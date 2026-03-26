@@ -1,0 +1,122 @@
+# =============================================================================
+# FedRGBD — Complete Experiment Matrix
+# =============================================================================
+# Total runs: ~72 (some overlap with profiling)
+# =============================================================================
+
+experiment_1:
+  name: "FL Strategy Comparison"
+  description: "Compare 6 strategies × 2 data distributions × 3 seeds"
+  total_runs: 36
+  
+  strategies:
+    - centralized
+    - local_only
+    - fedavg
+    - fedprox_001
+    - fedprox_01
+    - fedbn
+  
+  data_distributions:
+    iid:
+      description: "Random 50/50 split across nodes"
+      node_a_ratio: 0.5
+      node_b_ratio: 0.5
+    
+    non_iid_label:
+      description: "Label skew: Node A 70% positive, Node B 70% negative"
+      node_a_positive_ratio: 0.7
+      node_b_positive_ratio: 0.3
+  
+  modality: "rgb_d_ir"  # Best multimodal config (or rgb as fallback)
+  seeds: [42, 123, 456]
+
+experiment_2:
+  name: "Modality Ablation"
+  description: "5 modality combos × best FL strategy × 3 seeds"
+  total_runs: 15
+  
+  # Uses best strategy from experiment_1 (determined after Exp 1)
+  strategy: "TBD"
+  data_distribution: "non_iid_label"
+  
+  modalities:
+    - rgb
+    - depth
+    - ir
+    - rgb_d
+    - rgb_d_ir
+  
+  seeds: [42, 123, 456]
+
+experiment_3:
+  name: "Cross-Sensor Generalization"
+  description: "Train/test across D435i and D455 cameras"
+  total_runs: 9
+  
+  configurations:
+    - name: "d435i_to_d455"
+      train_camera: "d435i"
+      test_camera: "d455"
+    
+    - name: "d455_to_d435i"
+      train_camera: "d455"
+      test_camera: "d435i"
+    
+    - name: "fl_both_cameras"
+      train_camera: "both_fl"
+      test_camera: "both"
+  
+  modality: "rgb_d"
+  seeds: [42, 123, 456]
+
+experiment_4:
+  name: "Resource Profiling"
+  description: "Per-round energy, latency, communication metrics"
+  total_runs: 0  # Runs alongside Experiment 1
+  
+  metrics:
+    - gpu_power_w
+    - board_power_w
+    - training_time_s
+    - model_transfer_size_kb
+    - transfer_latency_ms
+    - total_energy_wh
+    - total_communication_mb
+    - peak_gpu_memory_mb
+    - peak_ram_mb
+  
+  profiling_tool: "tegrastats"
+  sampling_interval_ms: 100
+
+experiment_5:
+  name: "Network Constraint Sensitivity"
+  description: "Best FL strategy under bandwidth limitations"
+  total_runs: 12
+  
+  # Uses best strategy from experiment_1
+  strategy: "TBD"
+  modality: "rgb_d_ir"
+  
+  network_conditions:
+    - name: "baseline"
+      bandwidth: "1000mbps"
+      packet_loss: 0.0
+      tc_command: null
+    
+    - name: "10mbps"
+      bandwidth: "10mbps"
+      packet_loss: 0.0
+      tc_command: "sudo tc qdisc add dev {iface} root tbf rate 10mbit burst 32kbit latency 400ms"
+    
+    - name: "1mbps"
+      bandwidth: "1mbps"
+      packet_loss: 0.0
+      tc_command: "sudo tc qdisc add dev {iface} root tbf rate 1mbit burst 32kbit latency 400ms"
+    
+    - name: "1mbps_lossy"
+      bandwidth: "1mbps"
+      packet_loss: 0.05
+      tc_command: "sudo tc qdisc add dev {iface} root netem loss 5% && sudo tc qdisc add dev {iface} parent 1:1 tbf rate 1mbit burst 32kbit latency 400ms"
+  
+  seeds: [42, 123, 456]

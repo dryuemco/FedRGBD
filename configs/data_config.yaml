@@ -1,0 +1,66 @@
+# =============================================================================
+# FedRGBD — Data Configuration
+# =============================================================================
+
+# Public dataset (Phase A) — to be confirmed on Day 4
+public_dataset:
+  # Primary candidate
+  name: "TBD"  # FLAME, MVTec AD, or SUN RGB-D
+  path: "data/raw/public/"
+  
+  # Candidate options (finalize after download verification)
+  candidates:
+    flame:
+      name: "FLAME (IEEE DataPort)"
+      url: "https://ieee-dataport.org/open-access/flame-dataset"
+      description: "RGB + Thermal fire imagery from UAVs, ~39K frames"
+      modalities: ["rgb", "thermal"]
+      note: "Thermal can substitute for IR channel"
+    
+    mvtec_ad:
+      name: "MVTec Anomaly Detection"
+      url: "https://www.mvtec.com/company/research/datasets/mvtec-ad"
+      description: "Industrial anomaly detection benchmark, RGB only"
+      modalities: ["rgb"]
+      note: "No depth — would need synthetic depth from monocular estimation"
+    
+    sun_rgbd:
+      name: "SUN RGB-D"
+      url: "https://rgbd.cs.princeton.edu/"
+      description: "Indoor RGB-D scenes, 10K images with depth"
+      modalities: ["rgb", "depth"]
+      note: "Good for depth modality experiments"
+
+# Custom RealSense dataset (Phase B)
+custom_dataset:
+  path: "data/raw/custom/"
+  
+  node_a:
+    camera: "d435i"
+    target_frames: 500
+    resolution_rgb: [1920, 1080]
+    resolution_depth: [1280, 720]
+    fps: 30
+  
+  node_b:
+    camera: "d455"
+    target_frames: 500
+    resolution_rgb: [1920, 1080]
+    resolution_depth: [1280, 720]
+    fps: 30
+
+# Data split ratios
+splits:
+  train: 0.7
+  val: 0.15
+  test: 0.15
+
+# Augmentation
+augmentation:
+  random_horizontal_flip: 0.5
+  random_rotation: 10       # degrees
+  color_jitter:
+    brightness: 0.2
+    contrast: 0.2
+    saturation: 0.2
+  random_crop_scale: [0.8, 1.0]

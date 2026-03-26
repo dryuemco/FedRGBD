@@ -1,0 +1,49 @@
+# =============================================================================
+# FedRGBD — Model Architecture Configuration
+# =============================================================================
+
+model:
+  name: mobilenetv3_small
+  pretrained: true          # ImageNet pre-trained weights
+  num_classes: 2            # Binary: normal vs anomaly (fire)
+  
+  # Input configuration per modality
+  input_channels:
+    rgb: 3
+    depth: 1
+    ir: 1
+    rgb_d: 4               # RGB (3) + Depth (1)
+    rgb_d_ir: 5             # RGB (3) + Depth (1) + IR (1)
+  
+  # Input resolution (resized from camera native resolution)
+  input_size: 224           # MobileNetV3 default
+
+  # Fusion approach
+  # Options: "early" (channel concatenation) or "feature" (separate encoders)
+  # NOTE: "feature" fusion may not fit in 8GB — test on Day 7
+  fusion_type: "early"
+
+  # MobileNetV3-Small specs (for reference)
+  # Parameters: ~2.5M
+  # Weight size: ~10MB
+  # TensorRT compatible: Yes
+
+training:
+  # Desktop pre-training
+  pretrain_epochs: 30
+  pretrain_batch_size: 64   # Desktop has more VRAM
+  pretrain_lr: 0.001
+  
+  # Image preprocessing
+  resize: 256
+  crop: 224
+  normalize_rgb:
+    mean: [0.485, 0.456, 0.406]
+    std: [0.229, 0.224, 0.225]
+  normalize_depth:
+    # Will be determined from dataset statistics
+    mean: [0.5]
+    std: [0.25]
+  normalize_ir:
+    mean: [0.5]
+    std: [0.25]

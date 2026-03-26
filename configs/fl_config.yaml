@@ -1,0 +1,60 @@
+# =============================================================================
+# FedRGBD — Federated Learning Configuration
+# =============================================================================
+
+fl:
+  # Number of FL rounds
+  num_rounds: 50
+  
+  # Early stopping: stop if val loss doesn't improve for this many rounds
+  early_stopping_patience: 10
+  
+  # Local training per round
+  local_epochs: 5
+  batch_size: 16          # Constrained by Jetson 8GB RAM
+  
+  # Optimizer
+  optimizer: adam
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  
+  # Participation
+  min_fit_clients: 2      # Both clients must participate
+  min_evaluate_clients: 2
+  min_available_clients: 2
+  
+  # Server address (Node A acts as server by default)
+  server_address: "192.168.1.8:8080"
+
+strategies:
+  fedavg:
+    name: FedAvg
+    params: {}
+  
+  fedprox_001:
+    name: FedProx
+    params:
+      proximal_mu: 0.01
+  
+  fedprox_01:
+    name: FedProx
+    params:
+      proximal_mu: 0.1
+  
+  fedbn:
+    name: FedBN
+    params: {}
+
+baselines:
+  centralized:
+    description: "All data pooled on training server (upper bound)"
+    epochs: 50
+    batch_size: 32
+  
+  local_only:
+    description: "Each node trains independently (lower bound)"
+    epochs: 50
+    batch_size: 16
+
+# Random seeds for reproducibility (3 repeats)
+seeds: [42, 123, 456]
