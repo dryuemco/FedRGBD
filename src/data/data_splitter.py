@@ -1,4 +1,4 @@
-"""FedRGBD Data Splitter — IID and Non-IID partitioning for 2 FL nodes."""
+"""FedRGBD Data Splitter — IID and Non-IID partitioning for 2 or 3 FL nodes."""
 
 import argparse, json, os, random
 from pathlib import Path
@@ -32,7 +32,7 @@ def link_files(file_list, dest_dir, class_name):
         if link.exists(): link.unlink()
         os.symlink(os.path.abspath(src), str(link))
 
-def create_split(fire, nofire, output_dir, split_name, node_data, seed):
+def create_split(output_dir, split_name, node_data, seed):
     stats = {}
     for node_name, nd in node_data.items():
         fs = split_list(nd['fire'], seed=seed)
@@ -51,15 +51,20 @@ def create_split(fire, nofire, output_dir, split_name, node_data, seed):
         print(f"  {node_name}: {total} imgs (Fire:{tf}, NoFire:{total-tf}, ratio:{tf/total:.1%})")
     return stats
 
+def split_into(lst, n):
+    k, m = divmod(len(lst), n)
+    return [lst[i*k+min(i,m):(i+1)*k+min(i+1,m)] for i in range(n)]
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_dir", default="data/raw/flame_dataset")
     parser.add_argument("--output_dir", default="data/processed")
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--nodes", type=int, default=3, choices=[2,3])
     args = parser.parse_args()
 
     print("=" * 50)
-    print("  FedRGBD Data Splitter")
+    print(f"  FedRGBD Data Splitter ({args.nodes} nodes)")
     print("=" * 50)
 
     fire, nofire = find_images(args.data_dir)
@@ -70,31 +75,47 @@ def main():
 
     random.seed(args.seed)
     all_stats = {}
+    node_names = ['node_a', 'node_b', 'node_c'][:args.nodes]
 
-    # IID: random 50/50
-    print("\n--- IID Split ---")
+    # IID: equal random split
+    print(f"\n--- IID Split ({args.nodes} nodes) ---")
     rf, rn = fire.copy(), nofire.copy()
     random.shuffle(rf); random.shuffle(rn)
-    mf, mn = len(rf)//2, len(rn)//2
-    iid_nodes = {
-        'node_a': {'fire': rf[:mf], 'nofire': rn[:mn]},
-        'node_b': {'fire': rf[mf:], 'nofire': rn[mn:]}
-    }
-    all_stats['iid'] = create_split(fire, nofire, args.output_dir, 'iid', iid_nodes, args.seed)
+    fire_parts = split_into(rf, args.nodes)
+    nofire_parts = split_into(rn, args.nodes)
+    iid_nodes = {name: {'fire': fp, 'nofire': np} 
+                 for name, fp, np in zip(node_names, fire_parts, nofire_parts)}
+    all_stats['iid'] = create_split(args.output_dir, 'iid', iid_nodes, args.seed)
 
-    # Non-IID label skew: Node A 70% Fire, Node B 70% NoFire
-    print("\n--- Non-IID Label Skew ---")
+    # Non-IID label skew
+    print(f"\n--- Non-IID Label Skew ({args.nodes} nodes) ---")
     random.shuffle(rf); random.shuffle(rn)
-    half = (len(fire)+len(nofire))//2
-    a_fire = min(int(half*0.7), len(fire))
-    a_nofire = half - a_fire
-    noniid_nodes = {
-        'node_a': {'fire': rf[:a_fire], 'nofire': rn[:a_nofire]},
-        'node_b': {'fire': rf[a_fire:], 'nofire': rn[a_nofire:]}
-    }
-    all_stats['non_iid_label'] = create_split(fire, nofire, args.output_dir, 'non_iid_label', noniid_nodes, args.seed)
+    total = len(fire) + len(nofire)
+    per_node = total // args.nodes
 
-    # Save stats
+    if args.nodes == 2:
+        a_fire = min(int(per_node*0.7), len(fire))
+        a_nofire = per_node - a_fire
+        noniid_nodes = {
+            'node_a': {'fire': rf[:a_fire], 'nofire': rn[:a_nofire]},
+            'node_b': {'fire': rf[a_fire:], 'nofire': rn[a_nofire:]}
+        }
+    else:
+        # 3 nodes: A=80% fire, B=50/50, C=80% nofire
+        a_fire = min(int(per_node*0.8), len(fire))
+        a_nofire = per_node - a_fire
+        c_nofire = min(int(per_node*0.8), len(nofire) - a_nofire)
+        c_fire = per_node - c_nofire
+        b_fire = len(fire) - a_fire - c_fire
+        b_nofire = len(nofire) - a_nofire - c_nofire
+        noniid_nodes = {
+            'node_a': {'fire': rf[:a_fire], 'nofire': rn[:a_nofire]},
+            'node_b': {'fire': rf[a_fire:a_fire+b_fire], 'nofire': rn[a_nofire:a_nofire+b_nofire]},
+            'node_c': {'fire': rf[a_fire+b_fire:], 'nofire': rn[a_nofire+b_nofire:]}
+        }
+
+    all_stats['non_iid_label'] = create_split(args.output_dir, 'non_iid_label', noniid_nodes, args.seed)
+
     os.makedirs(args.output_dir, exist_ok=True)
     with open(os.path.join(args.output_dir, 'split_stats.json'), 'w') as f:
         json.dump(all_stats, f, indent=2)
