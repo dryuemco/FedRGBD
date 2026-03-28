@@ -311,7 +311,7 @@ else
 fi
 
 # Install numpy first (specific version for compatibility)
-pip install "numpy==1.26.1"
+pip install "numpy==1.26.4"
 
 if [ "$JETPACK_MINOR" = "1" ]; then
     log_info "Installing PyTorch 2.5.0 from NVIDIA official wheel (JetPack 6.1)..."
@@ -494,8 +494,9 @@ echo "  4. Test camera:  rs-enumerate-devices"
 echo "  5. Test capture:  python3 src/data/realsense_capture.py --test"
 echo ""
 echo "  For FL network setup between two Jetsons:"
-echo "    Node A (server): 192.168.1.10"
-echo "    Node B (client): 192.168.1.11"
+echo "    Node A (server): 192.168.1.4"
+echo "    Node B (client): 192.168.1.5"
+echo "    Node C (client): 192.168.1.3"
 echo "    Configure with:"
 echo "      sudo nmcli connection modify 'Wired connection 1' \\"
 echo "        ipv4.addresses 192.168.1.10/24 ipv4.method manual"
