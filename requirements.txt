@@ -12,7 +12,7 @@ flwr[simulation]==1.13.1
 # Data & ML (PyTorch installed separately on Jetson)
 scikit-learn>=1.3.0
 scipy>=1.11.0
-numpy==1.26.1
+numpy==1.26.4              # MUST be 1.26.x — numpy 2.x breaks PyTorch on Jetson
 
 # Statistical Analysis
 pingouin>=0.5.4
@@ -31,9 +31,3 @@ seaborn>=0.12.0
 
 # Utilities
 tqdm>=4.65.0
-
-# RealSense (fallback — prefer system build on Jetson)
-# pyrealsense2>=2.55.0
-
-# Jetson monitoring (install via sudo pip on Jetson)
-# jetson-stats

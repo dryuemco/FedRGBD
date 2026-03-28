@@ -50,7 +50,7 @@ class HelloClient(fl.client.NumPyClient):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--server", default="192.168.1.8:8080")
+    parser.add_argument("--server", default="192.168.1.4:8080")
     args = parser.parse_args()
     print(f"  Connecting to {args.server}...")
     fl.client.start_client(

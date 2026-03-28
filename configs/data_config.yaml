@@ -2,51 +2,44 @@
 # FedRGBD — Data Configuration
 # =============================================================================
 
-# Public dataset (Phase A) — to be confirmed on Day 4
+# Public dataset (Phase A) — CONFIRMED
 public_dataset:
-  # Primary candidate
-  name: "TBD"  # FLAME, MVTec AD, or SUN RGB-D
-  path: "data/raw/public/"
-  
-  # Candidate options (finalize after download verification)
-  candidates:
-    flame:
-      name: "FLAME (IEEE DataPort)"
-      url: "https://ieee-dataport.org/open-access/flame-dataset"
-      description: "RGB + Thermal fire imagery from UAVs, ~39K frames"
-      modalities: ["rgb", "thermal"]
-      note: "Thermal can substitute for IR channel"
-    
-    mvtec_ad:
-      name: "MVTec Anomaly Detection"
-      url: "https://www.mvtec.com/company/research/datasets/mvtec-ad"
-      description: "Industrial anomaly detection benchmark, RGB only"
-      modalities: ["rgb"]
-      note: "No depth — would need synthetic depth from monocular estimation"
-    
-    sun_rgbd:
-      name: "SUN RGB-D"
-      url: "https://rgbd.cs.princeton.edu/"
-      description: "Indoor RGB-D scenes, 10K images with depth"
-      modalities: ["rgb", "depth"]
-      note: "Good for depth modality experiments"
+  name: "FLAME"
+  source: "Kaggle (smrutisanchitadas/flame-dataset-fire-classification)"
+  path: "data/raw/flame_dataset"
+  total_images: 47992
+  classes:
+    Fire: 30155
+    No_Fire: 17837
+  image_size: [254, 254]
+  format: "JPEG"
 
-# Custom RealSense dataset (Phase B)
+# Custom RGB-D dataset (Phase B) — for cross-sensor experiments
 custom_dataset:
   path: "data/raw/custom/"
-  
+
   node_a:
-    camera: "d435i"
+    camera: "d435if"
+    serial: "239722070442"
     target_frames: 500
     resolution_rgb: [1920, 1080]
     resolution_depth: [1280, 720]
     fps: 30
-  
+
   node_b:
-    camera: "d455"
+    camera: "d435i"
+    serial: "405622076256"
     target_frames: 500
     resolution_rgb: [1920, 1080]
     resolution_depth: [1280, 720]
+    fps: 30
+
+  node_c:
+    camera: "zed2i"
+    serial: "32608934"
+    target_frames: 500
+    resolution_rgb: [2208, 1242]
+    resolution_depth: [2208, 1242]
     fps: 30
 
 # Data split ratios
@@ -55,12 +48,17 @@ splits:
   val: 0.15
   test: 0.15
 
-# Augmentation
+# Non-IID label skew configuration (3 nodes)
+non_iid_label:
+  node_a_fire_ratio: 0.80
+  node_b_fire_ratio: 0.885
+  node_c_fire_ratio: 0.20
+
+# Augmentation (applied during training only)
 augmentation:
   random_horizontal_flip: 0.5
   random_rotation: 10       # degrees
   color_jitter:
     brightness: 0.2
     contrast: 0.2
-    saturation: 0.2
-  random_crop_scale: [0.8, 1.0]
+  input_size: 224            # Resize for MobileNetV3

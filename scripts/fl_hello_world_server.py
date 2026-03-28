@@ -3,13 +3,13 @@ from flwr.server.strategy import FedAvg
 
 def main():
     strategy = FedAvg(
-        min_fit_clients=2,
-        min_evaluate_clients=2,
-        min_available_clients=2,
+        min_fit_clients=3,
+        min_evaluate_clients=3,
+        min_available_clients=3,
     )
     print("=" * 50)
     print("  FedRGBD - FL Hello World Server")
-    print("  Waiting for 2 clients...")
+    print("  Waiting for 3 clients...")
     print("  Server: 0.0.0.0:8080")
     print("=" * 50)
     fl.server.start_server(
