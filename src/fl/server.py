@@ -1,4 +1,4 @@
-"""FedRGBD — Flower FL Server with logging and seed support."""
+"""FedRGBD — Flower FL Server with FedAvg, FedProx, and FedBN support."""
 
 import argparse
 import json
@@ -12,6 +12,9 @@ import torch
 import flwr as fl
 from flwr.common import Metrics
 from flwr.server.strategy import FedAvg, FedProx
+
+# FedBN strategy (local import)
+from fedbn_strategy import FedBN
 
 
 def set_seed(seed):
@@ -31,6 +34,16 @@ def weighted_average(metrics):
     return {"accuracy": sum(accuracies) / sum(totals)}
 
 
+def make_fit_config_fn(strategy_name):
+    """Create on_fit_config_fn that passes strategy info to clients."""
+    def fit_config(server_round: int):
+        config = {"server_round": server_round}
+        if strategy_name == "fedbn":
+            config["fedbn"] = True
+        return config
+    return fit_config
+
+
 def get_strategy(name, min_clients=3, **kwargs):
     """Create FL strategy by name."""
     common = dict(
@@ -38,6 +51,7 @@ def get_strategy(name, min_clients=3, **kwargs):
         min_evaluate_clients=min_clients,
         min_available_clients=min_clients,
         evaluate_metrics_aggregation_fn=weighted_average,
+        on_fit_config_fn=make_fit_config_fn(name),
     )
     common.update(kwargs)
 
@@ -46,6 +60,8 @@ def get_strategy(name, min_clients=3, **kwargs):
     elif name.startswith("fedprox"):
         mu = float(name.split("_")[-1]) if "_" in name else 0.01
         return FedProx(proximal_mu=mu, **common)
+    elif name == "fedbn":
+        return FedBN(**common)
     else:
         return FedAvg(**common)
 
@@ -53,8 +69,8 @@ def get_strategy(name, min_clients=3, **kwargs):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--strategy", default="fedavg",
-                        help="fedavg, fedprox_0.01, fedprox_0.1")
-    parser.add_argument("--rounds", type=int, default=10)
+                        help="fedavg, fedprox_0.01, fedprox_0.1, fedbn")
+    parser.add_argument("--rounds", type=int, default=3)
     parser.add_argument("--address", default="0.0.0.0:8080")
     parser.add_argument("--output_dir", default="results/fl_run")
     parser.add_argument("--min_clients", type=int, default=3,
@@ -69,7 +85,7 @@ def main():
 
     strategy = get_strategy(args.strategy, min_clients=args.min_clients)
 
-    print("=" * 50)
+    print("=" * 60)
     print(f"  FedRGBD FL Server")
     print(f"  Strategy: {args.strategy}")
     print(f"  Rounds: {args.rounds}")
@@ -78,7 +94,7 @@ def main():
     print(f"  Min clients: {args.min_clients}")
     print(f"  Seed: {args.seed}")
     print(f"  Waiting for {args.min_clients} clients...")
-    print("=" * 50)
+    print("=" * 60)
 
     start = time.perf_counter()
 

@@ -1,10 +1,11 @@
-"""FedRGBD — Flower FL Client for fire classification on Jetson."""
+"""FedRGBD — Flower FL Client with FedAvg, FedProx, and FedBN support."""
 
 import argparse
 import os
 import random
 import socket
 import time
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -32,6 +33,30 @@ def set_seed(seed):
     os.environ['PYTHONHASHSEED'] = str(seed)
 
 
+def is_batchnorm_key(key):
+    """Check if a state_dict key belongs to a BatchNorm layer."""
+    bn_keywords = ['running_mean', 'running_var', 'num_batches_tracked']
+    for kw in bn_keywords:
+        if kw in key:
+            return True
+    return False
+
+
+def is_batchnorm_param(key, shape):
+    """Check if a state_dict key is a BN learnable parameter (weight/bias).
+    
+    BN weight/bias are 1D tensors matching channel dimensions.
+    Conv weight is 4D, Linear weight is 2D, so 1D weight/bias = BN.
+    Exception: the final classifier bias is also 1D but shape=(num_classes,).
+    """
+    if not (key.endswith('.weight') or key.endswith('.bias')):
+        return False
+    # 1D tensors that are NOT the classifier output
+    if len(shape) == 1 and shape[0] != 2:  # 2 = num_classes (Fire/NoFire)
+        return True
+    return False
+
+
 class FedRGBDClient(fl.client.NumPyClient):
     def __init__(self, data_dir, batch_size=16, lr=0.001, local_epochs=5,
                  device="cuda", seed=42):
@@ -41,6 +66,7 @@ class FedRGBDClient(fl.client.NumPyClient):
         self.lr = lr
         self.local_epochs = local_epochs
         self.seed = seed
+        self._fedbn_mode = False  # Will be set by first fit() call
 
         # Set seed before any data loading or model creation
         set_seed(seed)
@@ -51,7 +77,7 @@ class FedRGBDClient(fl.client.NumPyClient):
         self.val_ds = FlameDataset(data_dir, split="val")
         self.test_ds = FlameDataset(data_dir, split="test")
 
-        # Deterministic DataLoader with seeded generator
+        # Deterministic DataLoader
         g = torch.Generator()
         g.manual_seed(seed)
 
@@ -65,18 +91,50 @@ class FedRGBDClient(fl.client.NumPyClient):
         self.model = create_model(num_classes=2, in_channels=3, pretrained=True)
         self.model.to(self.device)
 
-        print(f"  [{self.hostname}] Train: {len(self.train_ds)}, Val: {len(self.val_ds)}, Test: {len(self.test_ds)}")
-        print(f"  [{self.hostname}] Device: {self.device}, Seed: {seed}")
+        # Cache BN key indices for FedBN
+        self._bn_key_indices = set()
+        for i, (key, param) in enumerate(self.model.state_dict().items()):
+            if is_batchnorm_key(key) or is_batchnorm_param(key, param.shape):
+                self._bn_key_indices.add(i)
+
+        print(f"  [{self.hostname}] Train: {len(self.train_ds)}, Val: {len(self.val_ds)}, "
+              f"Test: {len(self.test_ds)}")
+        print(f"  [{self.hostname}] Device: {self.device}, BN params: {len(self._bn_key_indices)}")
 
     def get_parameters(self, config):
         return [val.cpu().numpy() for val in self.model.state_dict().values()]
 
     def set_parameters(self, parameters):
-        params_dict = zip(self.model.state_dict().keys(), parameters)
-        state_dict = OrderedDict({k: torch.tensor(v) for k, v in params_dict})
-        self.model.load_state_dict(state_dict, strict=True)
+        """Load global parameters. In FedBN mode, skip BatchNorm layers."""
+        keys = list(self.model.state_dict().keys())
+        current_state = self.model.state_dict()
+
+        if self._fedbn_mode:
+            # FedBN: only update non-BN parameters
+            new_state = OrderedDict()
+            for i, key in enumerate(keys):
+                if i in self._bn_key_indices:
+                    # Keep local BN parameters
+                    new_state[key] = current_state[key]
+                else:
+                    # Use global (aggregated) parameters
+                    new_state[key] = torch.tensor(parameters[i])
+        else:
+            # FedAvg/FedProx: update all parameters
+            new_state = OrderedDict()
+            for i, key in enumerate(keys):
+                new_state[key] = torch.tensor(parameters[i])
+
+        self.model.load_state_dict(new_state, strict=True)
 
     def fit(self, parameters, config):
+        # Check if FedBN mode from server config
+        if config.get("fedbn", False):
+            if not self._fedbn_mode:
+                self._fedbn_mode = True
+                print(f"  [{self.hostname}] FedBN mode: keeping {len(self._bn_key_indices)} "
+                      f"BN params local")
+
         self.set_parameters(parameters)
 
         # Clear GPU cache before training
@@ -121,7 +179,14 @@ class FedRGBDClient(fl.client.NumPyClient):
         train_time = time.perf_counter() - start
         avg_loss = total_loss / max(total_samples, 1)
 
-        strategy_str = f"FedProx(mu={proximal_mu})" if proximal_mu > 0 else "FedAvg"
+        # Log strategy info
+        if self._fedbn_mode:
+            strategy_str = "FedBN"
+        elif proximal_mu > 0:
+            strategy_str = f"FedProx(mu={proximal_mu})"
+        else:
+            strategy_str = "FedAvg"
+
         print(f"  [{self.hostname}] Fit: {self.local_epochs} epochs, "
               f"loss={avg_loss:.4f}, time={train_time:.1f}s, strategy={strategy_str}")
 
@@ -135,8 +200,7 @@ class FedRGBDClient(fl.client.NumPyClient):
             "train_loss": avg_loss,
             "train_time": train_time,
             "hostname": self.hostname,
-            "proximal_mu": proximal_mu,
-            "seed": self.seed,
+            "strategy": strategy_str,
         }
 
     def evaluate(self, parameters, config):
@@ -175,12 +239,14 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
-    print("=" * 50)
+    print("=" * 60)
     print(f"  FedRGBD FL Client — {socket.gethostname()}")
     print(f"  Server: {args.server}")
     print(f"  Data: {args.data_dir}")
+    print(f"  Batch: {args.batch_size}, LR: {args.lr}")
+    print(f"  Local epochs: {args.local_epochs}")
     print(f"  Seed: {args.seed}")
-    print("=" * 50)
+    print("=" * 60)
 
     client = FedRGBDClient(
         data_dir=args.data_dir,
