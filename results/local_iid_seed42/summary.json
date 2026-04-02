@@ -1,0 +1,52 @@
+{
+  "experiment": "local_only_batch",
+  "seed": 42,
+  "epochs": 15,
+  "total_time_s": 16015.72,
+  "nodes": {
+    "node_a": {
+      "final_test_accuracy": 0.994376,
+      "final_test_loss": 0.016336,
+      "cross_eval": {
+        "node_b": {
+          "test_loss": 0.013929,
+          "test_accuracy": 0.994695
+        },
+        "node_c": {
+          "test_loss": 0.01411,
+          "test_accuracy": 0.994583
+        }
+      }
+    },
+    "node_b": {
+      "final_test_accuracy": 0.994353,
+      "final_test_loss": 0.022423,
+      "cross_eval": {
+        "node_a": {
+          "test_loss": 0.024495,
+          "test_accuracy": 0.993476
+        },
+        "node_c": {
+          "test_loss": 0.016294,
+          "test_accuracy": 0.996667
+        }
+      }
+    },
+    "node_c": {
+      "final_test_accuracy": 0.997083,
+      "final_test_loss": 0.006577,
+      "cross_eval": {
+        "node_a": {
+          "test_loss": 0.019237,
+          "test_accuracy": 0.994826
+        },
+        "node_b": {
+          "test_loss": 0.009902,
+          "test_accuracy": 0.99692
+        }
+      }
+    }
+  },
+  "mean_test_accuracy": 0.995271,
+  "timestamp": "2026-04-01T23:54:25.814683"
+}
