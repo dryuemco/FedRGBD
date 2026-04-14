@@ -1,4 +1,4 @@
-"""FedRGBD — Flower FL Client with FedAvg, FedProx, and FedBN support."""
+"""FedRGBD — Flower FL Client with FedAvg, FedProx, and FedBN support (v2)."""
 
 import argparse
 import os
@@ -33,28 +33,24 @@ def set_seed(seed):
     os.environ['PYTHONHASHSEED'] = str(seed)
 
 
-def is_batchnorm_key(key):
-    """Check if a state_dict key belongs to a BatchNorm layer."""
-    bn_keywords = ['running_mean', 'running_var', 'num_batches_tracked']
-    for kw in bn_keywords:
-        if kw in key:
-            return True
-    return False
-
-
-def is_batchnorm_param(key, shape):
-    """Check if a state_dict key is a BN learnable parameter (weight/bias).
+def get_bn_indices(model):
+    """Get state_dict indices that belong to BatchNorm layers.
     
-    BN weight/bias are 1D tensors matching channel dimensions.
-    Conv weight is 4D, Linear weight is 2D, so 1D weight/bias = BN.
-    Exception: the final classifier bias is also 1D but shape=(num_classes,).
+    Uses isinstance() on actual modules - more reliable than shape heuristics.
     """
-    if not (key.endswith('.weight') or key.endswith('.bias')):
-        return False
-    # 1D tensors that are NOT the classifier output
-    if len(shape) == 1 and shape[0] != 2:  # 2 = num_classes (Fire/NoFire)
-        return True
-    return False
+    bn_layer_names = set()
+    for name, module in model.named_modules():
+        if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
+            bn_layer_names.add(name)
+    
+    bn_indices = set()
+    state_dict_keys = list(model.state_dict().keys())
+    for i, key in enumerate(state_dict_keys):
+        parent = key.rsplit('.', 1)[0]
+        if parent in bn_layer_names:
+            bn_indices.add(i)
+    
+    return bn_indices
 
 
 class FedRGBDClient(fl.client.NumPyClient):
@@ -66,9 +62,8 @@ class FedRGBDClient(fl.client.NumPyClient):
         self.lr = lr
         self.local_epochs = local_epochs
         self.seed = seed
-        self._fedbn_mode = False  # Will be set by first fit() call
+        self._fedbn_mode = False
 
-        # Set seed before any data loading or model creation
         set_seed(seed)
 
         # Load data
@@ -77,7 +72,6 @@ class FedRGBDClient(fl.client.NumPyClient):
         self.val_ds = FlameDataset(data_dir, split="val")
         self.test_ds = FlameDataset(data_dir, split="test")
 
-        # Deterministic DataLoader
         g = torch.Generator()
         g.manual_seed(seed)
 
@@ -91,11 +85,8 @@ class FedRGBDClient(fl.client.NumPyClient):
         self.model = create_model(num_classes=2, in_channels=3, pretrained=True)
         self.model.to(self.device)
 
-        # Cache BN key indices for FedBN
-        self._bn_key_indices = set()
-        for i, (key, param) in enumerate(self.model.state_dict().items()):
-            if is_batchnorm_key(key) or is_batchnorm_param(key, param.shape):
-                self._bn_key_indices.add(i)
+        # Name-based BN detection (matches server fedbn_strategy.py)
+        self._bn_key_indices = get_bn_indices(self.model)
 
         print(f"  [{self.hostname}] Train: {len(self.train_ds)}, Val: {len(self.val_ds)}, "
               f"Test: {len(self.test_ds)}")
@@ -110,25 +101,24 @@ class FedRGBDClient(fl.client.NumPyClient):
         current_state = self.model.state_dict()
 
         if self._fedbn_mode:
-            # FedBN: only update non-BN parameters
             new_state = OrderedDict()
             for i, key in enumerate(keys):
                 if i in self._bn_key_indices:
                     # Keep local BN parameters
                     new_state[key] = current_state[key]
                 else:
-                    # Use global (aggregated) parameters
-                    new_state[key] = torch.tensor(parameters[i])
+                    # Cast to the original dtype of the parameter
+                    orig_dtype = current_state[key].dtype
+                    new_state[key] = torch.tensor(parameters[i]).to(orig_dtype)
         else:
-            # FedAvg/FedProx: update all parameters
             new_state = OrderedDict()
             for i, key in enumerate(keys):
-                new_state[key] = torch.tensor(parameters[i])
+                orig_dtype = current_state[key].dtype
+                new_state[key] = torch.tensor(parameters[i]).to(orig_dtype)
 
         self.model.load_state_dict(new_state, strict=True)
 
     def fit(self, parameters, config):
-        # Check if FedBN mode from server config
         if config.get("fedbn", False):
             if not self._fedbn_mode:
                 self._fedbn_mode = True
@@ -137,14 +127,11 @@ class FedRGBDClient(fl.client.NumPyClient):
 
         self.set_parameters(parameters)
 
-        # Clear GPU cache before training
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        # Check if FedProx proximal term is requested
         proximal_mu = config.get("proximal_mu", 0.0)
         if proximal_mu > 0:
-            # Store global model parameters on CPU to save GPU memory
             global_params = [val.clone().detach().cpu() for val in self.model.parameters()]
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
@@ -163,7 +150,6 @@ class FedRGBDClient(fl.client.NumPyClient):
                 outputs = self.model(images)
                 loss = criterion(outputs, labels)
 
-                # FedProx proximal term: (mu/2) * ||w - w_global||^2
                 if proximal_mu > 0:
                     proximal_term = 0.0
                     for local_param, global_param in zip(self.model.parameters(), global_params):
@@ -179,7 +165,6 @@ class FedRGBDClient(fl.client.NumPyClient):
         train_time = time.perf_counter() - start
         avg_loss = total_loss / max(total_samples, 1)
 
-        # Log strategy info
         if self._fedbn_mode:
             strategy_str = "FedBN"
         elif proximal_mu > 0:
@@ -190,7 +175,6 @@ class FedRGBDClient(fl.client.NumPyClient):
         print(f"  [{self.hostname}] Fit: {self.local_epochs} epochs, "
               f"loss={avg_loss:.4f}, time={train_time:.1f}s, strategy={strategy_str}")
 
-        # Clean up
         if proximal_mu > 0:
             del global_params
         if torch.cuda.is_available():
