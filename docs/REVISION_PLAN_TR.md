@@ -1,0 +1,187 @@
+# NCAA-D-26-02211 — Revizyon Planı (Türkçe çalışma notu)
+
+Karar: **Major Revision**, teslim tarihi **13 Kasım 2026** (Editör: Ö. F. Ertuğrul).
+Kod tarafı `revision-ncaa` dalında tamamlandı (bkz. `docs/REVISION_CHANGES.md`, İngilizce ve
+dosya dosya). Bu belge üç soruya cevap verir:
+
+1. Hakemler ne istedi, biz **neyi ne amaçla** yaptık?
+2. Cihazlara (3× Jetson) geçmeden önce başka ne yapılmalı?
+3. Düzeltmeler için öncelikli deney ve metin planı nedir?
+
+---
+
+## 1. Hakem yorumu → yapılan iş → amaç
+
+| # | Hakem isteği | Yapılan (kod) | Amaç / makalede nereye gidecek |
+|---|--------------|---------------|--------------------------------|
+| R3-a | FLAME'de aynı video/sekanstan kareler hem train hem test'te olabilir; sekans/kaynak düzeyinde bölme yapın | `scripts/analyze_flame_leakage.py` (algısal hash ile yakın-kopya kümeleme + mevcut `data/processed` için sızıntı raporu) ve `data_splitter.py --group_file` (yakın-kopya grubu bir bütün olarak tek node'a ve tek split'e gider) | Metodoloji bölümüne "sekans düzeyinde (grup) bölme" paragrafı; sızıntı oranını **rapor edip** v1 sonuçlarıyla farkı tartışmak. Sonuçlar 99 %'un altına inerse bu, hakemin "doygunluk" itirazına da cevap olur |
+| R3-b, R5-b | Yalnızca accuracy yetmez: balanced accuracy, macro-F1, sensitivity, specificity, precision, recall, MCC, ROC-AUC; global **ve** istemci başına; istemci başına karışıklık matrisi | `src/evaluation/metrics.py`; istemci her turda tüm metrikleri döndürüyor; sunucu `results.json`'a istemci başına satır + ağırlıklı global + havuzlanmış (toplam karışıklık matrisinden) metrikleri yazıyor; `train_local.py` / `train_centralized.py` aynı seti epoch başına ve test'te kaydediyor | Yeni tablo: her strateji × dağılım için tüm metrikler (mean ± std, %95 GA); ek tablo: Non-IID'de istemci başına karışıklık matrisleri |
+| R3-c | Yöntemleri tur sayısına değil **geçen süreye ve iletişim maliyetine** göre de karşılaştırın | İstemci `fit_time_s`, `eval_time_s`, gönderilen/alınan bayt; sunucu tur sonunda `elapsed_s` ve kümülatif iletişim baytı; `analyze_results.py` accuracy-vs-time ve accuracy-vs-MB grafikleri | Yeni şekil (3 panel: tur / süre / MB). Eski sonuçlar için süre-MB **tahmini** (grafikte kesikli çizgi ve dipnot) |
+| R3-d, R5-a | 3 seed az; güven aralığı ekleyin; "istatistiksel olarak ayırt edilemez" gibi ifadelerden kaçının | Matriste 5 seed bloğu; `analyze_results.py`: mean ± std, t-dağılımıyla %95 GA, eşleştirilmiş Cohen d, Wilcoxon, eşleştirilmiş t, Friedman | İstatistik paragrafını yeniden yazmak (GA ile), "indistinguishable" yerine "no significant difference at n=5 (p=…)" |
+| R3-e | Daha zor bir koşul: daha az yerel örnek, daha güçlü heterojenlik | `--subsample_frac 0.05 0.01` (node başına train'i %5 / %1'e indirir) ve `--dirichlet_alpha 0.1 0.5 1.0` | Yeni alt bölüm "Low-data regime" ve "Dirichlet label skew"; FL'nin yerel eğitime göre ne zaman avantaj sağladığını burada göstermek |
+| R5-c | Sonuçlar farklı non-IID derece ve türlerinde stabil mi? Tek elle kurgulanmış label-skew yetmez | Dirichlet bloğu (α = 0.1, 0.5, 1.0) | Aynı alt bölüm; α'ya göre FedAvg/FedProx eğrileri |
+| R5-d | Hiperparametre duyarlılığı: μ yalnızca 0.01/0.1; batch 8, Adam 1e-3, 5 yerel epoch sabit | Matriste μ ∈ {0.001, 0.01, 0.05, 0.1, 0.5}, E ∈ {1, 2, 5}, lr ∈ {1e-4, 1e-3} blokları | "Sensitivity analysis" alt bölümü + 1 şekil |
+| R3-f, R5-e | FedBN sonuçları 3 turla sınırlı; "çok turlu senaryoya saklayın" iddiası test edilmedi | 10 turluk FedBN (+ referans FedAvg) bloğu | FedBN paragrafını 10 tur sonucuna göre yeniden yazmak; iddiayı test edilen koşulla sınırlamak |
+| R5-f | Başlık değişsin: "Empirical Evaluation of Federated Learning on Edge GPU Clusters with Heterogeneous RGB-D Sensors" | — (metin işi) | Başlığı hakemin önerdiği gibi değiştirmek |
+| R1 | Eş. 1–5b öncesine ilgili referanslar; 2025-26 kaynakları; gelecek çalışmaya wavelet tabanlı hibrit yöntem | — (metin işi) | Related work + future work |
+| R5-g | Metasezgisel hiperparametre ayarlama literatürüne atıf ("Convolutional neural networks hyperparameters tuning") | — (metin işi) | Related work'e 1 paragraf |
+| R3-g | Çapraz-sensör deneyi sahne bağımsız olmalı (leave-one-scene-out); sensör heterojenliği FL deneyine bağlansın | **Yapılmadı** (özel RGB-D kayıtları + cihaz gerekir) | Bkz. §3.4 |
+
+### Bu oturumda yapılan destekleyici işler
+* `configs/experiment_matrix.yaml` → `revision:` bloğu ve `scripts/print_revision_commands.py`
+  (komutları üretir, `results/<run>/results.json` varsa atlar; **kaldığı yerden devam edilebilir**).
+* `results.json` şeması v2: eski anahtarlar aynen korunuyor, yeni `rounds`, `client_config`,
+  `model_payload_bytes`, `tags` vb. eklendi. Eski dosyalar ve yeni dosyalar aynı analiz
+  betiğinden geçiyor.
+* 115 CPU birim testi (`python3 -m pytest tests -q`), gerçek Flower 1.13.1 ile localhost'ta
+  2 istemcili uçtan uca test dahil.
+* `results/` altına hiçbir şey yazılmadı; model değişmedi.
+
+---
+
+## 2. Cihazlara geçmeden önce kontrol listesi
+
+Sıra önemli; 2.1–2.4 tamamen CPU işidir ve masaüstünde yapılabilir.
+
+### 2.1 Sızıntı analizini **gerçek** FLAME verisi üzerinde çalıştır (kararı bu belirler)
+```bash
+python3 scripts/analyze_flame_leakage.py --data_dir data/raw/flame_dataset \
+    --processed_dir data/processed --output_dir analysis/leakage --threshold 8 --workers 4
+```
+`analysis/leakage/leakage_report.json` içindeki `global_test_leak_rate_any_node` ve
+`groups_spanning_multiple_nodes` sayılarına bak. Beklenti: FLAME video karesi olduğu için
+oran yüksek çıkar. **Eşik seçimi** (`--threshold 6/8/10`) için `group_size_histogram`'ı ve
+`cross_label_groups`'u kontrol et; cross-label grup çoksa eşik fazla gevşektir. Bu sayılar
+makaleye girecek (R3-a'ya doğrudan cevap).
+
+### 2.2 Protokol kararı: yeniden bölme yapılacak mı?
+Sızıntı anlamlıysa (büyük olasılıkla evet) tüm revizyon deneyleri **grup-güvenli bölme** ile
+koşulmalı. Sonuçları:
+* Eski 3 seed'lik sonuçlar yeni koşularla **karşılaştırılamaz** (farklı bölme). Seed
+  uzatma bloğu 2 yeni seed değil **5 seed'in tamamı** olarak koşulur:
+  `print_revision_commands.py --all_seeds`. Makalede v1 sonuçları "image-level split"
+  olarak ayrı bir tabloda kalır; ana tablolar yeni protokolden gelir.
+* Dizin adı `results/rev_*` olduğu için eski `results/3node_*` ile karışmaz.
+
+Sızıntı ihmal edilebilir düzeydeyse (örn. < %2) eski seed'ler yeniden kullanılabilir ve
+yalnızca 789/1011 koşulur; bu durumda makalede sızıntı oranını raporlamak yeterlidir.
+
+### 2.3 Bölmeleri üret ve **üç node'da aynı olduğunu doğrula**
+```bash
+python3 src/data/data_splitter.py --data_dir data/raw/flame_dataset --output_dir data/processed \
+    --nodes 3 --seed 42 --group_file analysis/leakage/groups.json \
+    --dirichlet_alpha 0.1 0.5 1.0 --subsample_frac 0.05 0.01
+```
+Dikkat: bölücü `os.walk` sırasına dayanır (v1'de de öyleydi). Her node kendi kopyasında
+çalıştırıyorsa dosya sistemi sırası farklıysa bölmeler **farklı** çıkabilir ve node'lar
+arası örtüşme oluşur. Doğrulama: üç node'da
+`md5sum data/processed/*/manifest.csv data/processed/split_stats.json` çıktıları birebir
+aynı olmalı. Aynı değilse tek node'da üretip `data/processed`'ı (sembolik linkler, küçük)
+diğerlerine kopyala ya da `manifest.csv`'yi paylaş.
+`split_stats.json` → `class_counts` tabloları makaledeki "veri dağılımı" tablosuna girer.
+
+### 2.4 Yeni bölmelerin sızıntısını doğrula (sıfır olmalı)
+```bash
+python3 scripts/analyze_flame_leakage.py --data_dir data/raw/flame_dataset \
+    --processed_dir data/processed --output_dir analysis/leakage
+```
+Tüm `leak_rate_any_node` = 0 ve `groups_spanning_multiple_nodes` = 0 olmalı.
+
+### 2.5 Kodu üç Jetson'a al ve doğrula
+```bash
+git fetch && git checkout revision-ncaa          # her node'da
+pip install pytest                                # yalnızca test için
+python3 -m pytest tests -q -k "not end_to_end"    # ~1 dk, CPU
+python3 -m pytest tests/test_fl_end_to_end.py -q  # isteğe bağlı, ~1-2 dk
+```
+Yeni Python bağımlılığı yok (numpy 1.26.4 / torch 2.5 / flwr 1.13.1 aynen).
+
+### 2.6 Donanımda 1 turluk duman testi (matris öncesi)
+`iid_sub0.01` bölmesi (node başına ~110 eğitim görüntüsü) ile 1 tur FedAvg koş ve
+`results/smoke/results.json` içinde `rounds[0].evaluate.clients.node_*` altında tüm
+metriklerin, `payload_bytes_up` ≈ 6.13 MB ve `elapsed_s` değerlerinin geldiğini kontrol et:
+```bash
+# Node A
+python3 src/fl/server.py --strategy fedavg --rounds 1 --seed 42 --min_clients 3 --output_dir results/smoke --tag smoke
+# her node
+python3 src/fl/client.py --server 192.168.1.4:8080 --data_dir data/processed/iid_sub0.01/node_X --batch_size 8 --seed 42
+python3 scripts/analyze_results.py --results_dir results --output_dir analysis --include_test_runs
+```
+Sonra `results/smoke` silinir (matris dizin adlarıyla çakışmaz ama temiz kalsın).
+
+### 2.7 Küçük kararlar (şimdi netleştir)
+* **Değerlendirme kümesi**: v1'de olduğu gibi her tur *val* üzerinde ölçüm yapılıyor.
+  Hakemler test-kümesi rakamı da isteyebilir; seçenekler: (a) v1 ile aynı kal, metinde
+  açıkça söyle; (b) son turdan sonra istemcileri `--eval_split test` ile bir kez daha
+  bağlayıp 1 turluk "değerlendirme koşusu" yap. Öneri: (a) + subsample/Dirichlet için de aynı
+  kural; gerekirse hakem cevabında (b)'yi ek olarak sun.
+* **Eşik**: `--threshold 8` varsayılan; 2.1'deki histogramla teyit et ve makaleye yaz.
+* **Dirichlet `--dirichlet_min_size`**: varsayılan 10; α=0.1'de bir node'un çok küçük
+  kalması normaldir, bu **istenen** zorluktur. Bunu kaldırma, sadece rapor et.
+* **`.eml` dosyası** git'e girmiyor (`*.eml` ignore'da); repo public olduğu için hakem
+  metinlerini asla commit etme.
+
+---
+
+## 3. Deney planı (öncelikli, süre tahminli)
+
+Süreler mevcut `results/` dosyalarındaki ölçülmüş `total_time_s`'den türetildi
+(3 tur, 5 yerel epoch): FedAvg ≈ 1.7 sa, FedProx ≈ 2.9 sa, FedBN ≈ 1.75 sa,
+centralized ≈ 4.2 sa, local-only (3 node ardışık) ≈ 4.4 sa. Subsample koşuları eğitim
+verisiyle orantılı kısalır (%5 → ~0.3 sa, %1 → ~0.2 sa; kaba tahmin). 10 tur ≈ 3.3× 3 tur.
+Testbed tek seferde yalnızca bir FL koşusu yapabilir.
+
+| Öncelik | Blok | Koşu | Tahmini testbed süresi | Hangi hakem isteği |
+|---------|------|------|------------------------|--------------------|
+| **P0** | 2.1–2.4 sızıntı + yeniden bölme | CPU | birkaç saat, cihaz gerekmez | R3-a |
+| **P0** | `seed_extension` (**5 seed**, FedAvg + FedProx 0.01, IID + Non-IID) | 20 | ≈ 46 sa | R3-d, R5-a, R3-b (yeni metrikler bu koşulardan gelir) |
+| **P0** | `low_data` (%5, %1 × IID/Non-IID × 2 strateji × 3 seed) | 24 | ≈ 8 sa | R3-e |
+| **P0** | `mu_grid` (0.001, 0.05, 0.1, 0.5; 0.01 P0'dan paylaşılır) | 12 | ≈ 35 sa | R5-d |
+| **P1** | `dirichlet_skew` (α 0.1, 1.0 önce; 0.5 sonra) | 18 | ≈ 41 sa | R3-e, R5-c |
+| **P1** | `long_horizon_fedbn` (10 tur FedBN + FedAvg, 3 seed) | 6 | ≈ 35 sa | R3-f, R5-e |
+| **P1** | `local_epochs` (E=1, 2) | 12 | ≈ 12 sa | R5-d |
+| **P1** | `learning_rate` (1e-4) | 6 | ≈ 14 sa | R5-d |
+| **P2** | `baselines_extension` (centralized + local: yeni seed'ler, Dirichlet, subsample) | 50 | ≈ 120 sa testbed **veya** masaüstü GPU'da | R3-e, R5 (alt/üst sınır) |
+
+Toplam ≈ 310 testbed saati (~13 gün kesintisiz). Öneriler:
+* P0 (~90 sa) bitince makalenin ana tabloları/şekilleri üretilebilir; P1 paralel yazım
+  sırasında koşar.
+* Baseline'lar (P2) FL ağı gerektirmez: centralized/local koşularını masaüstü GPU'da
+  yap, makalede "accuracy baselines were trained on a desktop GPU; timing not comparable"
+  de. Böylece testbed FL'ye kalır. Ya da FL koşusu gece testbed'deyken gündüz tek node'da
+  koş (node B/C boşken).
+* Her koşudan sonra `python3 scripts/analyze_results.py` ile tabloları güncelle; hiçbir
+  şeyi elle tabloya yazma (rakamlar `analysis/summary_table.md`'den gelir).
+* Komutlar: `python3 scripts/print_revision_commands.py --all_seeds` (tüm liste) veya
+  `--block mu_grid --format bash` (o bloğun sunucu betiği).
+
+### 3.4 Kod olarak hâlâ eksik olan (cihaz + özel veri gerektirir)
+* **Leave-one-scene-out çapraz-sensör değerlendirmesi** (R3-g): özel RGB-D kayıtlarındaki
+  5 sahne için "4 sahnede eğit, 1'inde test" döngüsü. Kayıtlar Jetson'larda; küçük bir betik
+  (`scripts/cross_sensor_loso.py`) gerekir. İstersen bir sonraki adımda yazabilirim; veri
+  klasör yapısını (`data/raw/custom/node_*/{id}_rgb.png` + sahne etiketi nerede?) bilmem
+  gerekir.
+* Sensör heterojenliğini FL deneyine bağlamak (R3): en ucuz yol, custom RGB(-D) kayıtlarını
+  node başına doğal istemci verisi olarak kullanan küçük bir FL koşusu (her node kendi
+  kamerasının verisiyle). Bu da yeni veri/etiket gerektirir; kapsam kararı sana ait.
+
+---
+
+## 4. Metin planı (kod gerektirmez, deneyler koşarken yapılabilir)
+1. **Başlık**: R5'in önerdiği "Empirical Evaluation of Federated Learning on Edge GPU
+   Clusters with Heterogeneous RGB-D Sensors".
+2. **Kapsam ifadesi**: giriş ve sonuçta "3 node, 1 veri kümesi, 1 backbone, 3 tur" sınırını
+   açıkça yaz; genellenebilir olan/olmayan sonuçları ayır (R5).
+3. **Veri/Protokol**: sekans düzeyinde bölme, sızıntı oranı (2.1'den), Dirichlet ve
+   low-data tanımları, metrik tanımları (specificity, MCC, AUC formülleri).
+4. **İstatistik**: n=5 ile GA'lı tablolar; "indistinguishable" ifadelerini kaldır; Cohen d'yi
+   "large but n is small" diye yorumla; Friedman/Wilcoxon p değerlerini ver.
+5. **FedBN**: 10 tur sonucuna göre yeniden yaz; iddiayı test edilen koşulla sınırla.
+6. **Süre/iletişim**: FedProx'un ilk tur avantajını süre eksenindeki grafikle birlikte
+   tartış ("aynı duvar-saati bütçesinde FedAvg 2. turu bitiriyor" gibi).
+7. **R1**: Eş. 1–5b öncesine FedAvg/FedProx/FedBN orijinal atıfları; 2025-26 kaynakları;
+   future work'e wavelet tabanlı hibrit yaklaşım cümlesi.
+8. **R5-g**: metasezgisel hiperparametre ayarlama literatürüne 1 paragraf (hakemin verdiği
+   çalışma + 1-2 genel kaynak).
+9. **Cevap mektubu**: yukarıdaki tablonun (§1) hakem-madde sırasına göre düzenlenmiş hâli;
+   her madde için "değişiklik nerede (bölüm/tablo/şekil)" satırı.
