@@ -89,7 +89,94 @@ python3 src/fl/client.py --server 192.168.1.4:8080 --data_dir data/processed/iid
 
 ### 5. Generate Figures
 ```bash
-python3 scripts/generate_plots.py
+python3 scripts/generate_plots.py                 # paper v1 figures (hard-coded numbers)
+python3 scripts/analyze_results.py --results_dir results --output_dir analysis   # revision: tables + plots from results/**/results.json
+```
+
+## NCAA Revision Additions (branch `revision-ncaa`)
+
+Everything below is hardware-independent code added for the major revision of
+NCAA-D-26-02211 (see `docs/REVISION_CHANGES.md` for the full change list and
+the mapping to reviewer comments).  The model (MobileNetV3-Small) is unchanged
+and no experiment results were modified.
+
+### Near-duplicate / leakage audit and sequence-level splits
+FLAME frames are video frames; a random image-level split puts near-copies of
+test images into training.  `scripts/analyze_flame_leakage.py` hashes every
+image (dHash / pHash / aHash, 64 bit), clusters near-duplicates within a
+Hamming threshold (multi-index hashing, no O(N²) scan) and audits an existing
+`data/processed` tree for val/test → train leakage.  Its `groups.json` feeds
+`src/data/data_splitter.py --group_file`, which then assigns whole groups so
+no near-duplicate group is split across nodes or across train/val/test.
+```bash
+python3 scripts/analyze_flame_leakage.py --data_dir data/raw/flame_dataset \
+    --processed_dir data/processed --output_dir analysis/leakage --threshold 8 --workers 4
+python3 src/data/data_splitter.py --data_dir data/raw/flame_dataset --output_dir data/processed \
+    --nodes 3 --seed 42 --group_file analysis/leakage/groups.json \
+    --dirichlet_alpha 0.1 0.5 1.0 --subsample_frac 0.05 0.01
+```
+
+### Dirichlet label skew and low-data regimes
+`--dirichlet_alpha 0.1 0.5 1.0` produces `data/processed/dirichlet_<alpha>/`
+(per-class Dirichlet(alpha) proportions over the 3 nodes, seeded, group-aware,
+per-node class-count table written to `split_stats.json`).
+`--subsample_frac 0.05 0.01` produces `<split>_sub<frac>/` variants in which
+each node's *train* split is reduced to that fraction (stratified, group-aware);
+val/test stay full so results remain comparable.  See `data/README.md`.
+
+### Metrics beyond accuracy
+`src/evaluation/metrics.py` computes accuracy, balanced accuracy, precision,
+recall (sensitivity), specificity, F1 / macro-F1, MCC, ROC-AUC and the
+confusion matrix from logits + labels (pure NumPy, validated against
+scikit-learn in `tests/test_metrics.py`).  It is wired into
+
+* `src/fl/client.py` – `evaluate()` returns every metric per client per round,
+  plus `eval_time_s`, `fit_time_s` and the model payload bytes sent/received;
+* `src/fl/server.py` – persists per-client rows, the num-examples-weighted
+  global aggregate **and** pooled metrics from the summed confusion matrix for
+  every round, plus server elapsed time and cumulative communication bytes;
+* `scripts/train_local.py` / `scripts/train_centralized.py` – full metric set
+  per epoch (`val_metrics`) and on the final test set (`final_test_metrics`).
+
+`results.json` keeps every previous key (`strategy`, `num_rounds`, `seed`,
+`total_time_s`, `losses_distributed`, `metrics_distributed`, …) and adds
+`results_schema_version: 2`, `proximal_mu`, `tags`, `client_config`,
+`model_payload_bytes`, `total_communication_bytes`, `metrics_distributed_fit`
+and a `rounds` list:
+```
+rounds[i] = {
+  "round": r,
+  "fit":      {"clients": {node_a: {train_loss, fit_time_s, payload_bytes_up, payload_bytes_down, ...}},
+               "aggregate": {...}, "elapsed_s": ...},
+  "evaluate": {"clients": {node_a: {accuracy, balanced_accuracy, precision, recall, specificity,
+                                    f1, macro_f1, mcc, roc_auc, loss, confusion_matrix, eval_time_s, ...}},
+               "aggregate": {accuracy, ..., pooled_accuracy, pooled_f1, ..., cm_0_0, ...}, "elapsed_s": ...},
+  "cumulative_communication_bytes": ...
+}
+```
+New server flag: `--tag <dist> ...` stores free-form tags (e.g. `dirichlet_0.1`)
+used by the analysis script.  New client flags: `--node_name`, `--eval_split`.
+
+### Statistical analysis and plots
+`scripts/analyze_results.py` reads every `results/**/results.json` (old
+accuracy-only files and new ones alike) and writes to `analysis/`: per-config
+tables (mean ± std, 95 % t-CI over seeds), paired Cohen's d, Wilcoxon and
+paired t-tests, Friedman tests, and accuracy-vs-round, accuracy-vs-elapsed-time
+and accuracy-vs-cumulative-communication (MB) plots.  For old files time and
+communication are *estimated* (flagged) from `total_time_s` and the model size.
+
+### Revision experiment matrix
+`configs/experiment_matrix.yaml` → `revision:` block (5 seeds FedAvg vs
+FedProx, Dirichlet alphas, subsample fractions, 10-round FedBN, μ grid,
+local-epoch and learning-rate sweeps, matching baselines).
+`scripts/print_revision_commands.py` expands it into resumable server/client
+command lines (`--skip_existing`).
+
+### Tests
+CPU-only, tiny synthetic data, no downloads:
+```bash
+pip install pytest
+python3 -m pytest tests -q
 ```
 
 ## Repository Structure

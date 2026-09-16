@@ -1,4 +1,11 @@
-"""FedRGBD — Flower FL Client with FedAvg, FedProx, and FedBN support (v2)."""
+"""FedRGBD — Flower FL Client with FedAvg, FedProx, and FedBN support (v3).
+
+v3 (NCAA revision): ``evaluate()`` returns the full metric set from
+``src/evaluation/metrics.py`` (accuracy, balanced accuracy, precision, recall,
+specificity, F1, MCC, ROC-AUC, confusion matrix); ``fit()`` and ``evaluate()``
+report wall-clock time and the model payload bytes sent/received so the server
+can persist per-client, per-round cost measurements.  The model is unchanged.
+"""
 
 import argparse
 import os
@@ -17,7 +24,13 @@ import flwr as fl
 import sys
 sys.path.insert(0, ".")
 from src.data.dataset import FlameDataset
+from src.evaluation.metrics import MetricAccumulator, format_metrics, to_flower_metrics
 from src.models.mobilenetv3_multimodal import create_model
+
+
+def payload_bytes(parameters):
+    """Bytes of a list of NumPy arrays (= bytes serialised on the wire, excluding gRPC framing)."""
+    return int(sum(np.asarray(p).nbytes for p in parameters))
 
 
 def set_seed(seed):
@@ -55,22 +68,27 @@ def get_bn_indices(model):
 
 class FedRGBDClient(fl.client.NumPyClient):
     def __init__(self, data_dir, batch_size=16, lr=0.001, local_epochs=5,
-                 device="cuda", seed=42):
+                 device="cuda", seed=42, node_name=None, pretrained=True,
+                 img_size=224, eval_split="val"):
         self.device = torch.device(device if torch.cuda.is_available() else "cpu")
         self.hostname = socket.gethostname()
+        self.data_dir = data_dir
+        # node_a / node_b / node_c — used by the server to key per-client metrics
+        self.node_name = node_name or os.path.basename(os.path.normpath(data_dir))
         self.batch_size = batch_size
         self.lr = lr
         self.local_epochs = local_epochs
         self.seed = seed
+        self.eval_split = eval_split
         self._fedbn_mode = False
 
         set_seed(seed)
 
         # Load data
         print(f"  [{self.hostname}] Loading data from {data_dir}...")
-        self.train_ds = FlameDataset(data_dir, split="train")
-        self.val_ds = FlameDataset(data_dir, split="val")
-        self.test_ds = FlameDataset(data_dir, split="test")
+        self.train_ds = FlameDataset(data_dir, split="train", img_size=img_size)
+        self.val_ds = FlameDataset(data_dir, split="val", img_size=img_size)
+        self.test_ds = FlameDataset(data_dir, split="test", img_size=img_size)
 
         g = torch.Generator()
         g.manual_seed(seed)
@@ -80,9 +98,11 @@ class FedRGBDClient(fl.client.NumPyClient):
                                        generator=g)
         self.val_loader = DataLoader(self.val_ds, batch_size=batch_size,
                                      shuffle=False, num_workers=0, pin_memory=False)
+        self.test_loader = DataLoader(self.test_ds, batch_size=batch_size,
+                                      shuffle=False, num_workers=0, pin_memory=False)
 
-        # Create model
-        self.model = create_model(num_classes=2, in_channels=3, pretrained=True)
+        # Create model (architecture unchanged; pretrained=False only for CPU unit tests)
+        self.model = create_model(num_classes=2, in_channels=3, pretrained=pretrained)
         self.model.to(self.device)
 
         # Name-based BN detection (matches server fedbn_strategy.py)
@@ -119,6 +139,10 @@ class FedRGBDClient(fl.client.NumPyClient):
         self.model.load_state_dict(new_state, strict=True)
 
     def fit(self, parameters, config):
+        fit_start = time.perf_counter()
+        bytes_down = payload_bytes(parameters)
+        server_round = int(config.get("server_round", 0))
+
         if config.get("fedbn", False):
             if not self._fedbn_mode:
                 self._fedbn_mode = True
@@ -180,37 +204,71 @@ class FedRGBDClient(fl.client.NumPyClient):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        return self.get_parameters(config={}), len(self.train_ds), {
+        new_parameters = self.get_parameters(config={})
+        bytes_up = payload_bytes(new_parameters)
+        fit_wall = time.perf_counter() - fit_start
+
+        return new_parameters, len(self.train_ds), {
+            # --- keys kept from v2 ---
             "train_loss": avg_loss,
             "train_time": train_time,
             "hostname": self.hostname,
             "strategy": strategy_str,
+            # --- v3: identity / config echo (lets the server persist per-client rows) ---
+            "node_name": self.node_name,
+            "data_dir": self.data_dir,
+            "server_round": server_round,
+            "local_epochs": int(self.local_epochs),
+            "lr": float(self.lr),
+            "batch_size": int(self.batch_size),
+            "proximal_mu": float(proximal_mu),
+            "num_examples": len(self.train_ds),
+            # --- v3: cost measurements ---
+            "fit_time_s": train_time,          # pure local-training time
+            "fit_wall_s": fit_wall,            # incl. parameter loading / serialisation
+            "payload_bytes_down": bytes_down,  # global model received for this round
+            "payload_bytes_up": bytes_up,      # local model returned to the server
         }
 
     def evaluate(self, parameters, config):
+        eval_start = time.perf_counter()
+        bytes_down = payload_bytes(parameters)
+        server_round = int(config.get("server_round", 0))
         self.set_parameters(parameters)
 
-        criterion = nn.CrossEntropyLoss()
-        self.model.eval()
-        total_loss = 0
-        correct = 0
-        total = 0
+        loader = self.test_loader if self.eval_split == "test" else self.val_loader
+        metrics = self.evaluate_loader(loader)
+        eval_time = time.perf_counter() - eval_start
 
+        total = int(metrics["n_examples"])
+        avg_loss = float(metrics["loss"]) if metrics["loss"] is not None else 0.0
+        print(f"  [{self.hostname}] Eval r{server_round}: loss={avg_loss:.4f}, "
+              f"{format_metrics(metrics)}, time={eval_time:.1f}s")
+
+        flat = to_flower_metrics(metrics)
+        flat.update({
+            "hostname": self.hostname,
+            "node_name": self.node_name,
+            "server_round": server_round,
+            "eval_split": self.eval_split,
+            "num_examples": total,
+            "eval_time_s": eval_time,
+            "payload_bytes_down": bytes_down,
+        })
+        return avg_loss, total, flat
+
+    def evaluate_loader(self, loader):
+        """Run the model over ``loader`` and return the full metrics dict (incl. ``loss``)."""
+        criterion = nn.CrossEntropyLoss(reduction="sum")
+        acc = MetricAccumulator(num_classes=2, positive_class=1)
+        self.model.eval()
         with torch.no_grad():
-            for images, labels in self.val_loader:
+            for images, labels in loader:
                 images, labels = images.to(self.device), labels.to(self.device)
                 outputs = self.model(images)
-                loss = criterion(outputs, labels)
-                total_loss += loss.item() * images.size(0)
-                _, predicted = outputs.max(1)
-                total += labels.size(0)
-                correct += predicted.eq(labels).sum().item()
-
-        avg_loss = total_loss / max(total, 1)
-        accuracy = correct / max(total, 1)
-        print(f"  [{self.hostname}] Eval: loss={avg_loss:.4f}, acc={accuracy:.4f}")
-
-        return avg_loss, total, {"accuracy": accuracy, "hostname": self.hostname}
+                loss_sum = criterion(outputs, labels).item()
+                acc.update(outputs, labels, loss_sum)
+        return acc.compute()
 
 
 def main():
@@ -221,6 +279,10 @@ def main():
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--local_epochs", type=int, default=5)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--node_name", default=None,
+                        help="Client identifier for results.json (default: basename of --data_dir)")
+    parser.add_argument("--eval_split", default="val", choices=["val", "test"],
+                        help="Split evaluated every round (val = paper protocol)")
     args = parser.parse_args()
 
     print("=" * 60)
@@ -230,6 +292,7 @@ def main():
     print(f"  Batch: {args.batch_size}, LR: {args.lr}")
     print(f"  Local epochs: {args.local_epochs}")
     print(f"  Seed: {args.seed}")
+    print(f"  Eval split: {args.eval_split}")
     print("=" * 60)
 
     client = FedRGBDClient(
@@ -238,6 +301,8 @@ def main():
         lr=args.lr,
         local_epochs=args.local_epochs,
         seed=args.seed,
+        node_name=args.node_name,
+        eval_split=args.eval_split,
     )
 
     fl.client.start_client(

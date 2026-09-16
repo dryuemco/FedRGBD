@@ -62,10 +62,11 @@ for SEED in $SEEDS; do
 
     python3 src/fl/server.py \
         --strategy "$STRATEGY" \
-        --rounds 3 \
+        --rounds "${ROUNDS:-3}" \
         --output_dir "$OUTPUT_DIR" \
         --seed "$SEED" \
-        --min_clients 3
+        --min_clients 3 \
+        --tag "$DIST"
 
     echo ""
     echo "[DONE] Seed $SEED complete. Results: $OUTPUT_DIR/results.json"

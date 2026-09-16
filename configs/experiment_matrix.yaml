@@ -160,3 +160,259 @@ experiment_5:
       tc_command: "sudo tc qdisc add dev {iface} root handle 1: netem loss 5% && sudo tc qdisc add dev {iface} parent 1:1 handle 10: tbf rate 1mbit burst 32kbit latency 400ms"
 
   seeds: [42, 123, 456]
+
+# =============================================================================
+# NCAA MAJOR-REVISION EXPERIMENT MATRIX
+# =============================================================================
+# Added for the NCAA revision round (see docs/ for the reviewer response).
+# Consumed by scripts/print_revision_commands.py, which expands every block
+# below into concrete `src/fl/server.py` / `src/fl/client.py` (or
+# `scripts/train_centralized.py` / `scripts/train_local.py`) command lines.
+#
+# Output-directory convention (parsed by scripts/analyze_results.py):
+#   results/rev_<dist>_<strategy>[_ep<E>][_lr<LR>][_r<R>]_seed<S>
+#   - the optional _ep<E> / _lr<LR> / _r<R> suffixes are only appended when
+#     that value differs from the block default (local_epochs=5, lr=0.001,
+#     rounds=3) -- this means the "default" cell of a sweep block (e.g. E=5 in
+#     `local_epochs`, lr=0.001 in `learning_rate`, mu=0.01 in `mu_grid`) lands
+#     in the SAME results/ directory as the equivalent cell in another block
+#     (e.g. `seed_extension`), so results are naturally shared/deduplicated by
+#     scripts/print_revision_commands.py's --skip_existing (on by default).
+#   - <dist> in {iid, noniid, dirichlet0.1, dirichlet0.5, dirichlet1,
+#     iid_sub0.05, iid_sub0.01, noniid_sub0.05, noniid_sub0.01}, corresponding
+#     to the data/processed/<split>/<node> splits produced by
+#     src/data/data_splitter.py (iid, non_iid_label, dirichlet_<alpha>,
+#     <split>_sub<frac>).
+#   - <strategy> is the exact `--strategy` value passed to src/fl/server.py
+#     (fedavg, fedprox_<mu>, fedbn) or `centralized` / `local` for the
+#     baseline scripts.
+#
+# Server CLI:
+#   python3 src/fl/server.py --strategy <strategy> --rounds <R> --seed <S> \
+#       --min_clients 3 --output_dir results/<run> --tag <dist>
+#   (--tag is a new server.py CLI arg added for this revision so the server
+#   records which distribution/config a run belongs to independent of the
+#   output directory name.)
+# Client CLI (run once per node, same --seed on every node):
+#   python3 src/fl/client.py --server 192.168.1.4:8080 \
+#       --data_dir data/processed/<split>/<node> --batch_size 8 --seed <S> \
+#       --local_epochs <E> --lr <LR>
+#
+# TIME BUDGET: each FL run (1 server + 3 client processes) takes roughly
+# 90-170 minutes wall clock on the 3x Jetson Orin Nano Super testbed (per the
+# README hardware/known-issues notes) -- no more precise per-run timing is
+# available, so use this range only when estimating how long the ~151
+# actionable runs below (see `grand_total_runs` / `grand_total_new_runs`)
+# will take on a single 3-node testbed.
+# =============================================================================
+
+revision:
+  meta:
+    description: >
+      NCAA major-revision experiment matrix. Extends experiment_1's 3-seed
+      FedAvg/FedProx/FedBN x {iid, non_iid_label} comparison with a 5-seed
+      extension, a Dirichlet label-skew sweep, a low-data (client subsample)
+      sweep, a longer FL horizon for FedBN, a FedProx mu sensitivity grid,
+      a local-epoch sweep, a learning-rate sweep, and matching
+      centralized/local-only baselines for every new split/seed introduced
+      here.
+    output_dir_convention: "results/rev_<dist>_<strategy>[_ep<E>][_lr<LR>][_r<R>]_seed<S>"
+    dist_tags: [iid, noniid, dirichlet0.1, dirichlet0.5, dirichlet1,
+                iid_sub0.05, iid_sub0.01, noniid_sub0.05, noniid_sub0.01]
+    node_ips:
+      node_a: {ip: "192.168.1.4", role: "server + client"}
+      node_b: {ip: "192.168.1.5", role: "client"}
+      node_c: {ip: "192.168.1.3", role: "client"}
+    time_budget_note: >
+      ~90-170 minutes per FL run on the 3-Jetson testbed (see block comment
+      above); no precise per-run timing beyond that range is available.
+
+  # ------------------------------------------------------------------------
+  # 1. Seed-count extension: 3 -> 5 seeds for the headline FedAvg/FedProx
+  #    comparison from experiment_1.
+  # ------------------------------------------------------------------------
+  seed_extension:
+    description: >
+      FedAvg vs FedProx(mu=0.01) x {iid, non_iid_label} x 5 seeds, extending
+      experiment_1's 3-seed runs for tighter confidence intervals.
+    strategies: [fedavg, fedprox_0.01]
+    data_distributions: [iid, non_iid_label]
+    seeds: [42, 123, 456, 789, 1011]
+    # Seeds 42/123/456 already exist as results/3node_<dist>_<strategy>_seed<seed>/
+    # from experiment_1 (see experiment_1 above) and are reused as-is for the
+    # combined 5-seed analysis -- only 789 and 1011 need fresh FL runs under
+    # the results/rev_... naming convention used by this revision matrix.
+    new_seeds: [789, 1011]
+    # IMPORTANT: reusing the old seeds is only valid while data/processed is the
+    # ORIGINAL image-level partition.  If the data is re-split (e.g. with
+    # --group_file for the leakage-safe protocol, which changes the partition),
+    # all 5 seeds must be rerun: `print_revision_commands.py --all_seeds`
+    # (or set `all_seeds: true` here).
+    all_seeds: false
+    rounds: 3
+    local_epochs: 5
+    lr: 0.001
+    batch_size: 8
+    total_runs: 20   # full logical grid: 2 strategies x 2 dists x 5 seeds
+    new_runs: 8      # 2 strategies x 2 dists x 2 new seeds (what print_revision_commands.py emits)
+
+  # ------------------------------------------------------------------------
+  # 2. Dirichlet label-skew sweep.
+  # ------------------------------------------------------------------------
+  dirichlet_skew:
+    description: >
+      Label-skew sensitivity via Dirichlet(alpha) client partitioning, at
+      three concentration levels (lower alpha = more skewed).
+    alphas: [0.1, 0.5, 1.0]
+    strategies: [fedavg, fedprox_0.01]
+    seeds: [42, 123, 456]
+    rounds: 3
+    local_epochs: 5
+    lr: 0.001
+    batch_size: 8
+    total_runs: 18   # 3 alphas x 2 strategies x 3 seeds
+
+  # ------------------------------------------------------------------------
+  # 3. Low-data (client subsample) sweep.
+  # ------------------------------------------------------------------------
+  low_data:
+    description: >
+      Effect of severe per-client data scarcity via the subsampled
+      <split>_sub<frac> splits, at {iid, non_iid_label} x {5%, 1%} of data.
+    fractions: [0.05, 0.01]
+    data_distributions: [iid, non_iid_label]
+    strategies: [fedavg, fedprox_0.01]
+    seeds: [42, 123, 456]
+    rounds: 3
+    local_epochs: 5
+    lr: 0.001
+    batch_size: 8
+    total_runs: 24   # 2 fractions x 2 dists x 2 strategies x 3 seeds
+
+  # ------------------------------------------------------------------------
+  # 4. Longer FL horizon for FedBN (+ FedAvg reference).
+  # ------------------------------------------------------------------------
+  long_horizon_fedbn:
+    description: >
+      FedBN under a longer 10-round horizon (vs. the 3-round default) on the
+      non_iid_label split, with FedAvg at the same horizon as a reference.
+    strategies: [fedbn, fedavg]
+    data_distributions: [non_iid_label]
+    seeds: [42, 123, 456]
+    rounds: 10
+    local_epochs: 5
+    lr: 0.001
+    batch_size: 8
+    total_runs: 6    # 2 strategies x 3 seeds
+
+  # ------------------------------------------------------------------------
+  # 5. FedProx proximal-mu sensitivity grid.
+  # ------------------------------------------------------------------------
+  mu_grid:
+    description: "FedProx proximal-mu sensitivity sweep on non_iid_label."
+    mus: [0.001, 0.01, 0.05, 0.1, 0.5]
+    data_distributions: [non_iid_label]
+    seeds: [42, 123, 456]
+    rounds: 3
+    local_epochs: 5
+    lr: 0.001
+    batch_size: 8
+    total_runs: 15   # 5 mus x 3 seeds
+    note: >
+      The mu=0.01 cells reproduce the same (strategy, dist, seed) config as
+      seed_extension's fedprox_0.01/non_iid_label seeds 42/123/456 and land
+      in the same results/rev_noniid_fedprox_0.01_seed<S> directory, so they
+      are naturally deduplicated by --skip_existing.
+
+  # ------------------------------------------------------------------------
+  # 6. Local-epoch (client compute budget) sensitivity.
+  # ------------------------------------------------------------------------
+  local_epochs:
+    description: "Local-epoch sensitivity on non_iid_label."
+    local_epochs_values: [1, 2, 5]
+    strategies: [fedavg, fedprox_0.01]
+    data_distributions: [non_iid_label]
+    seeds: [42, 123, 456]
+    rounds: 3
+    lr: 0.001
+    batch_size: 8
+    total_runs: 18   # 3 E values x 2 strategies x 3 seeds
+    note: >
+      E=5 is the block default, so those cells share their
+      results/rev_noniid_<strategy>_seed<S> directory with seed_extension
+      and mu_grid instead of getting an _ep5 suffix.
+
+  # ------------------------------------------------------------------------
+  # 7. Client learning-rate sensitivity.
+  # ------------------------------------------------------------------------
+  learning_rate:
+    description: "Client learning-rate sensitivity on non_iid_label."
+    lrs: [0.0001, 0.001]
+    strategies: [fedavg, fedprox_0.01]
+    data_distributions: [non_iid_label]
+    seeds: [42, 123, 456]
+    rounds: 3
+    local_epochs: 5
+    batch_size: 8
+    total_runs: 12   # 2 lrs x 2 strategies x 3 seeds
+    note: >
+      lr=0.001 is the block default, so those cells share their
+      results/rev_noniid_<strategy>_seed<S> directory with seed_extension,
+      mu_grid and local_epochs instead of getting an _lr0.001 suffix.
+
+  # ------------------------------------------------------------------------
+  # 8. Centralized / local-only baseline extension.
+  # ------------------------------------------------------------------------
+  baselines_extension:
+    description: >
+      Centralized (upper bound, scripts/train_centralized.py) and local-only
+      (lower bound, scripts/train_local.py --batch --cross_eval) baselines
+      for the new seeds and new splits introduced above. epochs = rounds x
+      local_epochs (3 x 5 = 15), matching the FL runs' total local compute.
+    baseline_types: [centralized, local_only]
+    rounds: 3
+    local_epochs: 5
+    lr: 0.001
+    batch_size: 8
+    parts:
+      new_seeds:
+        description: "Seeds 789, 1011 on the original iid / non_iid_label splits."
+        data_distributions: [iid, non_iid_label]
+        seeds: [789, 1011]
+        total_runs: 8    # 2 baseline types x 2 dists x 2 seeds
+      dirichlet:
+        description: "3 seeds on each dirichlet_<alpha> split."
+        alphas: [0.1, 0.5, 1.0]
+        seeds: [42, 123, 456]
+        total_runs: 18   # 2 baseline types x 3 alphas x 3 seeds
+      subsample:
+        description: "3 seeds on each subsampled split."
+        data_distributions: [iid, non_iid_label]
+        fractions: [0.05, 0.01]
+        seeds: [42, 123, 456]
+        total_runs: 24   # 2 baseline types x 2 dists x 2 fractions x 3 seeds
+    total_runs: 50       # sum of the three parts above
+
+  # Sum of every block's `total_runs` (full logical grid, incl. reused seeds).
+  grand_total_runs: 163   # 20 + 18 + 24 + 6 + 15 + 18 + 12 + 50
+  # Sum of every block's actionable run count as emitted by
+  # scripts/print_revision_commands.py (seed_extension counted as new_runs=8
+  # instead of total_runs=20; directory-level overlaps across blocks noted
+  # above are intentionally NOT subtracted here, they are handled at run time
+  # by --skip_existing).
+  grand_total_new_runs: 151   # 8 + 18 + 24 + 6 + 15 + 18 + 12 + 50
+
+  data_preparation:
+    description: >
+      Regenerate data/processed with leakage-safe grouping and the new
+      dirichlet/subsample splits required by the blocks above. Run once,
+      after scripts/analyze_flame_leakage.py has produced
+      analysis/leakage/groups.json.
+    commands:
+      - "python3 src/data/data_splitter.py --data_dir data/raw/flame_dataset --output_dir data/processed --nodes 3 --seed 42 --group_file analysis/leakage/groups.json --dirichlet_alpha 0.1 0.5 1.0 --subsample_frac 0.05 0.01"
+
+  analysis:
+    description: "Run after the revision matrix (or any subset of it) completes."
+    commands:
+      - "python3 scripts/analyze_results.py --results_dir results --output_dir analysis"
+      - "python3 scripts/analyze_flame_leakage.py --data_dir data/raw/flame_dataset --processed_dir data/processed --output_dir analysis/leakage"

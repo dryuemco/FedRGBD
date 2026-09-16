@@ -63,8 +63,70 @@ bash scripts/run_experiment.sh fedavg non_iid 42 123 456
 
 ### Step 5: Generate Results
 ```bash
-python3 scripts/generate_plots.py     # PDF/PNG figures
+python3 scripts/generate_plots.py     # PDF/PNG figures (paper v1, hard-coded numbers)
+python3 scripts/analyze_results.py --results_dir results --output_dir analysis
+#   -> analysis/summary_table.{csv,md}  mean ± std, 95 % t-CI over seeds, per config
+#   -> analysis/pairwise_tests.{csv,md} paired Cohen's d, Wilcoxon, paired t-test
+#   -> analysis/friedman.csv            Friedman test across >= 3 strategies
+#   -> analysis/accuracy_vs_{round,time,communication}_<dist>.{png,pdf}
 ```
+
+## Revision Protocol (NCAA-D-26-02211, major revision)
+
+The revision adds the following hardware-independent steps; none of them
+change the model or the already-recorded results under `results/`.
+
+### R1. Near-duplicate audit and sequence-level split
+```bash
+python3 scripts/analyze_flame_leakage.py --data_dir data/raw/flame_dataset \
+    --processed_dir data/processed --output_dir analysis/leakage --threshold 8 --workers 4
+```
+`analysis/leakage/leakage_report.json` reports, per split and node, the share
+of val/test images that have a near-duplicate (Hamming ≤ 8 on a 64-bit dHash)
+in *any* node's training split, plus the number of near-duplicate groups that
+span several nodes.  `groups.json` is then passed to the splitter:
+```bash
+python3 src/data/data_splitter.py --data_dir data/raw/flame_dataset --output_dir data/processed \
+    --nodes 3 --seed 42 --group_file analysis/leakage/groups.json \
+    --dirichlet_alpha 0.1 0.5 1.0 --subsample_frac 0.05 0.01
+```
+This regenerates `iid/` and `non_iid_label/` group-aware and adds
+`dirichlet_<alpha>/` (per-class Dirichlet label skew) and `<split>_sub<frac>/`
+(train split reduced per node) partitions.  `data/processed/split_stats.json`
+holds the per-node class-count tables.
+
+### R2. Full metric set per client and per round
+Clients now return accuracy, balanced accuracy, precision, recall
+(sensitivity), specificity, F1, macro-F1, MCC, ROC-AUC and the confusion
+matrix every round, together with fit/eval wall-clock time and model payload
+bytes.  The server writes per-client rows, the weighted-global aggregate and
+pooled (summed-confusion-matrix) metrics to `results.json` (`rounds` key;
+all previous keys are unchanged).  `train_local.py` / `train_centralized.py`
+record the same metrics per epoch and on the final test set.
+
+### R3. Revision experiment matrix
+```bash
+python3 scripts/print_revision_commands.py            # every run, resumable
+python3 scripts/print_revision_commands.py --block mu_grid --format bash
+```
+The `revision:` block of `configs/experiment_matrix.yaml` defines: 5 seeds for
+FedAvg vs FedProx(μ=0.01) on IID / non-IID; Dirichlet α ∈ {0.1, 0.5, 1.0};
+subsample fractions {0.05, 0.01}; a 10-round FedBN run; μ ∈ {0.001, 0.01,
+0.05, 0.1, 0.5}; local epochs {1, 2, 5}; learning rates {1e-4, 1e-3}; and the
+matching centralized / local-only baselines.  Output directories follow
+`results/rev_<dist>_<strategy>[_ep<E>][_lr<LR>][_r<R>]_seed<S>` and are parsed
+by `scripts/analyze_results.py`.
+
+### R4. Unit tests (CPU, synthetic data)
+```bash
+python3 -m pytest tests -q
+```
+Covers the metric implementation (against scikit-learn), near-duplicate
+clustering and leakage audit, splitter behaviour (bit-identity with the v1
+partition, group integrity, Dirichlet determinism, subsampling), the FL
+client/server metric pipeline (including a real two-client Flower run on
+localhost), both baseline scripts, the analysis script on old and new result
+files, and the experiment matrix.
 
 ## Expected Variance
 

@@ -29,6 +29,7 @@ from torch.utils.data import DataLoader, ConcatDataset
 import sys
 sys.path.insert(0, ".")
 from src.data.dataset import FlameDataset
+from src.evaluation.metrics import MetricAccumulator, format_metrics
 from src.models.mobilenetv3_multimodal import create_model
 
 
@@ -46,25 +47,39 @@ def set_seed(seed):
 
 
 def evaluate(model, data_loader, criterion, device):
-    """Evaluate model on given data loader."""
-    model.eval()
-    total_loss = 0
-    correct = 0
-    total = 0
+    """Evaluate model on given data loader.
 
+    Returns ``(avg_loss, accuracy, metrics)`` where ``metrics`` is the full
+    dict from ``src.evaluation.metrics`` (balanced accuracy, precision,
+    recall/sensitivity, specificity, F1, MCC, ROC-AUC, confusion matrix, ...).
+    """
+    sum_criterion = nn.CrossEntropyLoss(reduction="sum")
+    acc = MetricAccumulator(num_classes=2, positive_class=1)
+    model.eval()
     with torch.no_grad():
         for images, labels in data_loader:
             images, labels = images.to(device), labels.to(device)
             outputs = model(images)
-            loss = criterion(outputs, labels)
-            total_loss += loss.item() * images.size(0)
-            _, predicted = outputs.max(1)
-            total += labels.size(0)
-            correct += predicted.eq(labels).sum().item()
+            acc.update(outputs, labels, sum_criterion(outputs, labels).item())
 
-    avg_loss = total_loss / max(total, 1)
-    accuracy = correct / max(total, 1)
-    return avg_loss, accuracy
+    metrics = acc.compute()
+    avg_loss = float(metrics["loss"]) if metrics["loss"] is not None else 0.0
+    accuracy = float(metrics["accuracy"]) if metrics["accuracy"] is not None else 0.0
+    metrics["loss"] = avg_loss
+    return avg_loss, accuracy, metrics
+
+
+def json_metrics(metrics, digits=6):
+    """Round floats for results.json; keep ints/lists (confusion matrix) as-is."""
+    out = {}
+    for k, v in metrics.items():
+        if k == "per_class":
+            out[k] = {c: json_metrics(sub, digits) for c, sub in v.items()}
+        elif isinstance(v, float):
+            out[k] = round(v, digits)
+        else:
+            out[k] = v
+    return out
 
 
 def train_one_epoch(model, train_loader, criterion, optimizer, device):
@@ -86,7 +101,7 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device):
     return total_loss / max(total_samples, 1)
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description="Centralized training baseline")
     parser.add_argument("--data_dirs", nargs="+", required=True,
                         help="Paths to all node data dirs (will be pooled)")
@@ -96,7 +111,11 @@ def main():
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output_dir", default="results/centralized")
-    args = parser.parse_args()
+    parser.add_argument("--no_pretrained", action="store_true",
+                        help="Random init instead of ImageNet weights (CPU unit tests only)")
+    parser.add_argument("--img_size", type=int, default=224,
+                        help="Input resolution (224 = paper setting; smaller only for tests)")
+    args = parser.parse_args(argv)
 
     set_seed(args.seed)
     os.makedirs(args.output_dir, exist_ok=True)
@@ -122,9 +141,9 @@ def main():
 
     for data_dir in args.data_dirs:
         node_name = os.path.basename(data_dir)
-        train_ds = FlameDataset(data_dir, split="train")
-        val_ds = FlameDataset(data_dir, split="val")
-        test_ds = FlameDataset(data_dir, split="test")
+        train_ds = FlameDataset(data_dir, split="train", img_size=args.img_size)
+        val_ds = FlameDataset(data_dir, split="val", img_size=args.img_size)
+        test_ds = FlameDataset(data_dir, split="test", img_size=args.img_size)
         train_datasets.append(train_ds)
         val_datasets.append(val_ds)
         test_datasets.append(test_ds)
@@ -151,7 +170,8 @@ def main():
                              shuffle=False, num_workers=0, pin_memory=False)
 
     # Create model
-    model = create_model(num_classes=2, in_channels=3, pretrained=True)
+    pretrained = not args.no_pretrained
+    model = create_model(num_classes=2, in_channels=3, pretrained=pretrained)
     model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -168,7 +188,10 @@ def main():
 
         epoch_start = time.perf_counter()
         train_loss = train_one_epoch(model, train_loader, criterion, optimizer, device)
-        val_loss, val_acc = evaluate(model, val_loader, criterion, device)
+        train_time = time.perf_counter() - epoch_start
+        eval_start = time.perf_counter()
+        val_loss, val_acc, val_metrics = evaluate(model, val_loader, criterion, device)
+        eval_time = time.perf_counter() - eval_start
         epoch_time = time.perf_counter() - epoch_start
 
         record = {
@@ -177,6 +200,11 @@ def main():
             "val_loss": round(val_loss, 6),
             "val_accuracy": round(val_acc, 6),
             "epoch_time_s": round(epoch_time, 1),
+            # v3 (NCAA revision): full metric set + separate train/eval timing
+            "train_time_s": round(train_time, 3),
+            "eval_time_s": round(eval_time, 3),
+            "elapsed_s": round(time.perf_counter() - start_total, 3),
+            "val_metrics": json_metrics(val_metrics),
         }
         history.append(record)
 
@@ -189,8 +217,8 @@ def main():
     total_time = time.perf_counter() - start_total
 
     # Final test evaluation
-    test_loss, test_acc = evaluate(model, test_loader, criterion, device)
-    print(f"\n  Final Test: loss={test_loss:.4f}, accuracy={test_acc:.4f}")
+    test_loss, test_acc, test_metrics = evaluate(model, test_loader, criterion, device)
+    print(f"\n  Final Test: loss={test_loss:.4f}, {format_metrics(test_metrics)}")
 
     # Also evaluate on each node's test set individually
     per_node_results = {}
@@ -198,10 +226,11 @@ def main():
         node_name = os.path.basename(data_dir)
         node_test_loader = DataLoader(test_datasets[i], batch_size=args.batch_size,
                                       shuffle=False, num_workers=0, pin_memory=False)
-        node_loss, node_acc = evaluate(model, node_test_loader, criterion, device)
+        node_loss, node_acc, node_metrics = evaluate(model, node_test_loader, criterion, device)
         per_node_results[node_name] = {
             "test_loss": round(node_loss, 6),
             "test_accuracy": round(node_acc, 6),
+            "test_metrics": json_metrics(node_metrics),
         }
         print(f"  {node_name} Test: loss={node_loss:.4f}, accuracy={node_acc:.4f}")
 
@@ -217,6 +246,8 @@ def main():
         "total_time_s": round(total_time, 2),
         "final_test_loss": round(test_loss, 6),
         "final_test_accuracy": round(test_acc, 6),
+        "final_test_metrics": json_metrics(test_metrics),
+        "results_schema_version": 2,
         "per_node_test": per_node_results,
         "history": history,
         "fl_round_equivalents": {
