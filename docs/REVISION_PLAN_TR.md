@@ -25,7 +25,7 @@ dosya dosya). Bu belge üç soruya cevap verir:
 | R5-f | Başlık değişsin: "Empirical Evaluation of Federated Learning on Edge GPU Clusters with Heterogeneous RGB-D Sensors" | — (metin işi) | Başlığı hakemin önerdiği gibi değiştirmek |
 | R1 | Eş. 1–5b öncesine ilgili referanslar; 2025-26 kaynakları; gelecek çalışmaya wavelet tabanlı hibrit yöntem | — (metin işi) | Related work + future work |
 | R5-g | Metasezgisel hiperparametre ayarlama literatürüne atıf ("Convolutional neural networks hyperparameters tuning") | — (metin işi) | Related work'e 1 paragraf |
-| R3-g | Çapraz-sensör deneyi sahne bağımsız olmalı (leave-one-scene-out); sensör heterojenliği FL deneyine bağlansın | **Yapılmadı** (özel RGB-D kayıtları + cihaz gerekir) | Bkz. §3.4 |
+| R3-g | Çapraz-sensör deneyi sahne bağımsız olmalı (leave-one-scene-out); sensör heterojenliği FL deneyine bağlansın | `scripts/cross_sensor_loso.py` + `src/data/custom_dataset.py` (sahne başına bir kat, rastgele-bölme taban çizgisiyle yan yana); sahne etiketleri için `labels.csv` gerekir | Yeni tablo: LOSO vs rastgele bölme, kamera içi / kameralar arası; veri Jetson'larda, koşu cihaz ister (bkz. §3.4) |
 
 ### Bu oturumda yapılan destekleyici işler
 * `configs/experiment_matrix.yaml` → `revision:` bloğu ve `scripts/print_revision_commands.py`
@@ -33,7 +33,7 @@ dosya dosya). Bu belge üç soruya cevap verir:
 * `results.json` şeması v2: eski anahtarlar aynen korunuyor, yeni `rounds`, `client_config`,
   `model_payload_bytes`, `tags` vb. eklendi. Eski dosyalar ve yeni dosyalar aynı analiz
   betiğinden geçiyor.
-* 115 CPU birim testi (`python3 -m pytest tests -q`), gerçek Flower 1.13.1 ile localhost'ta
+* 220 CPU birim testi (`python3 -m pytest tests -q`), gerçek Flower 1.13.1 ile localhost'ta
   2 istemcili uçtan uca test dahil.
 * `results/` altına hiçbir şey yazılmadı; model değişmedi.
 

@@ -22,9 +22,12 @@ PyTorch 2.5, Flower 1.13.1, `batch_size=8` defaults for the Jetson Orin Nano
 | R5: hyperparameter sensitivity (μ, epochs, lr) | μ grid {0.001, 0.01, 0.05, 0.1, 0.5}, local epochs {1, 2, 5}, lr {1e-4, 1e-3} blocks |
 | R3, R5: FedBN conclusions limited to 3 rounds | 10-round FedBN (and FedAvg reference) block |
 
-Not addressed here because they need hardware or manuscript edits: scene-independent
-(leave-one-scene-out) cross-sensor evaluation, tying sensor heterogeneity into the FL
-run, new references / title change / wavelet future-work paragraph.
+| R3: scene-independent cross-sensor evaluation | `scripts/cross_sensor_loso.py` + `src/data/custom_dataset.py` (leave-one-scene-out, with a pooled random-split baseline for comparison) |
+| R1, R5: title, scope statements, equation citations, 2025-26 references, metaheuristic HPO paragraph, wavelet future work | `paper/main.tex` revised draft (all new numbers are red placeholders) and `docs/RESPONSE_TO_REVIEWERS.md` |
+
+Still requiring hardware or author input: every new experiment (see the revision matrix),
+scene labels for the custom captures (`labels.csv`), and tying sensor heterogeneity
+directly into an FL run.
 
 ## File-by-file changes
 
