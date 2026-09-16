@@ -229,9 +229,11 @@ def train_single_node(data_dir, node_name, epochs, batch_size, lr, seed, output_
         "results_schema_version": 2,
         "cross_eval": cross_eval_results,
         "history": history,
+        # one entry per completed FL-equivalent round (5 local epochs = 1 round),
+        # so a 10-round horizon (--epochs 50) is covered as well as the 3-round default
         "fl_round_equivalents": {
-            f"round_{r}": history[r * 5 - 1] if r * 5 <= len(history) else None
-            for r in range(1, 4)
+            f"round_{r}": history[r * 5 - 1]
+            for r in range(1, len(history) // 5 + 1)
         },
         "train_class_distribution": train_ds.get_class_distribution(),
         "timestamp": datetime.now().isoformat(),

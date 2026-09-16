@@ -188,13 +188,18 @@ def split_into(lst, n):
     return [lst[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n)]
 
 
-def _group_lookup(group_map: Dict[str, int]) -> Dict[str, int]:
-    """Secondary index ``<ClassDir>/<basename> -> gid`` used as a match fallback."""
-    by_name: Dict[str, int] = {}
+def _group_lookup(group_map: Dict[str, int]) -> Dict[str, Tuple[int, str]]:
+    """Secondary index ``<ClassDir>/<basename> -> (gid, original key)``.
+
+    Used as a match fallback when the group file stores longer paths than the
+    ones discovered under ``--data_dir``; the original key is kept so the caller
+    can report how much of the group file was actually consumed.
+    """
+    by_name: Dict[str, Tuple[int, str]] = {}
     for key, gid in group_map.items():
         parts = key.split('/')
         short = '/'.join(parts[-2:]) if len(parts) >= 2 else key
-        by_name.setdefault(short, gid)
+        by_name.setdefault(short, (gid, key))
     return by_name
 
 
@@ -209,7 +214,8 @@ def build_units(fire: Sequence[str], nofire: Sequence[str], data_dir: str,
     """
     gid_of: Dict[str, str] = {}
     info = {'n_matched': 0, 'n_groups_used': 0, 'cross_label_groups': 0,
-            'largest_unit': 1, 'n_units': len(fire) + len(nofire)}
+            'largest_unit': 1, 'n_units': len(fire) + len(nofire),
+            'group_paths_total': len(group_map or {}), 'group_paths_matched': 0}
     if not group_map:
         for p in list(fire) + list(nofire):
             gid_of[p] = 'singleton'
@@ -221,6 +227,7 @@ def build_units(fire: Sequence[str], nofire: Sequence[str], data_dir: str,
     classes_of_gid: Dict[int, set] = {}
     n_matched = 0
     n_singleton = 0
+    matched_keys = set()
 
     for paths, cls in ((fire, 'Fire'), (nofire, 'No_Fire')):
         units: List[Unit] = []
@@ -231,8 +238,13 @@ def build_units(fire: Sequence[str], nofire: Sequence[str], data_dir: str,
             except ValueError:  # different drive on Windows
                 rel = os.path.basename(p)
             gid = group_map.get(rel)
-            if gid is None:
-                gid = by_name.get('{}/{}'.format(cls, os.path.basename(p)))
+            if gid is not None:
+                matched_keys.add(rel)
+            else:
+                hit = by_name.get('{}/{}'.format(cls, os.path.basename(p)))
+                if hit is not None:
+                    gid, source_key = hit
+                    matched_keys.add(source_key)
             if gid is None:
                 gid_of[p] = 'singleton_{}'.format(n_singleton)
                 n_singleton += 1
@@ -255,7 +267,35 @@ def build_units(fire: Sequence[str], nofire: Sequence[str], data_dir: str,
     info['cross_label_groups'] = sum(1 for c in classes_of_gid.values() if len(c) > 1)
     info['n_units'] = len(fire_units) + len(nofire_units)
     info['largest_unit'] = max([len(u) for u in fire_units + nofire_units] or [0])
+    info['group_paths_matched'] = len(matched_keys)
     return fire_units, nofire_units, gid_of, info
+
+
+def warn_group_coverage(info: dict, group_file: Optional[str] = None,
+                        min_coverage: float = 0.5) -> bool:
+    """Shout when barely any path of ``--group_file`` matched a discovered image.
+
+    A group file written for a different directory layout matches nothing, the
+    splitter then silently treats every image as a singleton and the resulting
+    partition is NOT leakage-safe.  Returns True when the warning fired.
+    """
+    total = int(info.get('group_paths_total') or 0)
+    matched = int(info.get('group_paths_matched') or 0)
+    if total <= 0:
+        return False
+    coverage = matched / float(total)
+    if coverage >= min_coverage:
+        return False
+    print("!" * 72)
+    print("  WARNING: only {}/{} ({:.1%}) of the paths in {} matched an image".format(
+        matched, total, coverage, group_file or 'the group file'))
+    print("  under --data_dir.  Unmatched images are treated as SINGLETONS, so the")
+    print("  partition is NOT group-safe and near-duplicate frames can still be")
+    print("  split across nodes and across train/val/test.")
+    print("  Check that the group file was built from this --data_dir (its paths must")
+    print("  be relative to it, e.g. 'Fire/frame_00001.jpg').")
+    print("!" * 72)
+    return True
 
 
 # --------------------------------------------------------------------------- #
@@ -325,6 +365,35 @@ def link_files(file_list, dest_dir, class_name):
         _place(src, link)
 
 
+def prepare_split_dir(output_dir: str, split_name: str, clean: bool = False) -> bool:
+    """Delete (``--clean``) or loudly warn about a pre-existing split directory.
+
+    ``link_files`` only replaces the *same* basename, so images that move to a
+    different node or a different train/val/test bucket in a re-run are left
+    behind by the previous partition.  The tree then holds both partitions at
+    once, which silently puts training images into val/test.  Returns True when
+    the directory was removed.
+    """
+    target = os.path.join(output_dir, split_name)
+    if not os.path.isdir(target):
+        return False
+    with os.scandir(target) as it:
+        if next(it, None) is None:
+            return False
+    if clean:
+        print("  --clean: removing the stale {} tree".format(target))
+        shutil.rmtree(target)
+        return True
+    print("!" * 72)
+    print("  WARNING: {} already exists and is not empty.".format(target))
+    print("  Files written by a PREVIOUS partition are NOT removed: any image that")
+    print("  moves to another node or to another train/val/test bucket will exist")
+    print("  twice, which silently leaks training images into val/test.")
+    print("  Re-run with --clean (or delete the directory first) when re-splitting.")
+    print("!" * 72)
+    return False
+
+
 # --------------------------------------------------------------------------- #
 # stats / manifest
 # --------------------------------------------------------------------------- #
@@ -381,8 +450,10 @@ def partition_to_tvt(node_units: Dict[str, Dict[str, List[Unit]]], seed: int):
 
 
 def materialize(output_dir: str, split_name: str, tvt, data_dir: str,
-                gid_of: Dict[str, str], extra: Optional[dict] = None, quiet: bool = False) -> dict:
+                gid_of: Dict[str, str], extra: Optional[dict] = None, quiet: bool = False,
+                clean: bool = False) -> dict:
     """Place the files, write ``manifest.csv`` and return the stats block."""
+    prepare_split_dir(output_dir, split_name, clean)
     stats = {}
     for node, per_class in tvt.items():
         node_stats = {}
@@ -407,10 +478,11 @@ def materialize(output_dir: str, split_name: str, tvt, data_dir: str,
 
 
 def create_split(output_dir, split_name, node_data, seed, data_dir='.', gid_of=None,
-                 extra=None, quiet=False):
+                 extra=None, quiet=False, clean=False):
     """Split each node 70/15/15 and materialise it (original entry point)."""
     tvt = partition_to_tvt(node_data, seed)
-    return materialize(output_dir, split_name, tvt, data_dir, gid_of or {}, extra, quiet), tvt
+    return materialize(output_dir, split_name, tvt, data_dir, gid_of or {}, extra, quiet,
+                       clean), tvt
 
 
 # --------------------------------------------------------------------------- #
@@ -582,10 +654,13 @@ def run(args) -> dict:
               "{} cross-label groups)".format(
                   ginfo['n_matched'], len(fire) + len(nofire), ginfo['n_groups_used'],
                   ginfo['n_units'], ginfo['largest_unit'], ginfo['cross_label_groups']))
+        warn_group_coverage(ginfo, args.group_file)
 
     random.seed(args.seed)
     all_stats: Dict[str, dict] = {}
     base_tvt: Dict[str, dict] = {}
+
+    clean = bool(getattr(args, 'clean', False))
 
     if not getattr(args, 'skip_base_splits', False):
         # --- IID: equal random split ------------------------------------- #
@@ -595,7 +670,7 @@ def run(args) -> dict:
         random.shuffle(rn)
         iid_nodes = partition_iid(rf, rn, node_names)
         all_stats['iid'], base_tvt['iid'] = create_split(
-            args.output_dir, 'iid', iid_nodes, args.seed, args.data_dir, gid_of)
+            args.output_dir, 'iid', iid_nodes, args.seed, args.data_dir, gid_of, clean=clean)
 
         # --- Non-IID label skew ------------------------------------------ #
         print("\n--- Non-IID Label Skew ({} nodes) ---".format(args.nodes))
@@ -603,7 +678,8 @@ def run(args) -> dict:
         random.shuffle(rn)
         noniid_nodes = partition_non_iid_label(rf, rn, node_names)
         all_stats['non_iid_label'], base_tvt['non_iid_label'] = create_split(
-            args.output_dir, 'non_iid_label', noniid_nodes, args.seed, args.data_dir, gid_of)
+            args.output_dir, 'non_iid_label', noniid_nodes, args.seed, args.data_dir, gid_of,
+            clean=clean)
 
     # --- Dirichlet label skew -------------------------------------------- #
     for alpha in (getattr(args, 'dirichlet_alpha', None) or []):
@@ -616,7 +692,8 @@ def run(args) -> dict:
                  'dirichlet_proportions': proportions,
                  'seed': int(args.seed)}
         all_stats[name], base_tvt[name] = create_split(
-            args.output_dir, name, nodes_units, args.seed, args.data_dir, gid_of, extra)
+            args.output_dir, name, nodes_units, args.seed, args.data_dir, gid_of, extra,
+            clean=clean)
 
     # --- Subsampling ------------------------------------------------------ #
     fracs = getattr(args, 'subsample_frac', None) or []
@@ -633,7 +710,7 @@ def run(args) -> dict:
                 extra['dirichlet_alpha'] = all_stats[base_name]['dirichlet_alpha']
                 extra['dirichlet_proportions'] = all_stats[base_name]['dirichlet_proportions']
             all_stats[name] = materialize(
-                args.output_dir, name, sub, args.data_dir, gid_of, extra)
+                args.output_dir, name, sub, args.data_dir, gid_of, extra, clean=clean)
 
     all_stats['_meta'] = {
         'seed': int(args.seed),
@@ -649,6 +726,9 @@ def run(args) -> dict:
         'cross_label_groups': ginfo['cross_label_groups'],
         'largest_unit': ginfo['largest_unit'],
         'n_units': ginfo['n_units'],
+        'group_paths_total': ginfo['group_paths_total'],
+        'group_paths_matched': ginfo['group_paths_matched'],
+        'clean': clean,
     }
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -663,7 +743,8 @@ def _defaults() -> dict:
     return {'data_dir': 'data/raw/flame_dataset', 'output_dir': 'data/processed',
             'seed': 42, 'nodes': 3, 'group_file': None, 'dirichlet_alpha': None,
             'dirichlet_min_size': 10, 'skip_base_splits': False,
-            'subsample_frac': None, 'subsample_splits': ['train'], 'link_mode': 'symlink'}
+            'subsample_frac': None, 'subsample_splits': ['train'], 'link_mode': 'symlink',
+            'clean': False}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -689,6 +770,11 @@ def build_parser() -> argparse.ArgumentParser:
                         help="which splits the subsampling reduces (default: train only)")
     parser.add_argument("--link_mode", default="symlink", choices=["symlink", "hardlink", "copy"],
                         help="how images are placed; symlink falls back to copy if unsupported")
+    parser.add_argument("--clean", action="store_true",
+                        help="delete each <output_dir>/<split> tree before rewriting it; "
+                             "REQUIRED when re-partitioning into an existing data/processed "
+                             "(otherwise files from the previous partition stay behind and "
+                             "leak train images into val/test)")
     return parser
 
 

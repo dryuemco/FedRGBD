@@ -357,7 +357,11 @@ def _resolve_processed_image(link_path: str, data_dir: str, by_key: Dict[Tuple[s
     """Map a processed (sym)link/copy back to the raw image index."""
     try:
         real = os.path.realpath(link_path)
-        rel = os.path.relpath(real, os.path.abspath(data_dir)).replace(os.sep, "/")
+        # realpath (not abspath) on both sides: --data_dir itself is often reached
+        # through a symlink (data/raw -> /mnt/ssd/flame), and a mismatch here would
+        # silently fall back to basename matching, which collapses same-named files
+        # living in different sub-trees.
+        rel = os.path.relpath(real, os.path.realpath(data_dir)).replace(os.sep, "/")
         key = ("rel", rel)
         if key in by_key:
             return by_key[key]

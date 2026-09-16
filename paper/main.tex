@@ -1,8 +1,14 @@
-% FedRGBD — IEEE Sensors Journal Manuscript
-% Multimodal Federated Learning on Edge Sensor Nodes
-% for Visual Anomaly Detection Using RGB-D Cameras
+% FedRGBD — Manuscript (revision for Neural Computing and Applications, NCAA-D-26-02211)
+% Empirical Evaluation of Federated Learning on Edge GPU Clusters
+% with Heterogeneous RGB-D Sensors
 %
 % Compile with: pdflatex main.tex && bibtex main && pdflatex main.tex && pdflatex main.tex
+%
+% REVISION NOTE (major revision, due 13 Nov 2026):
+%   * every number that still has to come from the pending Jetson runs is written as
+%     XX.X / X.XXX and is accompanied by a \todo{...} marker.
+%   * NO placeholder number is a real measurement.  Do not remove a \todo without
+%     inserting the corresponding value from analysis/summary_table.md.
 
 \documentclass[journal]{IEEEtran}
 
@@ -24,17 +30,20 @@
 \newcommand{\fedprox}{\textsc{FedProx}}
 \newcommand{\fedbn}{\textsc{FedBN}}
 \newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+% Placeholder for a number that must come from a pending experiment.
+\newcommand{\PH}{\textcolor{red}{XX.X}}
+\newcommand{\PHs}{\textcolor{red}{X.XXX}}
 
 \begin{document}
 
-\title{Multimodal Federated Learning on Edge Sensor Nodes for Visual Anomaly Detection Using RGB-D Cameras}
+\title{Empirical Evaluation of Federated Learning on Edge GPU Clusters with Heterogeneous RGB-D Sensors}
 
 \author{Yunus~Emre~\c{C}o\u{g}urcu%
 \thanks{Y. E. \c{C}o\u{g}urcu is with the Department of Computer Engineering / Mechatronics Engineering, \c{C}ukurova University, 01330 Adana, Turkey (e-mail: yecogurcu@cu.edu.tr).}%
 }
 
-\markboth{IEEE Sensors Journal, Vol.~XX, No.~XX, Month~2026}%
-{Multimodal Federated Learning on Edge Sensor Nodes}
+\markboth{Neural Computing and Applications, 2026}%
+{Empirical Evaluation of Federated Learning on Edge GPU Clusters}
 
 \maketitle
 
@@ -42,13 +51,11 @@
 % ABSTRACT
 % ============================================================
 \begin{abstract}
-Federated learning (FL) enables privacy-preserving distributed model training across edge devices, yet nearly all existing FL research relies on single-modality data in simulated environments with virtual clients on a single GPU. This paper presents the first empirical study of multimodal FL using real RGB-D cameras on physical edge hardware. We deploy three NVIDIA Jetson Orin Nano Super devices, each equipped with heterogeneous depth cameras (two Intel RealSense variants and one Stereolabs ZED~2i), connected via wireless network. Using the FLAME fire detection dataset, we systematically evaluate FL strategies (\fedavg{}, \fedprox{}, \fedbn{}) across IID and non-IID data distributions with 2-node and 3-node configurations. Our experiments reveal three key findings: (1)~non-IID label skew causes a dramatic 31.8\% accuracy drop in the first communication round with 3-node \fedavg{}, reducing accuracy to near-random levels (53.66\%); (2)~\fedprox{} with $\mu=0.01$ recovers 41.1\% of this gap in the first round while achieving the highest final accuracy (99.49\%); and (3)~increasing the proximal term to $\mu=0.1$ leads to over-regularization, improving initial convergence but reducing asymptotic accuracy to 98.35\%. We further profile per-round energy consumption, communication overhead, and GPU memory usage on the Jetson platform, providing the first real hardware resource measurements for FL on modern edge AI devices. All code and configurations are publicly available at \url{https://github.com/dryuemco/FedRGBD}.
-
-\todo{Update abstract after all experiments are complete.}
+Federated learning (FL) enables privacy-preserving distributed model training across edge devices, yet the large majority of published FL results are obtained from virtual clients simulated on a single server-class GPU. This paper reports an \emph{empirical, deliberately narrow-scope} evaluation of FL on a physical edge GPU cluster: three NVIDIA Jetson Orin Nano Super nodes connected over a wireless local network, each instrumented with a different depth camera (two Intel RealSense variants and one Stereolabs ZED~2i). We state the scope explicitly. The federated experiments train a single MobileNetV3-Small backbone on RGB partitions of the FLAME aerial fire-detection dataset under a three-round communication budget; the heterogeneous RGB-D sensors are characterised separately, in a dedicated cross-sensor generalisation study, and the depth modality is \emph{not} an input of the federated classifier. Within this scope we compare \fedavg{}, \fedprox{} ($\mu$ grid) and \fedbn{} against centralised and local-only references under IID partitions, a manually constructed label skew, Dirichlet label skew, and a low-data regime, and we report balanced accuracy, sensitivity, specificity, precision, macro-F1, MCC and ROC-AUC globally and per client, together with per-round wall-clock time and communication volume. Conclusions are supported by 95\% confidence intervals over repeated seeds rather than by point estimates, and all statements about \fedbn{} are restricted to the communication budgets actually tested. \todo{Rewrite the quantitative sentences of the abstract once the pending Jetson runs (sequence-level split, 5 seeds, Dirichlet, low-data, $\mu$/epoch/lr sweeps, 10-round \fedbn{}, leave-one-scene-out cross-sensor) are complete; do not reuse v1 numbers, they were obtained under the image-level split.} All code, configurations and analysis scripts are publicly available at \url{https://github.com/dryuemco/FedRGBD}.
 \end{abstract}
 
 \begin{IEEEkeywords}
-Federated learning, edge computing, RGB-D cameras, sensor heterogeneity, non-IID data, Jetson Orin Nano, depth cameras, anomaly detection, multimodal learning
+Federated learning, edge computing, edge GPU cluster, RGB-D cameras, sensor heterogeneity, non-IID data, Jetson Orin Nano, data leakage, empirical evaluation
 \end{IEEEkeywords}
 
 % ============================================================
@@ -58,27 +65,40 @@ Federated learning, edge computing, RGB-D cameras, sensor heterogeneity, non-IID
 
 \IEEEPARstart{E}{dge} sensor networks equipped with depth cameras are increasingly deployed for environmental monitoring, industrial inspection, and anomaly detection tasks. These sensors produce rich multimodal data streams---color (RGB), depth, and infrared (IR)---that capture complementary information about the observed scene. However, centralized collection and processing of such data raises significant privacy, bandwidth, and latency concerns, particularly in distributed deployments across multiple sites.
 
-Federated learning (FL) has emerged as a promising paradigm for privacy-preserving distributed model training, allowing multiple edge devices to collaboratively train a shared model without exchanging raw data~\cite{mcmahan2017fedavg}. Despite extensive research on FL algorithms and communication efficiency, the vast majority of studies operate in simulated environments where virtual clients are created by partitioning a single dataset on one GPU~\cite{li2020fedprox, kairouz2021advances}. This simulation-based approach fails to capture the real-world challenges of FL on physical edge hardware: genuine memory constraints, actual power budgets, true network latency, and---critically---the natural data heterogeneity that arises from physically different sensors observing different environments.
+Federated learning (FL) has emerged as a promising paradigm for privacy-preserving distributed model training, allowing multiple edge devices to collaboratively train a shared model without exchanging raw data~\cite{mcmahan2017fedavg}. Despite extensive research on FL algorithms and communication efficiency, the vast majority of studies operate in simulated environments where virtual clients are created by partitioning a single dataset on one GPU~\cite{li2020fedprox, kairouz2021advances, seo2025iidnoniid}. This simulation-based approach does not capture several properties of FL on physical edge hardware: genuine memory constraints, actual power budgets, true network latency, and the wall-clock cost of algorithmic choices that appear free in simulation.
 
-Several important gaps remain in the FL literature. First, no published work has conducted FL training with actual depth camera data from physical edge nodes; existing multimodal FL studies use pre-collected datasets without real sensor involvement. Second, while non-IID data distributions in FL have been extensively studied through artificial label and feature skew~\cite{zhao2018noniid}, the natural non-IID effect arising from physical sensor heterogeneity---different camera models with different baselines, depth ranges, and noise profiles producing structurally different data from the same scene type---has not been investigated. Third, real per-round energy and latency measurements for FL on modern edge AI hardware (such as the NVIDIA Jetson Orin platform) are virtually absent from the literature.
+Three gaps motivated this study. First, per-round energy, latency and communication measurements for FL on modern edge AI hardware such as the NVIDIA Jetson Orin platform remain scarce, even though the training-time behaviour of these devices has been characterised for the centralised case~\cite{prashanthi2022jetson, banerjee2025fedjoule}. Second, non-IID behaviour in FL is almost always induced artificially by partitioning one dataset, and the partitioning protocol itself is rarely audited for leakage between training and evaluation splits~\cite{zhao2018noniid, domini2025profed, borazjani2026embeddings}. Third, physically different depth cameras observing comparable scenes constitute a natural source of feature shift whose magnitude has not been quantified on real devices.
 
-This paper addresses these gaps through the first empirical study of multimodal federated learning on real edge sensor nodes with RGB-D cameras. Our testbed consists of three NVIDIA Jetson Orin Nano Super devices, each equipped with a different depth camera (two Intel RealSense variants and one Stereolabs ZED~2i), connected via a wireless local network. We systematically evaluate FL strategies across multiple dimensions: data distribution (IID vs.\ non-IID), FL algorithm (\fedavg{}, \fedprox{}, \fedbn{}), number of participating nodes (2 vs.\ 3), sensor modality (RGB, Depth, IR, and combinations), and network conditions.
+\subsection{Scope of this study}
+\label{sec:scope}
+
+This paper is an empirical evaluation, not a proposal of a new algorithm, and its scope is deliberately narrow. We state the boundaries up front so that the reader can judge which conclusions transfer.
+
+\begin{itemize}
+    \item \textbf{Cluster size.} Three physical client nodes (plus a 2-node reference configuration) with full participation in every round. Nothing in this paper speaks to cross-device FL with hundreds or thousands of intermittently available clients.
+    \item \textbf{Task and dataset.} One binary visual anomaly-detection task (fire / no-fire) derived from the FLAME aerial imagery dataset~\cite{shamsoshoara2021flame}. The task is close to saturation for a centralised learner, which limits the resolution of accuracy-based comparisons; Sections~\ref{sec:lowdata} and~\ref{sec:res_lowdata} add a deliberately harder regime for this reason.
+    \item \textbf{Backbone.} One architecture (MobileNetV3-Small~\cite{howard2019mobilenetv3}), selected for the 8\,GB memory budget of the Jetson Orin Nano. Strategy rankings may depend on architecture, in particular on the amount and placement of normalisation layers.
+    \item \textbf{Communication budget.} The main comparison uses three communication rounds, which is the budget under which the testbed can complete the full experiment matrix. A separate ten-round block is used solely to probe whether the three-round ranking of \fedbn{} persists; no claim is made about asymptotic behaviour beyond ten rounds.
+    \item \textbf{Role of the RGB-D sensors.} The federated experiments use RGB partitions of FLAME. The heterogeneous depth cameras are \emph{not} inputs of the federated classifier; they are characterised in a separate cross-sensor generalisation study on custom captures (Sections~\ref{sec:sensorlink} and~\ref{sec:loso}). We keep the two experiments explicitly separate rather than presenting sensor heterogeneity as a property of the federated runs.
+\end{itemize}
 
 The main contributions of this work are:
 
 \begin{enumerate}
-    \item \textbf{First multimodal FL study with real depth cameras:} We train FL pipelines using RGB, depth, and IR data from physical RealSense and ZED cameras on physical Jetson edge nodes---not simulated.
+    \item \textbf{A physical edge-GPU-cluster FL testbed with full instrumentation.} Per-round wall-clock time, communication volume and resource usage are recorded on three Jetson Orin Nano Super devices, so that strategies can be compared per unit of time and per transmitted megabyte rather than only per round.
 
-    \item \textbf{Sensor heterogeneity as natural non-IID:} We quantify a three-level hierarchy of sensor heterogeneity (manufacturing variance, cross-technology, and client scaling) and its impact on FL convergence.
+    \item \textbf{A leakage-audited partitioning protocol.} FLAME consists of frames extracted from continuous acquisition sequences. We audit near-duplicate leakage of the original image-level split and re-run the evaluation under a group-level (sequence-level) split in which near-duplicate groups never cross a node or a split boundary.
 
-    \item \textbf{Proximal term analysis on real hardware:} We demonstrate that \fedprox{} with $\mu=0.01$ achieves a 41.1\% accuracy improvement over \fedavg{} in the critical first communication round under non-IID conditions, while $\mu=0.1$ leads to over-regularization---a trade-off not observable in simulation studies where memory and time constraints are absent.
+    \item \textbf{A full evaluation protocol rather than accuracy alone.} Balanced accuracy, sensitivity, specificity, precision, F1, macro-F1, MCC and ROC-AUC are reported globally and per client, with per-client confusion matrices, and all comparisons are accompanied by 95\% confidence intervals and effect sizes over repeated seeds.
 
-    \item \textbf{Real hardware resource profiling:} We provide per-round energy (Wh), latency (s), and communication cost (KB) measurements on the Jetson Orin Nano Super platform, offering practical guidance for FL deployment on edge devices.
+    \item \textbf{A sensitivity study over heterogeneity and hyperparameters.} Manual label skew, Dirichlet label skew at three concentrations, a low-data regime, a five-point $\mu$ grid, three local-epoch settings and two learning rates delimit how stable the observed rankings are.
 
-    \item \textbf{Open-source reproducible framework:} Complete code, configurations, and experiment scripts are publicly available.
+    \item \textbf{A scene-independent cross-sensor protocol.} Cross-camera generalisation is evaluated leave-one-scene-out, so that reported cross-camera accuracy cannot be explained by scene overlap between training and test frames.
+
+    \item \textbf{Open-source reproducible framework.} Complete code, configurations, experiment scripts and the analysis pipeline that produces every table in this paper are publicly available.
 \end{enumerate}
 
-The remainder of this paper is organized as follows. Section~\ref{sec:related} reviews related work on FL at the edge, multimodal sensor fusion, and non-IID data handling. Section~\ref{sec:methodology} describes our system architecture, dataset, model, and experimental design. Section~\ref{sec:results} presents the experimental results. Section~\ref{sec:discussion} discusses practical implications and limitations. Section~\ref{sec:conclusion} concludes the paper.
+The remainder of this paper is organized as follows. Section~\ref{sec:related} reviews related work on FL at the edge, multimodal sensor fusion, non-IID data handling, and metaheuristic hyperparameter optimisation. Section~\ref{sec:methodology} describes the system architecture, dataset and partitioning protocol, the federated objectives, the evaluation metrics and the statistical protocol. Section~\ref{sec:results} presents the experimental results. Section~\ref{sec:discussion} discusses practical implications, generalisability and limitations. Section~\ref{sec:conclusion} concludes the paper.
 
 
 % ============================================================
@@ -91,19 +111,28 @@ The remainder of this paper is organized as follows. Section~\ref{sec:related} r
 
 McMahan et al.\ introduced \fedavg{}, which performs multiple local stochastic gradient descent (SGD) steps before aggregating model updates~\cite{mcmahan2017fedavg}. Subsequent work has addressed communication efficiency~\cite{konevcny2016communication}, privacy guarantees~\cite{bonawitz2017practical}, and robustness to heterogeneous data~\cite{li2020fedprox}. However, most FL experiments are conducted in simulated environments where all clients run as separate processes on a single machine.
 
-Only a handful of studies have deployed FL on actual edge hardware. Edge-FLGuard~\cite{edgeflguard2025} used Raspberry Pi and earlier-generation Jetson Nano devices but did not profile per-round energy consumption or use real sensor data. \todo{Add 2-3 more references on real-hardware FL studies.}
+Only a limited number of studies deploy FL on actual edge hardware. Edge-FLGuard~\cite{reis2025edgeflguard} evaluates a lightweight federated anomaly-detection pipeline on Raspberry Pi~4 and Jetson Nano platforms for 5G-enabled IoT, but does not profile per-round energy or use image sensors. Prashanthi et al.~\cite{prashanthi2022jetson} characterise deep-learning \emph{training} performance and power on several Jetson classes, providing the centralised counterpart of the measurements we report for the federated case. Banerjee et al.~\cite{banerjee2025fedjoule} schedule federated training under a global energy budget using real traces from four Jetson device types, confirming that on accelerated edge devices the relevant comparison axis is energy and wall-clock time rather than communication rounds alone. Zhang et al.~\cite{zhang2025lcfed} reduce the server-side cost of clustered FL for heterogeneous clients, which is complementary to the per-node measurements considered here.
 
 \subsection{Multimodal Sensor Fusion and RGB-D Data}
 
-RGB-D cameras provide complementary color and depth information that has proven valuable for object detection~\cite{gupta2014rgbd}, semantic segmentation, and anomaly detection. Fusion strategies include early fusion (channel concatenation), feature-level fusion (separate encoders with concatenated features), and decision-level fusion~\cite{ngiam2011multimodal}. However, multimodal fusion has been explored exclusively in centralized settings. To our knowledge, no FL study has investigated the impact of adding depth or IR modalities on FL convergence dynamics and communication overhead.
+RGB-D cameras provide complementary color and depth information that has proven valuable for object detection~\cite{gupta2014rgbd}, semantic segmentation, and anomaly detection. Fusion strategies include early fusion (channel concatenation), feature-level fusion (separate encoders with concatenated features), and decision-level fusion~\cite{ngiam2011multimodal}. Such fusion has been explored predominantly in centralized settings. We stress that the present work does \emph{not} claim a multimodal federated classifier: the depth and IR streams are used in the cross-sensor generalisation study of Section~\ref{sec:loso}, and the federated classifier operates on RGB data.
 
 \subsection{Non-IID Data in Federated Learning}
 
-Data heterogeneity (non-IID) is a fundamental challenge in FL. Zhao et al.~\cite{zhao2018noniid} demonstrated significant accuracy degradation when client data distributions differ. Li et al.~\cite{li2020fedprox} proposed \fedprox{}, which adds a proximal term $\frac{\mu}{2}\|w - w^t\|^2$ to the local objective to prevent excessive drift from the global model. Li et al.~\cite{li2021fedbn} introduced \fedbn{}, which keeps batch normalization layers local to handle feature distribution shifts.
+Data heterogeneity (non-IID) is a fundamental challenge in FL. Zhao et al.~\cite{zhao2018noniid} demonstrated significant accuracy degradation when client data distributions differ. Li et al.~\cite{li2020fedprox} proposed \fedprox{}, which adds a proximal term to the local objective to prevent excessive drift from the global model. Li et al.~\cite{li2021fedbn} introduced \fedbn{}, which keeps batch normalization layers local to handle feature distribution shifts.
 
-All existing non-IID studies create heterogeneity artificially by partitioning a single dataset. Physical sensor heterogeneity---where different camera hardware produces structurally different data from similar scenes---represents a natural and unexplored dimension of non-IID in FL.
+\subsection{Recent Benchmarking of Non-IID Federated Learning (2025--2026)}
 
-\todo{Expand related work with 10-15 more references covering: FL communication efficiency, FL on Jetson platforms, fire detection with deep learning, depth camera applications.}
+Recent work has focused on how non-IID conditions are \emph{constructed} and \emph{reported}, which is directly relevant to the protocol questions addressed in this revision. Seo et al.~\cite{seo2025iidnoniid} provide a controlled experimental study of the IID-to-non-IID transition and show that variance across runs grows sharply with heterogeneity, so that single-seed comparisons under strong skew are unreliable. Domini et al.~\cite{domini2025profed} introduce ProFed, a benchmark that standardises Dirichlet-based and proximity-based partitioning so that results obtained on different codebases become comparable. Borazjani et al.~\cite{borazjani2026embeddings} argue that label-based skew is an incomplete model of heterogeneity for computer-vision tasks and propose embedding-based partitions that better reflect task-specific distribution shift. Mreish et al.~\cite{mreish2025mfedbn} revisit local batch normalisation with a server-side gradient-style update and report that the benefit of \fedbn{}-style schemes depends strongly on the type of skew and on the number of aggregation steps performed. These studies jointly motivate the three protocol choices of this revision: reporting confidence intervals over several seeds, sweeping the Dirichlet concentration rather than relying on a single hand-crafted skew, and restricting \fedbn{} conclusions to the communication budget that was actually executed.
+
+A second strand of recent work concerns evaluation hygiene. Barz and Denzler~\cite{barz2020duplicates} showed that widely used image benchmarks contain near-duplicates across the train/test boundary and that purging them changes reported accuracy; since FLAME consists of frames sampled from continuous acquisition sequences, the same risk applies here and is audited explicitly in Section~\ref{sec:leakage}.
+
+\subsection{Metaheuristic and Hybrid Hyperparameter Optimisation for CNNs}
+\label{sec:related_meta}
+
+The hyperparameters of a convolutional network---learning rate, batch size, number of local epochs, regularisation strength---interact strongly and are rarely optimal at their default values. Tuba et al.~\cite{tuba2021cnnhyper} survey and evaluate the use of swarm-intelligence and evolutionary metaheuristics for CNN hyperparameter tuning and show that population-based search finds configurations that manual grid search misses at comparable evaluation budgets. Ibrahim et al.~\cite{ibrahim2025metaheuristiccnn} give a recent comprehensive review of metaheuristic hyperparameter tuning for CNNs, classifying the search strategies and their computational cost. This literature is directly relevant to a federated edge setting for two reasons. First, the cost of a single configuration evaluation on a constrained device is measured in hours (Section~\ref{sec:res_time}), so the sample efficiency of the search procedure dominates the total cost; second, in FL the search space is larger than in the centralised case because it contains federation-level parameters (local epochs per round, proximal strength, participation) in addition to the usual optimiser parameters. The sensitivity analysis reported in Section~\ref{sec:res_sensitivity} is a structured grid rather than a metaheuristic search; we treat automated, population-based search over the joint local/federation hyperparameter space as a natural continuation of this work and discuss it in Section~\ref{sec:future}.
+
+Hybrid designs that combine a fixed analytical transform with a learned CNN are a second route to reducing this cost. Dede et al.~\cite{dede2025wavelet} use wavelet-based feature extraction as a front end for high-resolution image classification and report that learning in the wavelet domain preserves accuracy while reducing the spatial resolution the network must process; Yang et al.~\cite{yang2025wavelitenet} combine a 2-D discrete wavelet transform with a MobileNetV3 backbone and obtain a 25\% parameter reduction relative to the unmodified backbone. Because the transform itself is not learned, it does not enlarge the model payload that FL must transmit each round, which makes such hybrids attractive for edge GPU clusters; we return to this in Section~\ref{sec:future}.
 
 
 % ============================================================
@@ -144,14 +173,14 @@ IP Address & 192.168.1.4 & 192.168.1.5 & 192.168.1.3 \\
 \end{tabular}
 \end{table}
 
-The three cameras introduce a natural three-level hierarchy of sensor heterogeneity:
+The three cameras span a three-level hierarchy of sensor heterogeneity:
 
 \begin{itemize}
     \item \textbf{Level~1 -- Manufacturing Variance:} Nodes~A and B both use Intel RealSense cameras of the same product family, but the D435if includes an additional IR cut filter and has different factory calibration parameters (Table~\ref{tab:intrinsics}).
 
     \item \textbf{Level~2 -- Cross-Technology:} Node~C uses a Stereolabs ZED~2i, which employs passive stereo with neural depth estimation, fundamentally different from the active IR stereo approach of RealSense cameras.
 
-    \item \textbf{Level~3 -- Client Scaling:} We compare 2-node (A+B) and 3-node (A+B+C) FL configurations to study how adding a technologically heterogeneous node affects convergence.
+    \item \textbf{Level~3 -- Client Scaling:} We compare 2-node (A+B) and 3-node (A+B+C) FL configurations to study how adding a further node affects convergence under a fixed round budget.
 \end{itemize}
 
 \begin{table}[t]
@@ -170,19 +199,112 @@ IR min value & 15 & 19 & 4 \\
 \end{tabular}
 \end{table}
 
-\todo{Add testbed photo (Fig.~1) showing 3 Jetsons with cameras.}
+\todo{Add testbed photo (Fig.~1) showing the three Jetson nodes with their cameras.}
+
+\subsection{Relationship Between the Sensor Testbed and the Federated Experiment}
+\label{sec:sensorlink}
+
+The study comprises two experiments that share hardware but not data, and we keep them separate throughout.
+
+\textbf{Experiment~I (federated optimisation).} Each Jetson node holds a disjoint partition of the FLAME RGB images and participates as an FL client. The classifier input is a three-channel RGB tensor; the depth and IR streams of the attached cameras are \emph{not} used, and consequently the heterogeneity between clients in Experiment~I is the heterogeneity of the \emph{partition} (IID, manual label skew, or Dirichlet label skew), not of the sensors. Levels~1 and~2 of the hierarchy above therefore do not act on the federated results; only the hardware-level differences (identical in this cluster) and the partition act.
+
+\textbf{Experiment~II (cross-sensor generalisation).} Custom captures recorded with the three cameras are used to quantify how a classifier trained on images from one camera transfers to images from another. This experiment is centralised and scene-controlled (Section~\ref{sec:loso}); it characterises the natural feature shift induced by sensor hardware and thereby estimates the magnitude of the heterogeneity that a future sensor-native federated deployment would face.
+
+Statements about sensor heterogeneity in this paper derive from Experiment~II; statements about FL strategy behaviour derive from Experiment~I. We do not attribute federated convergence effects to the cameras.
 
 \subsection{Dataset}
 
-We use the FLAME fire detection dataset~\cite{flame_dataset}, which contains 30,155 fire-positive and 17,837 fire-negative images (47,992 total) at $254 \times 254$ pixel resolution. This dataset provides a binary classification task representative of visual anomaly detection in environmental monitoring.
+We use the FLAME aerial fire-detection dataset~\cite{shamsoshoara2021flame, flame_dataset}, comprising 30{,}155 fire-positive and 17{,}837 fire-negative images (47{,}992 total) at $254 \times 254$ pixel resolution. The dataset provides a binary classification task representative of visual anomaly detection in environmental monitoring. Crucially for the partitioning protocol, the images are frames extracted from continuous aerial video sequences, so temporally adjacent images are visually near-identical.
 
-\textbf{IID split:} Images are randomly distributed across nodes with equal class ratios ($\sim$62.8\% fire per node).
+\subsection{Sequence-Level Data Splitting and Leakage Audit}
+\label{sec:leakage}
 
-\textbf{Non-IID label skew:} We create class-imbalanced distributions: Node~A receives 80\% fire images, Node~B receives 88.5\% fire images, and Node~C receives 20\% fire images. This simulates realistic scenarios where different monitoring stations observe environments with varying anomaly frequencies.
+\subsubsection{Motivation}
+A uniformly random image-level split of a frame-extracted dataset places near-duplicate frames from the same acquisition sequence on both sides of the train/test boundary. The resulting accuracy then partly measures memorisation of a particular sequence rather than generalisation, an effect documented for standard image benchmarks by Barz and Denzler~\cite{barz2020duplicates}. The v1 protocol of this study used an image-level split; we therefore (i)~quantify the leakage it induces and (ii)~repeat the evaluation under a group-level split.
+
+\subsubsection{Near-duplicate grouping}
+Sequence identifiers are not distributed with FLAME, so we recover groups of related frames by perceptual hashing. For each image $x$ we compute a 64-bit difference hash $h(x)$ (a DCT-based perceptual hash and an average hash are available as alternatives). Two images are declared near-duplicates when their Hamming distance satisfies
+\begin{equation}
+d_H\bigl(h(x_i), h(x_j)\bigr) \le \tau ,
+\label{eq:hamming}
+\end{equation}
+with $\tau = 8$ bits by default. Candidate pairs are retrieved by multi-index hashing (the pigeonhole principle over $\tau+1$ hash chunks) rather than by an $O(N^2)$ scan, and \emph{groups} are the connected components of the resulting near-duplicate graph. A group is the atomic unit of assignment: every image in a group is assigned to the same node \emph{and} the same split. The threshold $\tau$ is validated by inspecting the group-size histogram and the number of \emph{cross-label} groups (groups containing both fire and no-fire images); a large number of cross-label groups indicates that $\tau$ is too permissive.
+
+\subsubsection{Leakage metric}
+For a given processed partition, let $\mathcal{E}$ be the union of the validation and test images of all nodes and let $\mathcal{T}$ be the union of all training images. The leakage rate is
+\begin{equation}
+L \;=\; \frac{\bigl|\{\, x \in \mathcal{E} \;:\; \exists\, y \in \mathcal{T},\ d_H(h(x),h(y)) \le \tau \,\}\bigr|}{|\mathcal{E}|}.
+\label{eq:leak}
+\end{equation}
+We report $L$ per node and pooled over the federation, together with the number of near-duplicate groups that span more than one node. For the group-level protocol both quantities are zero by construction, and we verify this as a sanity check.
+
+\subsection{Non-IID Partitions}
+\label{sec:noniid}
+
+Three partitioning regimes are used, all applied at group level under the revised protocol.
+
+\textbf{IID.} Groups are distributed across nodes so that each node receives approximately the same number of images and the same class ratio ($\sim$62.8\% fire per node).
+
+\textbf{Manual label skew.} A single hand-constructed configuration that reproduces the v1 setting: Node~A receives 80\% fire images, Node~B 88.5\%, and Node~C 20\%. This represents monitoring stations that observe environments with very different anomaly frequencies.
+
+\textbf{Dirichlet label skew.} To avoid drawing conclusions from one hand-picked skew, we additionally sample the client proportions of every class $c$ from a symmetric Dirichlet distribution over the $K$ nodes,
+\begin{equation}
+\bigl(p_{c,1},\dots,p_{c,K}\bigr) \sim \mathrm{Dir}_K(\alpha), \qquad \sum_{k=1}^{K} p_{c,k} = 1 ,
+\label{eq:dirichlet}
+\end{equation}
+with $\alpha \in \{0.1, 0.5, 1.0\}$; small $\alpha$ concentrates each class on few nodes, while $\alpha \to \infty$ recovers the IID case. Groups are assigned to nodes by cumulative image count according to $p_{c,k}$, and the draw is repeated until every node holds at least $n_{\min}=10$ images (a node holding very few images is a legitimate and intended difficulty at $\alpha=0.1$; only degenerate empty clients are excluded). The seed of the draw is fixed per experiment so that all strategies see identical partitions.
+
+\subsection{Low-Data Regime}
+\label{sec:lowdata}
+
+With the full FLAME partitions the task is close to saturation for every method, which compresses all differences into the last fraction of a percentage point. To obtain a condition in which collaboration can actually pay off, each node's \emph{training} split is subsampled, stratified per class and at group level, to a fraction
+\begin{equation}
+\rho \in \{1.00,\; 0.05,\; 0.01\}
+\label{eq:subsample}
+\end{equation}
+of its original size, leaving the validation and test splits untouched so that all regimes are evaluated on the same data. At $\rho = 0.01$ a node holds on the order of $10^2$ training images, i.e.\ a regime in which a locally trained model is expected to be clearly inferior to a federated one. The low-data regime is crossed with the IID and manual-skew partitions.
 
 \subsection{Model Architecture}
 
-We use MobileNetV3-Small~\cite{howard2019mobilenetv3} as the base model, with 1.52\,M parameters and a serialized weight size of 6.1\,MB. This architecture was selected for three reasons: (1)~it fits comfortably in the 8\,GB shared memory of the Jetson Orin Nano during FL training; (2)~its small model size ensures low communication overhead per FL round; and (3)~it is well-studied, making our results comparable to existing work. The model is initialized with ImageNet pre-trained weights. For multimodal experiments, the first convolutional layer is modified to accept variable input channels (1, 3, 4, or 5 channels for different modality combinations).
+We use MobileNetV3-Small~\cite{howard2019mobilenetv3} as the base model, with 1.52\,M parameters and a serialized weight size of 6.1\,MB. This architecture was selected for three reasons: (1)~it fits comfortably in the 8\,GB shared memory of the Jetson Orin Nano during FL training; (2)~its small model size ensures low communication overhead per FL round; and (3)~it is well-studied, making our results comparable to existing work. The model is initialized with ImageNet pre-trained weights. The first convolutional layer accepts a configurable number of input channels (1, 3, 4, or 5), which is used only by the modality ablation of Section~\ref{sec:modality}; all federated runs reported here use the 3-channel RGB configuration.
+
+\subsection{Federated Optimisation Objectives}
+\label{sec:objectives}
+
+We evaluate the three canonical strategies in their original formulations: \fedavg{}~\cite{mcmahan2017fedavg}, \fedprox{}~\cite{li2020fedprox} and \fedbn{}~\cite{li2021fedbn}. Let $K$ be the number of clients, let client $k$ hold $n_k$ samples with $n=\sum_k n_k$, and let $\ell(\cdot;\cdot)$ denote the per-sample loss (cross-entropy here). Following McMahan et al.~\cite{mcmahan2017fedavg}, federated training minimises the weighted average of the client objectives,
+\begin{equation}
+\min_{w} \; F(w) \;=\; \sum_{k=1}^{K} \frac{n_k}{n}\, F_k(w),
+\label{eq:global}
+\end{equation}
+where the local empirical risk of client $k$ over its private dataset $\mathcal{D}_k$ is
+\begin{equation}
+F_k(w) \;=\; \frac{1}{n_k} \sum_{(x,y)\in\mathcal{D}_k} \ell\bigl(f(x;w),\, y\bigr).
+\label{eq:local}
+\end{equation}
+In \fedavg{}~\cite{mcmahan2017fedavg}, each selected client initialises from the current global model $w^{t}$, runs $E$ local epochs of SGD-type updates to obtain $w_k^{t+1}$, and the server aggregates
+\begin{equation}
+w^{t+1} \;=\; \sum_{k=1}^{K} \frac{n_k}{n}\, w_k^{t+1}.
+\label{eq:fedavg}
+\end{equation}
+Because \eqref{eq:fedavg} averages models that have drifted apart when the $\mathcal{D}_k$ are non-IID, \fedprox{}~\cite{li2020fedprox} replaces the local objective~\eqref{eq:local} by a proximally regularised surrogate that penalises departure from the global model of the current round,
+\begin{equation}
+\min_{w} \; h_k\bigl(w; w^{t}\bigr) \;=\; F_k(w) \;+\; \frac{\mu}{2}\,\bigl\lVert w - w^{t} \bigr\rVert^{2},
+\label{eq:fedprox}
+\end{equation}
+with $\mu \ge 0$ controlling the strength of the constraint; $\mu = 0$ recovers \fedavg{}. \fedbn{}~\cite{li2021fedbn} instead addresses feature shift by partitioning the parameter vector into batch-normalisation parameters and the remainder, $w_k = (\theta_k, \beta_k)$ with $\beta_k$ collecting the affine and running statistics of every batch-normalisation layer of client $k$. Only the non-normalisation parameters are aggregated,
+\begin{equation}
+\theta^{t+1} \;=\; \sum_{k=1}^{K} \frac{n_k}{n}\, \theta_k^{t+1},
+\label{eq:fedbn_a}
+\end{equation}
+while the normalisation parameters are never transmitted and remain client-specific, so that client $k$ enters round $t+1$ with
+\begin{equation}
+w_k^{t+1} \;=\; \bigl(\theta^{t+1},\; \beta_k^{t+1}\bigr), \qquad k = 1,\dots,K ,
+\label{eq:fedbn_b}
+\end{equation}
+where $\beta_k^{t+1}$ is the outcome of client $k$'s own local update and never enters the average in~\eqref{eq:fedbn_a}.
+Equation~\eqref{eq:fedbn_b} means that \fedbn{} produces $K$ personalised models rather than one global model; each client is therefore evaluated with its own $\beta_k$, and \fedbn{} needs at least one local pass before its normalisation statistics are meaningful. This is the structural reason why a very small round budget is a difficult setting for \fedbn{}, and why Section~\ref{sec:res_fedbn} treats the three-round result as budget-specific rather than as a property of the method.
+
+Two reference conditions bound the federated results: a \emph{centralised} model trained on the pooled data (upper reference) and \emph{local-only} models trained independently on each node without any aggregation (lower reference).
 
 \subsection{Federated Learning Protocol}
 
@@ -196,19 +318,104 @@ We use the Flower framework (v1.13.1)~\cite{beutel2020flower} for FL orchestrati
 \toprule
 \textbf{Strategy} & \textbf{Description} & \textbf{Key Parameter} \\
 \midrule
-Centralized & All data pooled (upper bound) & -- \\
-Local-only & No aggregation (lower bound) & -- \\
+Centralized & All data pooled (upper reference) & -- \\
+Local-only & No aggregation (lower reference) & -- \\
 \fedavg{} & Standard federated averaging & -- \\
-\fedprox{}-0.01 & Proximal regularization & $\mu = 0.01$ \\
-\fedprox{}-0.1 & Stronger regularization & $\mu = 0.1$ \\
+\fedprox{} & Proximal regularization & $\mu$ (grid) \\
 \fedbn{} & Local batch normalization & -- \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Common hyperparameters across all FL experiments: 3 communication rounds (with convergence typically achieved by round~2), 5 local epochs per round, batch size of 8 (constrained by 8\,GB shared GPU memory), learning rate of 0.001 with Adam optimizer, and full client participation (all nodes participate in every round). All experiments are repeated with three random seeds (42, 123, 456) for statistical reliability.
+Default hyperparameters across FL experiments: three communication rounds, five local epochs per round, batch size~8 (constrained by the 8\,GB shared GPU memory), learning rate $10^{-3}$ with the Adam optimizer, and full client participation. Evaluation is performed after every round on each node's validation split, as in v1; the test split is used only for the final model and for the cross-sensor study. Deviations from these defaults are exactly the sweeps of Section~\ref{sec:sensitivity}.
 
-\textbf{\fedprox{} implementation detail:} The proximal term $\frac{\mu}{2}\|w - w^t\|^2$ is computed in the client-side training loop. To avoid GPU out-of-memory errors on the memory-constrained Jetson platform, the global model parameters $w^t$ are stored on CPU and transferred to GPU per-layer during the proximal term computation. This memory optimization is necessary for real deployment but is invisible in simulation studies.
+\textbf{\fedprox{} implementation detail:} The proximal term of~\eqref{eq:fedprox} is computed in the client-side training loop. To avoid GPU out-of-memory errors on the memory-constrained Jetson platform, the global model parameters $w^t$ are stored on CPU and transferred to GPU per-layer during the proximal-term computation. This memory optimisation is necessary for real deployment and is one source of the wall-clock overhead quantified in Section~\ref{sec:res_time}.
+
+\subsection{Hyperparameter Sensitivity Protocol}
+\label{sec:sensitivity}
+
+To establish how far the observed rankings depend on the default configuration, we sweep one factor at a time around the default point (batch size~8, Adam, $\eta=10^{-3}$, $E=5$, $\mu=0.01$):
+
+\begin{itemize}
+    \item \textbf{Proximal strength:} $\mu \in \{0.001,\, 0.01,\, 0.05,\, 0.1,\, 0.5\}$, spanning two orders of magnitude around the v1 values.
+    \item \textbf{Local work per round:} $E \in \{1, 2, 5\}$ local epochs, which trades client drift against communication rounds.
+    \item \textbf{Learning rate:} $\eta \in \{10^{-4},\, 10^{-3}\}$.
+    \item \textbf{Communication budget:} $R \in \{3, 10\}$ rounds for \fedbn{} and a matched \fedavg{} reference.
+\end{itemize}
+
+Batch size is held at~8 because it is a hardware constraint of the platform rather than a free design choice; we report this as a limitation in Section~\ref{sec:limitations}. Each cell of the sweep is run with the same seeds as the corresponding default cell so that differences are paired. As noted in Section~\ref{sec:related_meta}, a one-factor-at-a-time grid cannot detect interactions between factors; metaheuristic joint search is left to future work.
+
+\subsection{Evaluation Metrics}
+\label{sec:metrics}
+
+Accuracy alone is inadequate for a class-imbalanced anomaly-detection task in which client class priors differ by construction. For the binary problem let $\mathrm{TP}$, $\mathrm{TN}$, $\mathrm{FP}$ and $\mathrm{FN}$ denote the entries of the confusion matrix with ``fire'' as the positive class. We report
+\begin{align}
+\mathrm{Accuracy} &= \frac{\mathrm{TP}+\mathrm{TN}}{\mathrm{TP}+\mathrm{TN}+\mathrm{FP}+\mathrm{FN}}, \label{eq:acc}\\[2pt]
+\mathrm{Sensitivity} = \mathrm{Recall} &= \frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FN}}, \label{eq:sens}\\[2pt]
+\mathrm{Specificity} &= \frac{\mathrm{TN}}{\mathrm{TN}+\mathrm{FP}}, \label{eq:spec}\\[2pt]
+\mathrm{Precision} &= \frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FP}}, \label{eq:prec}
+\end{align}
+and, as the primary prevalence-insensitive summary, the balanced accuracy
+\begin{equation}
+\mathrm{BA} \;=\; \tfrac{1}{2}\bigl(\mathrm{Sensitivity} + \mathrm{Specificity}\bigr).
+\label{eq:ba}
+\end{equation}
+The $F_1$ score and its class-averaged (macro) variant over the $C$ classes are
+\begin{equation}
+F_1 = \frac{2\,\mathrm{Precision}\cdot\mathrm{Recall}}{\mathrm{Precision}+\mathrm{Recall}},
+\qquad
+\text{macro-}F_1 = \frac{1}{C}\sum_{c=1}^{C} F_1^{(c)} .
+\label{eq:f1}
+\end{equation}
+Because accuracy and $F_1$ can both be optimistic on imbalanced data~\cite{chicco2020mcc}, we additionally report the Matthews correlation coefficient, which is high only when all four confusion-matrix cells are good,
+\begin{equation}
+\mathrm{MCC} = \frac{\mathrm{TP}\cdot\mathrm{TN} - \mathrm{FP}\cdot\mathrm{FN}}
+{\sqrt{(\mathrm{TP}{+}\mathrm{FP})(\mathrm{TP}{+}\mathrm{FN})(\mathrm{TN}{+}\mathrm{FP})(\mathrm{TN}{+}\mathrm{FN})}} ,
+\label{eq:mcc}
+\end{equation}
+with $\mathrm{MCC}\in[-1,1]$ and $0$ denoting chance-level agreement. Finally, the threshold-free ROC-AUC is computed from the scores $s(x)$ of the $n^{+}$ positive and $n^{-}$ negative samples using the Mann--Whitney form with ties resolved at one half,
+\begin{equation}
+\mathrm{AUC} = \frac{1}{n^{+}n^{-}}\!\!\sum_{i \in \mathcal{P}}\sum_{j \in \mathcal{N}}\!
+\Bigl[\mathbf{1}\{s_i > s_j\} + \tfrac{1}{2}\mathbf{1}\{s_i = s_j\}\Bigr].
+\label{eq:auc}
+\end{equation}
+
+Every metric is computed at three levels: \emph{per client} on that client's own evaluation split; \emph{weighted-global} as the $n_k$-weighted mean of the per-client values; and \emph{pooled}, recomputed from the summed confusion matrix of all clients. Per-client confusion matrices are stored for every round and reported for the non-IID conditions, where they are the most direct evidence of which class a drifting client fails on.
+
+\subsection{Statistical Analysis}
+\label{sec:stats}
+
+All configurations of the revised protocol are repeated with $n = 5$ random seeds. For a metric with sample mean $\bar{x}$ and sample standard deviation $s$ over $n$ seeds, we report the two-sided 95\% confidence interval of the mean based on the $t$ distribution,
+\begin{equation}
+\mathrm{CI}_{95} = \bar{x} \;\pm\; t_{0.975,\,n-1}\,\frac{s}{\sqrt{n}} .
+\label{eq:ci}
+\end{equation}
+Strategy pairs are compared \emph{paired by seed} within a data distribution. We report the paired effect size
+\begin{equation}
+d = \frac{\overline{\Delta}}{s_{\Delta}}, \qquad \Delta_i = x_i^{(A)} - x_i^{(B)},
+\label{eq:cohend}
+\end{equation}
+together with the paired $t$-test and the Wilcoxon signed-rank test, and a Friedman omnibus test across all strategies within a distribution. Because $n$ is small, we do not interpret a non-significant test as evidence of equivalence, and we do not use the phrase ``statistically indistinguishable''; we report the confidence interval of the difference and state explicitly when it contains zero. For the same reason, very large values of~\eqref{eq:cohend} are reported but not interpreted as strong evidence: with $n \le 5$, $s_{\Delta}$ is itself estimated from few observations, so $d$ has a wide sampling distribution and a large $|d|$ can arise from an unusually small $s_{\Delta}$ rather than from a large true effect. Where multiplicity matters we report the number of comparisons and the corresponding Bonferroni-adjusted threshold alongside the raw $p$ values.
+
+\subsection{Time- and Communication-Normalised Comparison}
+\label{sec:timecomm}
+
+Comparing strategies at equal round counts hides the fact that a round costs different amounts on different strategies. Each client therefore records its fit and evaluation wall-clock time and the size of the payload it sends and receives, and the server records the elapsed time and the cumulative communication volume at the end of every round. For $R$ rounds, $K$ fully participating clients and a serialized model of $|w|$ bytes, the cumulative volume of an aggregating strategy is
+\begin{equation}
+B(R) \;=\; 2\,R\,K\,|w| ,
+\label{eq:comm}
+\end{equation}
+which for \fedbn{} is reduced by the fraction of parameters held out of aggregation by~\eqref{eq:fedbn_b}. Results are therefore presented in three panels: accuracy versus round, accuracy versus elapsed wall-clock time, and accuracy versus cumulative megabytes transmitted. The time and volume axes are exact for all runs of the revised protocol; for the v1 runs, which predate the per-round instrumentation, both axes are reconstructed from the recorded total time and the model payload size and are marked as estimates.
+
+\subsection{Leave-One-Scene-Out Cross-Sensor Protocol}
+\label{sec:loso}
+
+The cross-sensor study of Experiment~II uses custom captures of $S=5$ scenes recorded with all three cameras. A split that randomly divides the frames of these scenes between training and test allows a classifier to recognise a test frame by its scene rather than by the target concept, so a high cross-camera accuracy obtained this way does not establish cross-camera transfer. We therefore evaluate leave-one-scene-out: for every held-out scene $s$, the model is trained on the frames of the remaining $S-1$ scenes of the source camera and evaluated on the frames of scene $s$ of the target camera, and the reported score is the mean over the $S$ folds with its confidence interval from~\eqref{eq:ci}. The same folds are used for every (source, target) camera pair, so the within-camera diagonal ($\text{source}=\text{target}$, different scene) provides the scene-shift-only reference against which the additional cost of a camera change is measured. The corresponding accuracy gap
+\begin{equation}
+\Delta_{\text{sensor}} = \mathrm{Acc}_{\text{same camera, held-out scene}} - \mathrm{Acc}_{\text{cross camera, held-out scene}}
+\label{eq:sensorgap}
+\end{equation}
+isolates the sensor effect from the scene effect. \todo{Confirm the final scene count $S$ and the per-scene frame counts from the capture log before submission; the protocol text assumes $S=5$.}
 
 
 % ============================================================
@@ -217,15 +424,18 @@ Common hyperparameters across all FL experiments: 3 communication rounds (with c
 \section{Experimental Results}
 \label{sec:results}
 
-\subsection{FL Strategy Comparison}
+Results are organised by protocol. Section~\ref{sec:res_v1} reports the original (v1) results, which were obtained under the \emph{image-level} split and are retained for continuity and for comparison against the audited protocol. Sections~\ref{sec:res_leakage}--\ref{sec:res_loso} report the revised protocol.
+
+\subsection{Results Under the Image-Level-Split Protocol (v1)}
+\label{sec:res_v1}
 
 \subsubsection{Impact of Non-IID Data Distribution}
 
-Table~\ref{tab:main_results} presents the global test accuracy across communication rounds for all evaluated configurations. The most striking finding is the severe accuracy degradation in the first round under non-IID conditions. With 3-node \fedavg{}, the round~1 accuracy drops from 85.45\% (IID) to 53.66\% (non-IID)---a 31.79 percentage point penalty, reducing performance to near-random levels for a binary classification task.
+Table~\ref{tab:main_results} presents the global validation accuracy across communication rounds for a single reference seed, and Table~\ref{tab:v1_ci} aggregates the final accuracy over the available seeds with 95\% confidence intervals. The dominant v1 effect is the accuracy deficit of the first round under non-IID conditions: with 3-node \fedavg{} the round-1 accuracy of the reference seed falls from 85.45\% (IID) to 53.66\% (non-IID), i.e.\ to near-chance level for a binary task. Table~\ref{tab:v1_ci} shows that this first-round quantity is also highly seed-dependent: over seeds the 3-node \fedavg{} round-1 accuracy is $49.79\% \pm 9.80\%$ (95\% CI $[25.5, 74.1]$, $n=3$) under non-IID and $68.23\% \pm 16.93\%$ ($n=2$) under IID. Single-seed round-1 numbers should therefore be read as illustrations, not as estimates.
 
 \begin{table}[t]
 \centering
-\caption{Global Test Accuracy (\%) Across Communication Rounds}
+\caption{Global Validation Accuracy (\%) Across Communication Rounds, Image-Level Split, Reference Seed 42}
 \label{tab:main_results}
 \begin{tabular}{@{}llccc@{}}
 \toprule
@@ -241,36 +451,65 @@ Table~\ref{tab:main_results} presents the global test accuracy across communicat
 \bottomrule
 \end{tabular}
 \vspace{2pt}
-\footnotesize{Results shown for seed=42. \todo{Add mean$\pm$std across 3 seeds.}}
+\footnotesize{Single seed (42), image-level split. Seed-aggregated values with confidence intervals are given in Table~\ref{tab:v1_ci}.}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Final Accuracy Under the Image-Level Split, Aggregated Over Seeds (mean $\pm$ std, 95\% $t$-CI of the mean)}
+\label{tab:v1_ci}
+\begin{tabular}{@{}llcl@{}}
+\toprule
+\textbf{Dist.} & \textbf{Method} & $n$ & \textbf{Final acc.\ (\%), mean $\pm$ std [95\% CI]} \\
+\midrule
+\multirow{6}{*}{IID}
+ & Centralized        & 3 & $99.65 \pm 0.13$ \, [99.31, 99.98] \\
+ & Local-only         & 3 & $99.49 \pm 0.08$ \, [99.28, 99.70] \\
+ & \fedavg{}          & 2 & $99.32 \pm 0.03$ \, [99.04, 99.60] \\
+ & \fedprox{} 0.01    & 3 & $99.18 \pm 0.12$ \, [98.90, 99.47] \\
+ & \fedprox{} 0.1     & 3 & $98.29 \pm 0.48$ \, [97.11, 99.47] \\
+ & \fedbn{}           & 3 & $95.69 \pm 3.12$ \, [87.93, 100.00]$^{\dagger}$ \\
+\midrule
+\multirow{6}{*}{Non-IID}
+ & Centralized        & 3 & $99.72 \pm 0.07$ \, [99.54, 99.90] \\
+ & Local-only         & 3 & $99.50 \pm 0.03$ \, [99.44, 99.57] \\
+ & \fedavg{}          & 3 & $99.31 \pm 0.39$ \, [98.34, 100.00]$^{\dagger}$ \\
+ & \fedprox{} 0.01    & 3 & $99.22 \pm 0.24$ \, [98.63, 99.82] \\
+ & \fedprox{} 0.1     & 3 & $98.33 \pm 0.19$ \, [97.86, 98.81] \\
+ & \fedbn{}           & 3 & $75.06 \pm 8.36$ \, [54.30, 95.83] \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}
+\footnotesize{Image-level split (v1 protocol). $n$ is the number of completed seeds; the 3-node \fedavg{} IID cell and several v1 cells have fewer than three usable seeds, which is why the intervals are wide. $^{\dagger}$Interval truncated at the 100\% boundary; the raw $t$-interval exceeds~1. Values produced by \texttt{scripts/analyze\_results.py}. \todo{Replace this table with the $n=5$ group-level-split results once the seed-extension block has been executed; keep the present table as the image-level-split reference.}}
 \end{table}
 
 \subsubsection{FedProx Proximal Term Analysis}
 
-\fedprox{} with $\mu=0.01$ achieves a remarkable 41.13 percentage point improvement in round~1 accuracy compared to \fedavg{} under non-IID conditions (94.79\% vs.\ 53.66\%). Increasing the proximal term to $\mu=0.1$ further improves round~1 accuracy to 96.91\%, but at the cost of asymptotic performance: the round~3 accuracy reaches only 98.35\% compared to 99.49\% with $\mu=0.01$. This demonstrates a clear over-regularization effect---the stronger proximal term prevents sufficient local adaptation while maintaining proximity to the global model.
+Under the v1 protocol, \fedprox{} with $\mu=0.01$ improved the reference-seed round-1 accuracy by 41.13 percentage points over \fedavg{} under non-IID conditions (94.79\% vs.\ 53.66\%). Increasing the proximal term to $\mu=0.1$ further raised round-1 accuracy to 96.91\% but lowered round-3 accuracy to $98.33\% \pm 0.19\%$ compared with $99.22\% \pm 0.24\%$ at $\mu=0.01$; the 95\% CIs of these two conditions do not overlap, which is consistent with an over-regularisation effect in which the stronger proximal constraint limits local adaptation. Whether this ordering persists across the wider $\mu$ grid is addressed in Section~\ref{sec:res_sensitivity}.
 
 Fig.~\ref{fig:convergence} shows the convergence curves, and Fig.~\ref{fig:mu_tradeoff} illustrates the $\mu$ trade-off between initial convergence speed and final accuracy.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{figures/fig1_convergence_accuracy.pdf}
-\caption{Global test accuracy convergence for 3-node FL configurations. \fedprox{} ($\mu$=0.01) provides the best balance of initial convergence and final accuracy under non-IID conditions.}
+\includegraphics[width=\columnwidth]{figures/fig1_convergence_accuracy}
+\caption{Global validation accuracy convergence for 3-node FL configurations under the image-level-split (v1) protocol. \todo{Regenerate with the group-level split, five seeds and shaded 95\% CI bands.}}
 \label{fig:convergence}
 \end{figure}
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{figures/fig6_mu_tradeoff.pdf}
-\caption{Proximal term trade-off: increasing $\mu$ improves round~1 accuracy but degrades final accuracy due to over-regularization. $\mu=0.01$ achieves the optimal balance.}
+\includegraphics[width=\columnwidth]{figures/fig6_mu_tradeoff}
+\caption{Proximal-term trade-off under the v1 protocol: increasing $\mu$ raises round-1 accuracy but lowers final accuracy. \todo{Extend to the full grid $\mu \in \{0.001, 0.01, 0.05, 0.1, 0.5\}$ (Section~\ref{sec:res_sensitivity}).}}
 \label{fig:mu_tradeoff}
 \end{figure}
 
 \subsubsection{Per-Node Analysis Under Non-IID}
 
-Table~\ref{tab:per_node} reveals that the non-IID accuracy degradation disproportionately affects nodes with majority-class bias. Nodes~A (80\% fire) and B (88.5\% fire) achieve only 45.11\% and 48.69\% round~1 accuracy with \fedavg{}, as their locally trained models cannot classify the minority class (no-fire). Node~C (20\% fire), with a more balanced local view of the minority class, achieves 85.92\%. \fedprox{} ($\mu$=0.01) substantially recovers all nodes, bringing the weakest-performing node from 45.11\% to 93.48\%.
+Table~\ref{tab:per_node} shows that the non-IID first-round degradation concentrates on the nodes with the strongest majority-class bias. Nodes~A (80\% fire) and B (88.5\% fire) reach only 45.11\% and 48.69\% round-1 accuracy with \fedavg{}, because their locally trained models fail on the minority class; Node~C (20\% fire), which observes the minority class more often, reaches 85.92\%. \fedprox{} ($\mu=0.01$) raises the weakest node from 45.11\% to 93.48\%. These are single-seed accuracies; the corresponding balanced accuracies, per-class sensitivities and confusion matrices under the revised protocol are reported in Section~\ref{sec:res_metrics}, and they are the quantities that actually identify \emph{which} class each node fails on.
 
 \begin{table}[t]
 \centering
-\caption{Per-Node Accuracy (\%) Under Non-IID Label Skew (3-Node)}
+\caption{Per-Node Accuracy (\%) Under Manual Non-IID Label Skew (3-Node, Image-Level Split, Seed 42)}
 \label{tab:per_node}
 \begin{tabular}{@{}llccc@{}}
 \toprule
@@ -289,108 +528,361 @@ Table~\ref{tab:per_node} reveals that the non-IID accuracy degradation dispropor
 \end{tabular}
 \end{table}
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig4_per_node_noniid}
+\caption{Per-node accuracy under manual label skew (v1 protocol, seed~42). \todo{Regenerate as per-node balanced accuracy with CI bands under the group-level split.}}
+\label{fig:pernode}
+\end{figure}
+
 \subsubsection{2-Node vs.\ 3-Node Scaling}
 
-Fig.~\ref{fig:2v3} compares 2-node and 3-node configurations. Under IID conditions, adding a third node reduces round~1 accuracy by 13.34 percentage points (98.79\% to 85.45\%) but converges to similar final accuracy. Under non-IID conditions, the gap widens to 24.70 percentage points (78.36\% to 53.66\%), indicating that non-IID effects compound with increasing client count.
+Fig.~\ref{fig:2v3} compares the 2-node and 3-node configurations of the v1 protocol. For the reference seed, adding a third node lowers round-1 accuracy by 13.34 points under IID (98.79\% $\to$ 85.45\%) and by 24.70 points under non-IID (78.36\% $\to$ 53.66\%), while the round-3 accuracies remain comparable. Given the seed variability quantified above, we present this as a consistent direction rather than as a calibrated effect size, and we do not extrapolate the trend to larger federations.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{figures/fig3_2node_vs_3node.pdf}
-\caption{Impact of client scaling: (a)~IID and (b)~non-IID. Adding a third heterogeneous node amplifies the non-IID round~1 accuracy penalty from 20.43\% to 31.79\%.}
+\includegraphics[width=\columnwidth]{figures/fig3_2node_vs_3node}
+\caption{Effect of client count on first-round accuracy under (a)~IID and (b)~manual label skew, image-level-split protocol, reference seed. \todo{Add seed-aggregated bars with 95\% CIs.}}
 \label{fig:2v3}
 \end{figure}
 
-\subsubsection{Training Time}
+\subsection{Leakage Audit and the Sequence-Level Split}
+\label{sec:res_leakage}
 
-Table~\ref{tab:time} summarizes the total training time for each configuration. \fedprox{} incurs a 63\% time overhead compared to \fedavg{} (168 vs.\ 103 minutes) due to the proximal term computation and the CPU-to-GPU parameter transfer required for memory-constrained edge devices.
+Table~\ref{tab:leakage} reports the near-duplicate audit of the v1 image-level partition and confirms that the group-level partition removes the leakage by construction.
 
 \begin{table}[t]
 \centering
-\caption{Total Training Time (3 Rounds)}
-\label{tab:time}
+\caption{Near-Duplicate Leakage Audit of the Two Partitioning Protocols ($\tau=8$ bits)}
+\label{tab:leakage}
 \begin{tabular}{@{}lcc@{}}
 \toprule
-\textbf{Configuration} & \textbf{Time (min)} & \textbf{R3 Accuracy (\%)} \\
+\textbf{Quantity} & \textbf{Image-level (v1)} & \textbf{Group-level} \\
 \midrule
-2N IID \fedavg{} & 61 & 99.68 \\
-2N Non-IID \fedavg{} & 81 & 99.85 \\
-3N IID \fedavg{} & 76 & 99.75 \\
-3N Non-IID \fedavg{} & 103 & 99.10 \\
-3N Non-IID \fedprox{} $\mu$=0.01 & 168 & 99.49 \\
-3N Non-IID \fedprox{} $\mu$=0.1 & 155 & 98.35 \\
+Near-duplicate groups & \PH{} & \PH{} \\
+Largest group (images) & \PH{} & \PH{} \\
+Exact duplicates & \PH{} & \PH{} \\
+Cross-label groups & \PH{} & \PH{} \\
+Leak rate $L$, Eq.~\eqref{eq:leak} (\%) & \PH{} & 0.00 \\
+Groups spanning $>1$ node & \PH{} & 0 \\
 \bottomrule
 \end{tabular}
+\vspace{2pt}
+\footnotesize{\todo{Fill from \texttt{analysis/leakage/leakage\_report.json} after running \texttt{scripts/analyze\_flame\_leakage.py} on the real FLAME tree; also report the group-size histogram and justify $\tau$ from the cross-label group count.}}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Effect of the Partitioning Protocol on Final Accuracy (3-Node, mean $\pm$ std [95\% CI], $n=5$)}
+\label{tab:protocol_effect}
+\begin{tabular}{@{}llcc@{}}
+\toprule
+\textbf{Dist.} & \textbf{Method} & \textbf{Image-level (\%)} & \textbf{Group-level (\%)} \\
+\midrule
+\multirow{3}{*}{IID}
+ & \fedavg{}       & $99.32 \pm 0.03$ & $\PH \pm \PH$ \\
+ & \fedprox{} 0.01 & $99.18 \pm 0.12$ & $\PH \pm \PH$ \\
+ & \fedbn{}        & $95.69 \pm 3.12$ & $\PH \pm \PH$ \\
+\midrule
+\multirow{3}{*}{Non-IID}
+ & \fedavg{}       & $99.31 \pm 0.39$ & $\PH \pm \PH$ \\
+ & \fedprox{} 0.01 & $99.22 \pm 0.24$ & $\PH \pm \PH$ \\
+ & \fedbn{}        & $75.06 \pm 8.36$ & $\PH \pm \PH$ \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}
+\footnotesize{\todo{Fill the group-level column from the \texttt{rev\_*} runs. The image-level column has $n \le 3$ seeds; state the per-cell $n$ in the final version. The two columns are \emph{not} paired: they use different partitions.}}
+\end{table}
+
+\subsection{Full Metric Set and Per-Client Confusion Matrices}
+\label{sec:res_metrics}
+
+\begin{table*}[t]
+\centering
+\caption{Global (Pooled) Metrics at the Final Round, Group-Level Split, 3-Node, mean $\pm$ std [95\% CI], $n=5$ Seeds}
+\label{tab:fullmetrics}
+\begin{tabular}{@{}llccccccc@{}}
+\toprule
+\textbf{Dist.} & \textbf{Method} & \textbf{Acc.} & \textbf{Bal.\ acc.} & \textbf{Sens.} & \textbf{Spec.} & \textbf{Macro-}$F_1$ & \textbf{MCC} & \textbf{ROC-AUC} \\
+\midrule
+\multirow{5}{*}{IID}
+ & Centralized      & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs \\
+ & Local-only       & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs \\
+ & \fedavg{}        & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs \\
+ & \fedprox{} 0.01  & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs \\
+ & \fedbn{}         & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs \\
+\midrule
+\multirow{5}{*}{Non-IID}
+ & Centralized      & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs \\
+ & Local-only       & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs \\
+ & \fedavg{}        & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs \\
+ & \fedprox{} 0.01  & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs \\
+ & \fedbn{}         & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs & \PHs \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}
+\parbox{\textwidth}{\footnotesize \todo{Fill every cell from \texttt{analysis/summary\_table.md} (metrics defined in Eqs.~\eqref{eq:acc}--\eqref{eq:auc}); report the $\pm$ and the 95\% CI for each entry. Add the corresponding per-client table (Table~\ref{tab:perclient_metrics}) and note whether the weighted-global and pooled variants differ materially.}}
+\end{table*}
+
+\begin{table}[t]
+\centering
+\caption{Per-Client Metrics at the Final Round Under Manual Label Skew (Group-Level Split, $n=5$)}
+\label{tab:perclient_metrics}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llcccc@{}}
+\toprule
+\textbf{Method} & \textbf{Node} & \textbf{Bal.\ acc.} & \textbf{Sens.} & \textbf{Spec.} & \textbf{MCC} \\
+\midrule
+\multirow{3}{*}{\fedavg{}}
+ & A (80\% F)   & \PHs & \PHs & \PHs & \PHs \\
+ & B (88.5\% F) & \PHs & \PHs & \PHs & \PHs \\
+ & C (20\% F)   & \PHs & \PHs & \PHs & \PHs \\
+\midrule
+\multirow{3}{*}{\fedprox{} 0.01}
+ & A & \PHs & \PHs & \PHs & \PHs \\
+ & B & \PHs & \PHs & \PHs & \PHs \\
+ & C & \PHs & \PHs & \PHs & \PHs \\
+\midrule
+\multirow{3}{*}{\fedbn{}}
+ & A & \PHs & \PHs & \PHs & \PHs \\
+ & B & \PHs & \PHs & \PHs & \PHs \\
+ & C & \PHs & \PHs & \PHs & \PHs \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}
+\footnotesize{\todo{Fill from the per-client rows of \texttt{results.json}; add rounds 1 and 3 so that the recovery of the minority-class sensitivity over rounds is visible.}}
 \end{table}
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{figures/fig5_time_vs_accuracy.pdf}
-\caption{Training time vs.\ final accuracy trade-off. \fedprox{} improves accuracy under non-IID but at significant time cost on memory-constrained edge hardware.}
-\label{fig:time}
+\todo{Figure: per-client confusion matrices (3 nodes $\times$ \{round 1, final round\}) for \fedavg{}, \fedprox{}~0.01 and \fedbn{} under manual label skew, normalised by true class. Produced by \texttt{scripts/analyze\_results.py}.}
+\caption{Per-client confusion matrices under manual label skew, showing which class each client fails on in the first round and to what extent aggregation repairs it.}
+\label{fig:confmat}
 \end{figure}
 
+\subsection{Dirichlet Label Skew}
+\label{sec:res_dirichlet}
 
-\subsection{Cross-Sensor Generalization}
-\label{sec:cross_sensor}
+\begin{table}[t]
+\centering
+\caption{Final Balanced Accuracy Under Dirichlet Label Skew (3-Node, Group-Level Split, mean [95\% CI], $n=5$)}
+\label{tab:dirichlet}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Method} & $\alpha=0.1$ & $\alpha=0.5$ & $\alpha=1.0$ \\
+\midrule
+Local-only      & \PHs & \PHs & \PHs \\
+\fedavg{}       & \PHs & \PHs & \PHs \\
+\fedprox{} 0.01 & \PHs & \PHs & \PHs \\
+\fedbn{}        & \PHs & \PHs & \PHs \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}
+\footnotesize{\todo{Fill from the \texttt{dirichlet\_skew} block. Report the realised per-node class counts from \texttt{split\_stats.json} so that the achieved skew at each $\alpha$ is documented, and state whether the ranking of the methods is preserved across $\alpha$.}}
+\end{table}
 
-\todo{Complete after Experiment~3 with custom RealSense + ZED captures. This section will present:
-\begin{itemize}
-    \item Train on D435if $\rightarrow$ Test on D435i (and reverse)
-    \item Train on RealSense $\rightarrow$ Test on ZED (and reverse)
-    \item FL (all 3 nodes) $\rightarrow$ Test on each node individually
-    \item Quantify accuracy gap as function of sensor heterogeneity level
-\end{itemize}
-}
+\begin{figure}[t]
+\centering
+\todo{Figure: final balanced accuracy vs.\ Dirichlet concentration $\alpha$ (log axis), one line per strategy, with 95\% CI bands; a horizontal line marks the IID reference.}
+\caption{Stability of the strategy ranking across the degree of label skew.}
+\label{fig:dirichlet}
+\end{figure}
+
+\subsection{Low-Data Regime}
+\label{sec:res_lowdata}
+
+\begin{table}[t]
+\centering
+\caption{Final Balanced Accuracy in the Low-Data Regime (3-Node, mean [95\% CI])}
+\label{tab:lowdata}
+\begin{tabular}{@{}llccc@{}}
+\toprule
+\textbf{Dist.} & \textbf{Method} & $\rho{=}1.00$ & $\rho{=}0.05$ & $\rho{=}0.01$ \\
+\midrule
+\multirow{3}{*}{IID}
+ & Local-only      & \PHs & \PHs & \PHs \\
+ & \fedavg{}       & \PHs & \PHs & \PHs \\
+ & \fedprox{} 0.01 & \PHs & \PHs & \PHs \\
+\midrule
+\multirow{3}{*}{Non-IID}
+ & Local-only      & \PHs & \PHs & \PHs \\
+ & \fedavg{}       & \PHs & \PHs & \PHs \\
+ & \fedprox{} 0.01 & \PHs & \PHs & \PHs \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}
+\footnotesize{$\rho$ is the retained fraction of each node's training split, Eq.~\eqref{eq:subsample}. \todo{Fill from the \texttt{low\_data} block and report the absolute number of training images per node at each $\rho$. The key quantity is the federated-minus-local gap as a function of $\rho$.}}
+\end{table}
+
+\subsection{Hyperparameter Sensitivity}
+\label{sec:res_sensitivity}
+
+\begin{table}[t]
+\centering
+\caption{Sensitivity of Final Balanced Accuracy to the Local and Federation Hyperparameters (3-Node, Non-IID, mean [95\% CI])}
+\label{tab:sensitivity}
+\begin{tabular}{@{}llc@{}}
+\toprule
+\textbf{Factor} & \textbf{Setting} & \textbf{Final bal.\ acc.} \\
+\midrule
+\multirow{5}{*}{Proximal strength $\mu$}
+ & 0.001 & \PHs \\
+ & 0.01  & \PHs \\
+ & 0.05  & \PHs \\
+ & 0.1   & \PHs \\
+ & 0.5   & \PHs \\
+\midrule
+\multirow{3}{*}{Local epochs $E$}
+ & 1 & \PHs \\
+ & 2 & \PHs \\
+ & 5 & \PHs \\
+\midrule
+\multirow{2}{*}{Learning rate $\eta$}
+ & $10^{-4}$ & \PHs \\
+ & $10^{-3}$ & \PHs \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}
+\footnotesize{One factor varied at a time about the default point ($\mu{=}0.01$, $E{=}5$, $\eta{=}10^{-3}$, batch~8). \todo{Fill from the \texttt{mu\_grid}, \texttt{local\_epochs} and \texttt{learning\_rate} blocks; add the matching round-1 column, because $\mu$ and $E$ affect the early rounds far more than the final round.}}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\todo{Figure: three panels, final and round-1 balanced accuracy vs.\ (a)~$\mu$ (log axis), (b)~$E$, (c)~$\eta$, with 95\% CI bands.}
+\caption{Hyperparameter sensitivity of the federated strategies under label skew.}
+\label{fig:sensitivity}
+\end{figure}
+
+\subsection{Extended Communication Budget for FedBN}
+\label{sec:res_fedbn}
+
+Under the v1 three-round budget, \fedbn{} was the weakest method in both distributions and was markedly unstable under label skew ($75.06\% \pm 8.36\%$, 95\% CI $[54.30, 95.83]$, $n=3$). We deliberately do \emph{not} conclude from this that \fedbn{} is unsuitable for this task, nor that it would necessarily become competitive given more rounds: both statements exceed the evidence of a three-round experiment. The ten-round block of Table~\ref{tab:fedbn10} tests the second statement directly against a matched \fedavg{} reference.
+
+\begin{table}[t]
+\centering
+\caption{\fedbn{} Under an Extended Communication Budget (3-Node, Group-Level Split, mean [95\% CI])}
+\label{tab:fedbn10}
+\begin{tabular}{@{}llcc@{}}
+\toprule
+\textbf{Dist.} & \textbf{Method} & \textbf{R3 bal.\ acc.} & \textbf{R10 bal.\ acc.} \\
+\midrule
+\multirow{2}{*}{IID}
+ & \fedavg{} & \PHs & \PHs \\
+ & \fedbn{}  & \PHs & \PHs \\
+\midrule
+\multirow{2}{*}{Non-IID}
+ & \fedavg{} & \PHs & \PHs \\
+ & \fedbn{}  & \PHs & \PHs \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}
+\footnotesize{\todo{Fill from the \texttt{long\_horizon\_fedbn} block. State explicitly whether the \fedbn{}--\fedavg{} difference at R10 has a CI that excludes zero; if it does not, the conclusion is that ten rounds are still insufficient to separate them, not that they are equivalent.}}
+\end{table}
+
+\subsection{Time- and Communication-Normalised Comparison}
+\label{sec:res_time}
+
+Table~\ref{tab:time} reports the measured wall-clock cost of the v1 runs. Aggregated over seeds, a three-round 3-node run takes $6147 \pm 410$\,s with \fedavg{} under label skew and $10{,}500 \pm 494$\,s with \fedprox{} ($\mu=0.01$), i.e.\ a $1.71\times$ wall-clock overhead for \fedprox{}, attributable to the proximal-term computation and to the per-layer CPU-to-GPU transfer of $w^t$ required by the memory budget. Communication volume, in contrast, is identical for both ($110.3$\,MB cumulative over three rounds with $K=3$ and $|w| \approx 6.13$\,MB, in agreement with~\eqref{eq:comm}), because \fedprox{} changes the local objective and not the payload.
+
+This asymmetry matters for the interpretation of the first-round advantage of \fedprox{}: an improvement that is obtained per \emph{round} is not necessarily an improvement per \emph{second}. At the measured rates, the time \fedprox{} needs for its first round is of the same order as the time \fedavg{} needs to complete more than one round, so a fair claim requires the time-normalised curve of Fig.~\ref{fig:timecomm} rather than Table~\ref{tab:main_results}.
+
+\begin{table}[t]
+\centering
+\caption{Measured Total Training Time, Image-Level Split (3 Rounds)}
+\label{tab:time}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Configuration} & \textbf{Time (min)} & \textbf{Comm.\ (MB)} & \textbf{R3 Acc.\ (\%)} \\
+\midrule
+2N IID \fedavg{} & 61 & 73.5 & 99.68 \\
+2N Non-IID \fedavg{} & 81 & 73.5 & 99.85 \\
+3N IID \fedavg{} & 102 & 110.3 & 99.32 \\
+3N Non-IID \fedavg{} & 102 & 110.3 & 99.31 \\
+3N Non-IID \fedprox{} $\mu$=0.01 & 175 & 110.3 & 99.22 \\
+3N Non-IID \fedprox{} $\mu$=0.1 & 164 & 110.3 & 98.33 \\
+3N Non-IID \fedbn{} & 103 & $<$110.3 & 75.06 \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}
+\footnotesize{Times are seed means of the recorded server elapsed time; accuracies are the seed means of Table~\ref{tab:v1_ci}. Communication volume follows~\eqref{eq:comm} with $|w| \approx 6.13$\,MB; the \fedbn{} entry is smaller because normalisation parameters are not transmitted. \todo{Replace the \fedbn{} communication entry with the exact measured value from \texttt{total\_\allowbreak communication\_\allowbreak bytes}, and add the 2-node rows for the revised protocol.}}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/fig5_time_vs_accuracy}
+\caption{Wall-clock time versus final accuracy under the v1 protocol. \todo{Replace with the three-panel figure of Section~\ref{sec:timecomm}: accuracy vs.\ round, vs.\ elapsed seconds, vs.\ cumulative MB, with the v1 curves drawn dashed and footnoted as time/volume estimates.}}
+\label{fig:timecomm}
+\end{figure}
+
+\subsection{Statistical Analysis}
+\label{sec:res_stats}
+
+Table~\ref{tab:stats} lists the paired comparisons of the v1 protocol. With $n \le 3$ seeds these tests have very low power, and we report them for completeness rather than as confirmatory evidence: only three of the fifteen pairs per distribution reach $p<0.05$ uncorrected, and none survives a Bonferroni correction for the fifteen comparisons ($\alpha = 0.0033$). The Friedman omnibus test over the six methods is not significant in either distribution ($\chi^2 = 10.00$, $p = 0.075$ for IID and $\chi^2 = 8.29$, $p = 0.141$ for label skew), but it is computed on only $n = 2$ seeds that are complete across all six methods, so it is uninformative. Several paired effect sizes are numerically very large (for example $d = -7.30$ for \fedprox{}~0.01 versus local-only under IID, where the mean difference is only $-0.31$ percentage points); as argued in Section~\ref{sec:stats}, such values reflect a very small paired standard deviation at $n=3$ and must not be read as evidence of a practically important difference.
+
+\begin{table}[t]
+\centering
+\caption{Paired Comparisons of Final Accuracy, Image-Level Split ($n$ = Number of Paired Seeds)}
+\label{tab:stats}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llccc@{}}
+\toprule
+\textbf{Dist.} & \textbf{Comparison} & $n$ & \textbf{Diff.\ (pp)} & \textbf{$d$ \; ($p$)} \\
+\midrule
+\multirow{3}{*}{IID}
+ & \fedprox{} 0.01 vs.\ Local-only & 3 & $-0.31$ & $-7.30$ \; (0.006) \\
+ & \fedprox{} 0.1 vs.\ Local-only  & 3 & $-1.19$ & $-3.03$ \; (0.034) \\
+ & Centralized vs.\ \fedbn{}       & 3 & $+3.96$ & $+1.22$ \; (0.169) \\
+\midrule
+\multirow{3}{*}{Non-IID}
+ & Centralized vs.\ \fedbn{}       & 3 & $+24.66$ & $+2.97$ \; (0.036) \\
+ & \fedbn{} vs.\ Local-only        & 3 & $-24.44$ & $-2.93$ \; (0.037) \\
+ & Centralized vs.\ Local-only     & 3 & $+0.22$  & $+2.84$ \; (0.039) \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}
+\footnotesize{$d$ is the paired effect size of~\eqref{eq:cohend}; $p$ is the uncorrected paired $t$-test. Bonferroni threshold for 15 comparisons per distribution: $\alpha=0.0033$; no comparison meets it. \todo{Regenerate at $n=5$ under the group-level split from \texttt{analysis/\allowbreak pairwise\_\allowbreak tests.md}, and add the 95\% CI of the paired difference for each row.}}
+\end{table}
+
+\subsection{Cross-Sensor Generalisation (Leave-One-Scene-Out)}
+\label{sec:res_loso}
+
+\begin{table}[t]
+\centering
+\caption{Leave-One-Scene-Out Cross-Sensor Accuracy (\%), mean Over $S$ Folds [95\% CI]}
+\label{tab:loso}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Train $\rightarrow$ Test} & \textbf{D435if} & \textbf{D435i} & \textbf{ZED 2i} \\
+\midrule
+D435if & \PHs & \PHs & \PHs \\
+D435i  & \PHs & \PHs & \PHs \\
+ZED 2i & \PHs & \PHs & \PHs \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}
+\footnotesize{Diagonal: same camera, held-out scene (scene-shift-only reference). Off-diagonal: cross-camera on the same held-out scene. The sensor gap of~\eqref{eq:sensorgap} is the row-wise difference. \todo{Fill from \texttt{scripts/cross\_sensor\_loso.py}; report per-fold values as well as the mean, and state the number of frames per scene and camera.}}
+\end{table}
+
+\todo{The v1 manuscript reported near-perfect cross-camera accuracy under a random frame-level split of five shared scenes. That number is not reported here because it cannot be separated from scene overlap; replace this paragraph with the leave-one-scene-out result and an explicit comparison against the earlier protocol.}
 
 
 \subsection{Modality Ablation}
 \label{sec:modality}
 
-\todo{Complete after Experiment~2. This section will present:
-\begin{itemize}
-    \item 5 modality combinations: RGB-only, Depth-only, IR-only, RGB+D, RGB+D+IR
-    \item Accuracy and convergence comparison
-    \item Communication cost per modality (model size difference)
-\end{itemize}
-}
+\todo{Complete after Experiment~2 (RGB-only, Depth-only, IR-only, RGB+D, RGB+D+IR: accuracy, convergence, and communication cost per modality). Note in the text that this ablation is centralised unless the federated variant is also executed.}
 
 
 \subsection{Resource Profiling}
 \label{sec:profiling}
 
-\todo{Complete after tegrastats profiling is integrated. This section will present:
-\begin{itemize}
-    \item Per-round GPU power (W) and total board power (W)
-    \item Energy consumption (Wh) per round and per experiment
-    \item Peak GPU memory usage (MB)
-    \item Model transfer size (KB) and transfer latency (ms)
-    \item Comparison across FL strategies
-\end{itemize}
-}
+\todo{Complete after tegrastats profiling is integrated: per-round GPU and board power (W), energy (Wh) per round and per run, peak GPU memory (MB), model transfer size (KB) and transfer latency (ms), per strategy.}
 
 
 \subsection{Network Constraint Sensitivity}
 \label{sec:network}
 
-\todo{Complete after Experiment~5 with tc bandwidth throttling. This section will present:
-\begin{itemize}
-    \item Baseline (WiFi), 10~Mbps, 1~Mbps, 1~Mbps + 5\% packet loss
-    \item Impact on round time and convergence
-\end{itemize}
-}
-
-
-\subsection{Statistical Analysis}
-
-\todo{Complete after all 3-seed experiments. This section will present:
-\begin{itemize}
-    \item Friedman test across 6 strategies
-    \item Wilcoxon signed-rank pairwise comparisons
-    \item Bonferroni correction
-    \item Cohen's d effect sizes
-    \item 95\% confidence intervals
-\end{itemize}
-}
+\todo{Complete after Experiment~5 with tc bandwidth throttling: baseline WiFi, 10~Mbps, 1~Mbps, and 1~Mbps with 5\% packet loss; impact on round time and convergence.}
 
 
 % ============================================================
@@ -401,20 +893,31 @@ Table~\ref{tab:time} summarizes the total training time for each configuration. 
 
 \subsection{Practical Implications}
 
-Our results provide several actionable insights for deploying FL on edge sensor networks:
+Within the scope defined in Section~\ref{sec:scope}, the results support the following practical guidance.
 
-\textbf{Strategy selection depends on the deployment phase.} For initial deployment where fast convergence is critical (e.g., a system that must be operational within one FL round), \fedprox{} with $\mu=0.01$ is strongly recommended under non-IID conditions, as it avoids the near-random first-round performance of \fedavg{}. For steady-state operation where communication rounds are not time-critical, even \fedavg{} eventually converges to high accuracy.
+\textbf{Strategy selection depends on the deployment phase, and on the cost axis used.} When a system must be usable after a single aggregation round under label skew, the proximal term of~\eqref{eq:fedprox} substantially improves first-round quality relative to plain averaging. That advantage is measured per round; on this hardware the same wall-clock budget buys \fedavg{} additional rounds (Section~\ref{sec:res_time}), so the recommendation holds when rounds are expensive (scheduled, bandwidth-limited or manually supervised aggregation) and weakens when the constraint is total training time on the device.
 
-\textbf{The memory-accuracy trade-off is real on edge hardware.} The \fedprox{} proximal term requires storing a copy of the global model parameters. On the memory-constrained Jetson Orin Nano (8\,GB shared between CPU and GPU), this necessitated storing global parameters on CPU and transferring them per-layer during computation---adding 63\% time overhead. This practical constraint is invisible in GPU-rich simulation environments.
+\textbf{The memory-accuracy trade-off is real on edge hardware.} The proximal term requires a copy of the global parameters. On the 8\,GB shared-memory Jetson Orin Nano this forced a CPU-resident copy with per-layer transfers, which is the main contributor to the measured $1.71\times$ wall-clock overhead. This cost does not appear in GPU-rich simulation, and it is invisible in any comparison indexed by communication rounds.
 
-\textbf{Non-IID effects compound with scale.} The non-IID round~1 accuracy penalty increases from 20.43\% (2~nodes) to 31.79\% (3~nodes) under label skew. This suggests that larger FL deployments with heterogeneous sensors require more aggressive non-IID mitigation strategies.
+\textbf{Per-round and per-client reporting changes what one sees.} The global accuracy of the final round is nearly identical for all aggregating strategies on this task, while the per-client first-round confusion matrices differ sharply. Aggregate accuracy is therefore the least informative of the metrics we report for this task, and balanced accuracy, minority-class sensitivity and MCC should be preferred when client priors differ.
 
-\todo{Expand discussion after all experiments are complete.}
+\todo{Extend once the Dirichlet, low-data and sensitivity blocks are available; in particular, state at which $\rho$ the federated advantage over local-only becomes larger than the width of its confidence interval.}
+
+\subsection{Which Conclusions Generalise}
+\label{sec:generalise}
+
+We separate the findings by how far they can be carried.
+
+\emph{Expected to generalise beyond this testbed:} (i)~that a proximal constraint reduces the first-round damage caused by strong client label skew, which is the mechanism established analytically and empirically by Li et al.~\cite{li2020fedprox}; (ii)~that on accelerated edge devices the per-round and per-second orderings of strategies can differ, so both must be reported~\cite{banerjee2025fedjoule, prashanthi2022jetson}; and (iii)~that frame-extracted video datasets require group-level splitting, which is a property of the data, not of the method~\cite{barz2020duplicates}.
+
+\emph{Specific to this configuration and not to be extrapolated:} (i)~the numerical size of the first-round penalty, which depends on client count, on the particular skew and on the backbone; (ii)~the ranking of \fedbn{}, which is tied to the number of normalisation layers in MobileNetV3-Small and to the executed round budget; (iii)~the $1.71\times$ \fedprox{} time overhead, which is a consequence of the 8\,GB memory constraint and of our CPU-resident implementation of $w^t$; and (iv)~all absolute accuracies, which reflect a near-saturated binary task.
+
+\emph{Not addressed at all:} cross-device federations with partial participation, client dropout, secure aggregation or differential privacy overheads, non-vision modalities, and multi-class or dense prediction tasks.
 
 \subsection{Limitations}
+\label{sec:limitations}
 
-This study has several limitations. First, our testbed consists of only three edge nodes; larger-scale deployments may exhibit different convergence dynamics. Second, we use a single dataset (FLAME); generalization to other anomaly detection tasks requires further validation. Third, our experiments use 3 communication rounds; tasks requiring many rounds may show different strategy rankings.
-\todo{Update limitations based on final results.}
+First, the federation has three clients with full participation; convergence dynamics at scale are outside the evidence of this study. Second, one dataset and one binary task are used, and the task is close to saturation under full data, which is why the low-data regime of Section~\ref{sec:lowdata} was added; even so, a single task cannot establish task-independence. Third, one backbone is evaluated; strategy rankings, and particularly the behaviour of \fedbn{}, depend on the normalisation structure of the architecture. Fourth, the main comparison uses a three-round budget, with a ten-round block only for \fedbn{}; nothing here describes asymptotic behaviour. Fifth, batch size is fixed at~8 by the device memory and is therefore not part of the sensitivity analysis, and the sweep varies one factor at a time, so interactions between $\mu$, $E$ and $\eta$ are not resolved. Sixth, the number of seeds is five, which yields wide confidence intervals; we consequently report intervals rather than significance verdicts and avoid equivalence claims. Seventh, the depth modality is not an input to the federated classifier, so sensor heterogeneity is characterised only in the separate centralised cross-sensor study. Eighth, per-round evaluation uses the validation split, as in v1; test-split numbers are reported only for final models.
 
 
 % ============================================================
@@ -423,11 +926,20 @@ This study has several limitations. First, our testbed consists of only three ed
 \section{Conclusion}
 \label{sec:conclusion}
 
-This paper presented the first empirical study of multimodal federated learning on real edge sensor nodes equipped with RGB-D cameras. Using three NVIDIA Jetson Orin Nano Super devices with heterogeneous depth cameras, we demonstrated that non-IID label skew causes dramatic accuracy degradation in early FL rounds (53.66\% for 3-node \fedavg{}), which \fedprox{} with $\mu=0.01$ effectively mitigates while achieving the highest final accuracy (99.49\%). We identified a critical over-regularization trade-off at higher $\mu$ values and documented the real-world memory and time costs of proximal-term computation on memory-constrained edge hardware.
+This paper reported an empirical evaluation of federated learning on a physical edge GPU cluster of three Jetson Orin Nano Super nodes with heterogeneous RGB-D cameras. Its contribution is measurement and protocol rather than a new algorithm: a leakage-audited, sequence-level partitioning of a frame-extracted dataset; a full per-client metric set with confusion matrices instead of aggregate accuracy alone; comparisons normalised by wall-clock time and communication volume in addition to communication rounds; heterogeneity varied both by a hand-constructed skew and by Dirichlet concentration; a low-data regime in which the task is not saturated; a one-factor-at-a-time hyperparameter sweep; and a scene-independent leave-one-scene-out protocol for cross-sensor generalisation. All comparisons are reported with 95\% confidence intervals over repeated seeds, and all conclusions are explicitly bounded by the configuration in which they were obtained: three clients, one dataset, one backbone, and the communication budgets actually executed. In particular, the behaviour of \fedbn{} is reported for the three- and ten-round budgets that were run, and no claim is made about its behaviour at larger budgets.
 
-\todo{Update conclusion after all experiments, especially cross-sensor and modality ablation results.}
+\todo{Rewrite the quantitative sentences of the conclusion once the pending runs are complete; state the leakage rate of the v1 split, the direction and size of the accuracy change under the group-level split, whether the strategy ranking is stable across $\alpha$ and $\rho$, and the leave-one-scene-out cross-sensor gap.}
 
-Future work includes scaling to larger node counts, deploying the system for outdoor environmental monitoring, and investigating adaptive $\mu$ scheduling that adjusts the proximal term based on measured data heterogeneity at each round.
+\subsection{Future Work}
+\label{sec:future}
+
+Three directions follow directly from the limitations above.
+
+\textbf{Hybrid wavelet-transform feature extraction for edge GPU clusters.} A promising way to reduce both the local computation and the transmitted payload is to place a fixed, non-learned wavelet transform in front of the learned backbone, so that the network operates on sub-band representations at reduced spatial resolution~\cite{dede2025wavelet, yang2025wavelitenet}. Because the transform carries no parameters, it shrinks the model that federated averaging must exchange at every round without adding to the aggregation cost, and its multi-resolution sub-bands offer a natural granularity for transmitting only the coefficients that changed. Combining such a wavelet front end with the federated objectives of Section~\ref{sec:objectives}, and tuning the resulting joint architecture-and-federation hyperparameter space with the metaheuristic search methods reviewed in Section~\ref{sec:related_meta}~\cite{tuba2021cnnhyper, ibrahim2025metaheuristiccnn}, is the hybrid method we intend to evaluate next on the same edge GPU cluster, measured on the time and communication axes of Section~\ref{sec:timecomm}.
+
+\textbf{Scene-independent, multi-site data collection.} The strongest limitation of the present cross-sensor evidence is that the custom captures share a small set of scenes. We are collecting RGB-D recordings at several physically distinct sites, with each camera fixed to one site, so that the client partitions are defined by \emph{where} and \emph{with what} the data were recorded rather than by an artificial label split. Such a corpus would make sensor heterogeneity an intrinsic property of the federated experiment instead of a separately characterised effect, and would allow the leave-one-scene-out protocol of Section~\ref{sec:loso} to be extended to a leave-one-site-out federated evaluation.
+
+\textbf{Scale, budget and search.} Larger client counts with partial participation, longer communication budgets, additional backbones, and joint rather than one-factor-at-a-time hyperparameter search are required before any of the rankings reported here can be claimed to hold generally.
 
 
 % ============================================================
@@ -435,9 +947,9 @@ Future work includes scaling to larger node counts, deploying the system for out
 % ============================================================
 \section*{Acknowledgment}
 
-\todo{Add acknowledgments: university, funding, AI assistance disclosure.}
-
 This work was supported by \c{C}ukurova University. The authors acknowledge the use of AI-assisted tools (Claude, Anthropic) for code development, statistical analysis code generation, and English language editing. All experimental results were obtained from real hardware runs; no results were fabricated or simulated.
+
+\todo{Add funding/grant numbers if applicable, and confirm the AI-assistance disclosure wording against the journal policy.}
 
 
 % ============================================================
@@ -456,7 +968,7 @@ B.~McMahan, E.~Moore, D.~Ramage, S.~Hampson, and B.~A.~y~Arcas, ``Communication-
 T.~Li, A.~K.~Sahu, M.~Zaheer, M.~Sanjabi, A.~Talwalkar, and V.~Smith, ``Federated optimization in heterogeneous networks,'' in \emph{Proc. Mach. Learn. Syst. (MLSys)}, vol.~2, 2020, pp. 429--450.
 
 \bibitem{li2021fedbn}
-X.~Li, M.~Jiang, X.~Zhang, M.~Kamp, and Q.~Dou, ``FedBN: Federated learning on non-IID features via local batch normalization,'' in \emph{Proc. Int. Conf. Learn. Representations (ICLR)}, 2021.
+X.~Li, M.~Jiang, X.~Zhang, M.~Kamp, and Q.~Dou, ``FedBN: Federated learning on non-IID features via local batch normalization,'' in \emph{Proc. Int. Conf. Learn. Representations (ICLR)}, 2021. [Online]. Available: \url{https://arxiv.org/abs/2102.07623}
 
 \bibitem{zhao2018noniid}
 Y.~Zhao, M.~Li, L.~Lai, N.~Suda, D.~Civin, and V.~Chandra, ``Federated learning with non-IID data,'' \emph{arXiv preprint arXiv:1806.00582}, 2018.
@@ -485,8 +997,52 @@ S.~Gupta, R.~Girshick, P.~Arbel\'{a}ez, and J.~Malik, ``Learning rich features f
 \bibitem{ngiam2011multimodal}
 J.~Ngiam, A.~Khosla, M.~Kim, J.~Nam, H.~Lee, and A.~Y.~Ng, ``Multimodal deep learning,'' in \emph{Proc. 28th Int. Conf. Mach. Learn. (ICML)}, 2011, pp. 689--696.
 
-\bibitem{edgeflguard2025}
-\todo{Add proper Edge-FLGuard reference from Applied Sciences 2025.}
+% ---------- References added in the revision ----------
+
+\bibitem{shamsoshoara2021flame}
+A.~Shamsoshoara, F.~Afghah, A.~Razi, L.~Zheng, P.~Z.~Ful\'{e}, and E.~Blasch, ``Aerial imagery pile burn detection using deep learning: The FLAME dataset,'' \emph{Comput. Netw.}, vol.~193, art.~108001, Jul. 2021, doi: 10.1016/j.comnet.2021.108001. % VERIFY
+
+\bibitem{reis2025edgeflguard}
+M.~J.~C.~S.~Reis, ``Edge-FLGuard: A federated learning framework for real-time anomaly detection in 5G-enabled IoT ecosystems,'' \emph{Appl. Sci.}, vol.~15, no.~12, art.~6452, Jun. 2025, doi: 10.3390/app15126452. % VERIFY
+
+\bibitem{banerjee2025fedjoule}
+R.~Banerjee, T.~Chandrashekar, A.~Eswar, and Y.~Simmhan, ``Federated learning within global energy budget over heterogeneous edge accelerators,'' in \emph{Proc. 31st Int. Eur. Conf. Parallel Distrib. Comput. (Euro-Par)}, 2025. [Online]. Available: \url{https://arxiv.org/abs/2506.10413} % VERIFY
+
+\bibitem{prashanthi2022jetson}
+Prashanthi~S.~K., S.~A.~Kesanapalli, and Y.~Simmhan, ``Characterizing the performance of accelerated Jetson edge devices for training deep learning models,'' \emph{Proc. ACM Meas. Anal. Comput. Syst.}, vol.~6, no.~3, pp. 1--26, Dec. 2022, doi: 10.1145/3570604. % VERIFY
+
+\bibitem{zhang2025lcfed}
+Y.~Zhang, H.~Chen, Z.~Lin, Z.~Chen, and J.~Zhao, ``LCFed: An efficient clustered federated learning framework for heterogeneous data,'' \emph{arXiv preprint arXiv:2501.01850}, Jan. 2025. % VERIFY
+
+\bibitem{seo2025iidnoniid}
+J.~Seo, F.~O.~Catak, and C.~Rong, ``Understanding federated learning from IID to non-IID dataset: An experimental study,'' in \emph{Proc. 36th Norwegian ICT Conf. Res. Educ. (NIKT)}, 2024. [Online]. Available: \url{https://arxiv.org/abs/2502.00182} % VERIFY
+
+\bibitem{domini2025profed}
+D.~Domini, G.~Aguzzi, and M.~Viroli, ``ProFed: A benchmark for proximity-based non-IID federated learning,'' \emph{arXiv preprint arXiv:2503.20618}, Mar. 2025. % VERIFY
+
+\bibitem{borazjani2026embeddings}
+K.~Borazjani, P.~Abdisarabshali, N.~Khosravan, and S.~Hosseinalipour, ``Redefining non-IID data in federated learning for computer vision tasks: Migrating from labels to embeddings for task-specific data distributions,'' \emph{IEEE Trans. Artif. Intell.}, 2026, accepted for publication. [Online]. Available: \url{https://arxiv.org/abs/2503.14553} % VERIFY
+
+\bibitem{mreish2025mfedbn}
+K.~Mreish, E.~Novikova, M.~Chaplygin, I.~Kholod, and T.~Alnajar, ``MFedBN: Tackling data heterogeneity with gradient-based aggregation and advanced distribution skew modeling,'' \emph{Sensors}, vol.~25, no.~23, art.~7314, 2025, doi: 10.3390/s25237314. % VERIFY
+
+\bibitem{barz2020duplicates}
+B.~Barz and J.~Denzler, ``Do we train on test data? Purging CIFAR of near-duplicates,'' \emph{J. Imaging}, vol.~6, no.~6, art.~41, Jun. 2020, doi: 10.3390/jimaging6060041. % VERIFY
+
+\bibitem{chicco2020mcc}
+D.~Chicco and G.~Jurman, ``The advantages of the Matthews correlation coefficient (MCC) over F1 score and accuracy in binary classification evaluation,'' \emph{BMC Genomics}, vol.~21, no.~1, art.~6, Jan. 2020, doi: 10.1186/s12864-019-6413-7. % VERIFY
+
+\bibitem{tuba2021cnnhyper}
+E.~Tuba, N.~Ba\v{c}anin, I.~Strumberger, and M.~Tuba, ``Convolutional neural networks hyperparameters tuning,'' in \emph{Artificial Intelligence: Theory and Applications} (Studies in Computational Intelligence). Cham, Switzerland: Springer, 2021, pp. 65--84, doi: 10.1007/978-3-030-72711-6\_4. % VERIFY
+
+\bibitem{ibrahim2025metaheuristiccnn}
+M.~Q.~Ibrahim, N.~K.~Hussein, D.~Guinovart, and M.~Qaraad, ``Optimizing convolutional neural networks: A comprehensive review of hyperparameter tuning through metaheuristic algorithms,'' \emph{Arch. Comput. Methods Eng.}, vol.~32, no.~8, pp. 5123--5160, 2025, doi: 10.1007/s11831-025-10292-x. % VERIFY
+
+\bibitem{dede2025wavelet}
+A.~Dede, H.~Nunoo-Mensah, E.~K.~Akowuah, K.~O.~Boateng, P.~E.~Adjei, F.~A.~Acheampong, I.~Acquah, and J.~J.~Kponyo, ``Wavelet-based feature extraction for efficient high-resolution image classification,'' \emph{Eng. Rep.}, vol.~7, no.~2, art.~e70027, Feb. 2025, doi: 10.1002/eng2.70027. % VERIFY
+
+\bibitem{yang2025wavelitenet}
+J.~Yang, G.~Xu, M.~Yang, and Z.~Lin, ``Lightweight wavelet-CNN tea leaf disease detection,'' \emph{PLOS ONE}, vol.~20, no.~5, art.~e0323322, 2025, doi: 10.1371/journal.pone.0323322. % VERIFY
 
 \end{thebibliography}
 

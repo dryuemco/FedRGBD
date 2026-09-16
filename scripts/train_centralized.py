@@ -250,9 +250,11 @@ def main(argv=None):
         "results_schema_version": 2,
         "per_node_test": per_node_results,
         "history": history,
+        # one entry per completed FL-equivalent round (5 local epochs = 1 round),
+        # so a 10-round horizon (--epochs 50) is covered as well as the 3-round default
         "fl_round_equivalents": {
-            f"round_{r}": history[r * 5 - 1] if r * 5 <= len(history) else None
-            for r in range(1, 4)  # Rounds 1, 2, 3
+            f"round_{r}": history[r * 5 - 1]
+            for r in range(1, len(history) // 5 + 1)
         },
         "timestamp": datetime.now().isoformat(),
     }

@@ -139,3 +139,44 @@ def test_train_centralized_writes_full_metrics(nodes, tmp_path):
         assert k in res["final_test_metrics"] and k in res["history"][0]["val_metrics"]
     assert "test_metrics" in res["per_node_test"]["node_a"]
     assert res["history"][0]["elapsed_s"] > 0
+
+
+@pytest.mark.parametrize("script_name", ["train_local", "train_centralized"])
+def test_fl_round_equivalents_cover_every_completed_round(nodes, tmp_path, script_name):
+    """``fl_round_equivalents`` must follow ``--epochs``, not a hard-coded 3 rounds.
+
+    The revision's long-horizon block runs FL for 10 rounds, so its matching
+    baselines run 50 epochs.  ``analyze_results.load_centralized_run`` prefers
+    ``fl_round_equivalents`` over the epoch-derived mapping, so a dict capped at
+    round 3 silently truncates the baseline curve to 3 of 10 rounds.
+    """
+    import importlib
+
+    script = importlib.import_module("scripts." + script_name)
+    out = tmp_path / ("equiv_" + script_name)
+    common = ["--epochs", "11", "--batch_size", "4", "--seed", "42",
+              "--output_dir", str(out), "--no_pretrained", "--img_size", str(IMG)]
+    if script_name == "train_local":
+        script.main(["--batch", "--data_dirs", nodes[0]] + common)
+        res = json.loads((out / "node_a" / "results.json").read_text())
+    else:
+        script.main(["--data_dirs", nodes[0]] + common)
+        res = json.loads((out / "results.json").read_text())
+
+    equiv = res["fl_round_equivalents"]
+    assert sorted(equiv) == ["round_1", "round_2"]           # 11 epochs -> 2 full rounds
+    assert all(v is not None for v in equiv.values())
+    assert equiv["round_1"]["epoch"] == 5 and equiv["round_2"]["epoch"] == 10
+
+
+def test_fl_round_equivalents_empty_for_short_runs(nodes, tmp_path):
+    from scripts import train_centralized
+
+    out = tmp_path / "equiv_short"
+    train_centralized.main(["--data_dirs", nodes[0], "--epochs", "2", "--batch_size", "4",
+                            "--seed", "42", "--output_dir", str(out), "--no_pretrained",
+                            "--img_size", str(IMG)])
+    res = json.loads((out / "results.json").read_text())
+    # fewer than 5 epochs -> no complete FL round, and no null placeholders that
+    # would make analyze_results invent empty rounds 1-3
+    assert res["fl_round_equivalents"] == {}

@@ -479,3 +479,88 @@ def test_stable_seed_is_process_independent():
     env = dict(os.environ, PYTHONHASHSEED="12345")
     got = subprocess.check_output([sys.executable, "-c", code], env=env).decode().strip()
     assert int(got) == ds._stable_seed(42, "iid|0.05")
+
+
+# --------------------------------------------------------------------------- #
+# re-partitioning into an existing output dir must not keep the old partition
+# --------------------------------------------------------------------------- #
+def _placed_files(output_dir, split):
+    """-> ``{(node, tvt, label, basename)}`` actually present on disk."""
+    out = set()
+    root = os.path.join(str(output_dir), split)
+    for node in sorted(os.listdir(root)):
+        node_dir = os.path.join(root, node)
+        if not os.path.isdir(node_dir):
+            continue
+        for sp in ("train", "val", "test"):
+            for label in ("Fire", "No_Fire"):
+                d = os.path.join(node_dir, sp, label)
+                if os.path.isdir(d):
+                    out |= {(node, sp, label, f) for f in os.listdir(d)}
+    return out
+
+
+def test_rerun_into_existing_dir_keeps_stale_files_and_warns(dataset, tmp_path, capsys):
+    """Without --clean the previous partition is left behind (and warned about).
+
+    ``link_files`` only replaces the *same* basename, so an image that moves to
+    another node or another train/val/test bucket exists twice afterwards -- i.e.
+    training images silently end up in val/test.  The warning is the only thing
+    standing between the operator and a corrupted data/processed tree.
+    """
+    out = tmp_path / "out_rerun"
+    run_split(dataset["raw"], out, seed=42, nodes=3)
+    first = _placed_files(out, "iid")
+    assert len(first) == 2 * N_PER_CLASS
+
+    run_split(dataset["raw"], out, seed=7, nodes=3)
+    second = _placed_files(out, "iid")
+    assert len(second) > len(first), "seed 7 must move at least one image"
+    warning = capsys.readouterr().out
+    assert "WARNING" in warning and "--clean" in warning
+
+
+def test_clean_removes_the_previous_partition(dataset, tmp_path):
+    out = tmp_path / "out_clean"
+    run_split(dataset["raw"], out, seed=42, nodes=3, clean=True)
+    run_split(dataset["raw"], out, seed=7, nodes=3, clean=True)
+    for split in ("iid", "non_iid_label"):
+        placed = _placed_files(out, split)
+        assert len(placed) == 2 * N_PER_CLASS
+        # every image is placed exactly once
+        assert len({name for _, _, _, name in placed}) == 2 * N_PER_CLASS
+        # and the manifest agrees with what is on disk
+        rows = read_manifest(out, split)
+        assert {(r["node"], r["split"], r["label"], os.path.basename(r["path"])) for r in rows} == placed
+
+
+# --------------------------------------------------------------------------- #
+# a group file that matches nothing must not silently produce singletons
+# --------------------------------------------------------------------------- #
+def test_unmatched_group_file_warns_loudly(dataset, tmp_path, capsys):
+    bad = tmp_path / "bad_groups.json"
+    bad.write_text(json.dumps({"groups": {
+        "0": ["Fire/not_in_this_dataset_000.png", "Fire/not_in_this_dataset_001.png"],
+        "1": ["No_Fire/not_in_this_dataset_002.png", "No_Fire/not_in_this_dataset_003.png"],
+    }}))
+    out = tmp_path / "out_bad_groups"
+    stats = run_split(dataset["raw"], out, seed=42, nodes=3, group_file=str(bad))
+
+    assert stats["_meta"]["group_paths_total"] == 4
+    assert stats["_meta"]["group_paths_matched"] == 0
+    printed = capsys.readouterr().out
+    assert "WARNING" in printed and "0/4" in printed
+    assert "NOT group-safe" in printed
+
+
+def test_matching_group_file_does_not_warn(dataset, tmp_path, capsys):
+    out = tmp_path / "out_good_groups"
+    stats = run_split(dataset["raw"], out, seed=42, nodes=3, group_file=dataset["group_file"])
+    assert stats["_meta"]["group_paths_matched"] == stats["_meta"]["group_paths_total"] == 2 * GROUPED
+    assert "NOT group-safe" not in capsys.readouterr().out
+
+
+def test_warn_group_coverage_threshold():
+    assert ds.warn_group_coverage({"group_paths_total": 0, "group_paths_matched": 0}) is False
+    assert ds.warn_group_coverage({"group_paths_total": 100, "group_paths_matched": 60}) is False
+    assert ds.warn_group_coverage({"group_paths_total": 100, "group_paths_matched": 49}) is True

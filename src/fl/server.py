@@ -271,6 +271,32 @@ def get_strategy(name, min_clients=3, recorder: Optional[RoundRecorder] = None, 
 # --------------------------------------------------------------------------- #
 # results serialisation
 # --------------------------------------------------------------------------- #
+def json_safe(obj):
+    """Make a value strictly JSON-serialisable (RFC 8259).
+
+    ``json.dump`` happily writes the bare tokens ``NaN`` / ``Infinity``, which
+    every non-Python JSON reader rejects.  A diverging local round (large
+    ``proximal_mu``, high lr) produces exactly that via ``train_loss``, so the
+    whole run's results.json would be unreadable outside Python.  Non-finite
+    floats become ``None``; numpy scalars/arrays become Python types.
+    """
+    if isinstance(obj, dict):
+        return {str(k): json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [json_safe(v) for v in obj]
+    if isinstance(obj, np.ndarray):
+        return json_safe(obj.tolist())
+    if isinstance(obj, np.generic):
+        return json_safe(obj.item())
+    if isinstance(obj, bool) or obj is None or isinstance(obj, (int, str)):
+        return obj
+    if isinstance(obj, float):
+        return obj if np.isfinite(obj) else None
+    if isinstance(obj, bytes):  # pragma: no cover - no client sends bytes today
+        return obj.decode("utf-8", "replace")
+    return obj
+
+
 def build_results(args, history, total_time: float, recorder: RoundRecorder,
                   payload_bytes: Optional[int]) -> dict:
     """Assemble results.json — v2 keys first (unchanged), v3 keys appended."""
@@ -306,7 +332,7 @@ def build_results(args, history, total_time: float, recorder: RoundRecorder,
         },
         "rounds": recorder.to_list(),
     })
-    return results
+    return json_safe(results)
 
 
 def main(argv=None):

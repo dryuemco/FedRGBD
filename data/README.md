@@ -100,6 +100,49 @@ counts (unchanged keys) plus a `class_counts` table
 the subsample settings.  Every split directory also gets a `manifest.csv`
 listing node, split, label, image path and near-duplicate group id.
 
+#### Verifying splits across nodes
+The splitter walks the raw dataset with `os.walk`, so a node whose filesystem
+returns the images in a different order produces a **different** partition even
+with the same `--seed`: one node's training image can be another node's test
+image. `scripts/verify_splits.py` checks a `data/processed` tree and exits
+non-zero (with a readable report) when anything is wrong:
+
+```bash
+# self-check of the local tree: no image in two nodes or in two of
+# train/val/test, no near-duplicate group split, manifest.csv counts ==
+# split_stats.json (per node/split fire/nofire and class_counts), files on disk
+python3 scripts/verify_splits.py data/processed
+
+# with the group file and the subsample ablations, plus a JSON summary
+python3 scripts/verify_splits.py data/processed \
+    --group_file analysis/leakage/groups.json --expect_subsample \
+    --json analysis/verify_splits.json
+
+# run this on EVERY node and compare the printed tables -- nothing is copied
+python3 scripts/verify_splits.py data/processed --hashes_only
+
+# or fetch the other nodes' trees (manifests are enough) and diff them here
+python3 scripts/verify_splits.py data/processed --no_disk \
+    --compare /mnt/node_b/processed /mnt/node_c/processed
+```
+
+The `--hashes_only` table prints one md5 per `manifest.csv` plus a normalised
+`split_stats.json` digest (the raw bytes legitimately differ between machines
+because `_meta.data_dir` is absolute).  All three nodes must print identical
+digests.  If they do not, generate the split on one node and copy
+`data/processed` (symlinks, small) or at least the `manifest.csv` files to the
+others, then re-run the check.
+
+| Flag | Effect |
+|------|--------|
+| `--compare DIR [DIR ...]` | other nodes' `data/processed` copies must be byte-identical per split (the first differing rows are printed) |
+| `--hashes_only` | print the md5 table and exit 0 (no comparison, nothing copied) |
+| `--no_disk` | skip the manifest-vs-filesystem check (for manifest-only copies) |
+| `--group_file PATH` | re-check node/split leakage with the group ids from `groups.json`/`groups.csv` instead of the manifest column |
+| `--expect_subsample` | every `<split>_sub<f>` must hold ~`f` x the base train count per node and class (whole units, so the tolerance is one unit or 25%) |
+| `--splits NAME [NAME ...]` | only check these split directories |
+| `--json PATH` | also write the machine-readable summary |
+
 ## Custom RGB-D Data (Phase B)
 
 Custom data is captured using camera-specific scripts:

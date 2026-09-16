@@ -237,8 +237,12 @@ def test_cli_text_format_run_count():
         [PYTHON, "scripts/print_revision_commands.py", "--format", "text"],
         capture_output=True, text=True, check=True,
     )
-    n_dirs = len(re.findall(r"^--- (results/rev_\S+) ---$", out.stdout, flags=re.MULTILINE))
-    assert n_dirs == 151
+    dirs = re.findall(r"^--- (results/rev_\S+) ---$", out.stdout, flags=re.MULTILINE)
+    # 151 logical cells, 9 of which share a results directory with an earlier
+    # block (the default-valued cells of the mu / epoch / lr sweeps) and are
+    # emitted once, as [DUP], instead of being launched again.
+    assert len(dirs) == len(set(dirs)) == 142
+    assert out.stdout.count("[DUP]") == 9
 
 
 def test_cli_block_filter():
@@ -265,3 +269,36 @@ def test_cli_bash_format_smoke():
 def test_main_returns_zero(revision, capsys):
     rc = prc.main(["--block", "learning_rate"])
     assert rc == 0
+
+
+def test_no_results_directory_is_launched_twice(revision):
+    """Every emitted command must target a distinct results directory.
+
+    The mu / local-epoch / learning-rate sweeps intentionally reuse the
+    seed-extension directory at their default value.  ``--skip_existing`` only
+    inspects the filesystem while the list is generated, so a script generated
+    on an empty ``results/`` would otherwise run those configurations up to four
+    times -- 1.5-3 h of testbed time each, with every repeat overwriting the
+    previous results.json.
+    """
+    for all_seeds in (False, True):
+        cfg = dict(revision)
+        cfg["seed_extension"] = dict(cfg["seed_extension"], all_seeds=all_seeds)
+        runs = [r for block in prc.expand_all(cfg).values() for r in block]
+
+        seen = set()
+        emitted = [r for r in runs if prc.emit_status(r, False, seen) == "run"]
+        emitted_dirs = [r.output_dir for r in emitted]
+        assert len(emitted_dirs) == len(set(emitted_dirs))
+        assert set(emitted_dirs) == {r.output_dir for r in runs}  # nothing is lost
+        assert len(emitted_dirs) == len({r.output_dir for r in runs})
+
+
+def test_cli_bash_never_repeats_a_server_command():
+    out = subprocess.run(
+        [PYTHON, "scripts/print_revision_commands.py", "--format", "bash"],
+        capture_output=True, text=True, check=True,
+    )
+    output_dirs = re.findall(r"--output_dir (results/rev_\S+)", out.stdout)
+    assert output_dirs
+    assert len(output_dirs) == len(set(output_dirs))

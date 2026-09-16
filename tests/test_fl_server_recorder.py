@@ -164,3 +164,59 @@ def test_strategy_factory_wires_recorder_and_configs():
 def test_model_payload_bytes_matches_state_dict():
     n = fl_server.model_payload_bytes()
     assert n is not None and n > 1_000_000  # MobileNetV3-Small ≈ 6 MB
+
+
+def test_results_json_is_strict_json_when_a_client_diverges():
+    """A NaN/inf client metric must not make results.json unreadable.
+
+    ``json.dump`` writes the bare tokens ``NaN`` / ``Infinity``, which are not
+    valid JSON (RFC 8259) and are rejected by every non-Python reader.  A
+    diverging local round (large ``proximal_mu``, high lr) produces exactly
+    that through ``train_loss``, and it would only surface after 1.5-3 h of
+    testbed time, when the run's results are written.
+    """
+    rng = np.random.RandomState(3)
+    rec = fl_server.RoundRecorder(start_time=0.0)
+
+    n_a, fit_a = _client_fit_metrics("node_a", 1, 100)
+    n_b, fit_b = _client_fit_metrics("node_b", 1, 100)
+    fit_b["train_loss"] = float("nan")          # diverged
+    fit_b["fit_time_s"] = float("inf")          # pathological timer
+    rec.fit_aggregation([(n_a, fit_a), (n_b, fit_b)])
+
+    na, ma, _ = _client_eval_metrics(rng, 20, "node_a", 1)
+    nb, mb, _ = _client_eval_metrics(rng, 20, "node_b", 1)
+    mb["loss"] = float("nan")
+    rec.evaluate_aggregation([(na, ma), (nb, mb)])
+
+    history = types.SimpleNamespace(
+        losses_distributed=[(1, float("nan"))],
+        metrics_distributed={"accuracy": [(1, 0.5)], "loss": [(1, float("nan"))]},
+        metrics_distributed_fit={"train_loss": [(1, float("nan"))]},
+    )
+    args = types.SimpleNamespace(strategy="fedprox_0.5", rounds=3, min_clients=3, seed=42,
+                                 tag=["noniid"], address="0.0.0.0:8080")
+    res = fl_server.build_results(args, history, 42.0, rec, 6_000_000)
+
+    # strict JSON: no NaN / Infinity tokens anywhere
+    text = json.dumps(res, allow_nan=False)
+    assert "NaN" not in text and "Infinity" not in text
+    assert json.loads(text)["rounds"][0]["fit"]["clients"]["node_b"]["train_loss"] is None
+    assert res["losses_distributed"][0]["loss"] is None
+    # finite values are untouched
+    assert res["rounds"][0]["fit"]["clients"]["node_a"]["train_loss"] == 0.5
+
+
+def test_json_safe_leaves_finite_values_and_converts_numpy():
+    out = fl_server.json_safe({
+        "i": np.int64(7), "f": np.float32(0.5), "arr": np.arange(3),
+        "nan": float("nan"), "inf": float("-inf"), "ok": 1.25,
+        "nested": [{"x": np.float64(2.0)}], "s": "text", "b": True, "none": None,
+    })
+    assert out["i"] == 7 and isinstance(out["i"], int)
+    assert out["f"] == pytest.approx(0.5) and isinstance(out["f"], float)
+    assert out["arr"] == [0, 1, 2]
+    assert out["nan"] is None and out["inf"] is None
+    assert out["ok"] == 1.25 and out["nested"] == [{"x": 2.0}]
+    assert out["s"] == "text" and out["b"] is True and out["none"] is None
+    json.dumps(out, allow_nan=False)

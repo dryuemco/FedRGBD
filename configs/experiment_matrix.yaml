@@ -416,3 +416,88 @@ revision:
     commands:
       - "python3 scripts/analyze_results.py --results_dir results --output_dir analysis"
       - "python3 scripts/analyze_flame_leakage.py --data_dir data/raw/flame_dataset --processed_dir data/processed --output_dir analysis/leakage"
+
+  # ------------------------------------------------------------------------
+  # 9. Scene-independent (leave-one-scene-out) cross-sensor evaluation.
+  #    Added for Reviewer 3: the original experiment_3 cross-camera runs split
+  #    frames of the SAME five scenes between train and test, so scene
+  #    similarity can inflate the reported cross-camera accuracy.  This block
+  #    is consumed by scripts/cross_sensor_loso.py (NOT by
+  #    scripts/print_revision_commands.py, whose BLOCK_ORDER covers the FLAME
+  #    FL runs only), which trains on the other scenes and evaluates on the
+  #    held-out scene, and -- with --pooled_random_split -- re-runs the old
+  #    frame-level random split on exactly the same frames so the paper can
+  #    report random-split vs LOSO side by side.
+  # ------------------------------------------------------------------------
+  cross_sensor_loso:
+    description: >
+      Leave-one-scene-out evaluation on the custom RGB-D captures
+      (data/raw/custom/node_{a,b,c}).  One fold per scene: train on the
+      remaining scenes of the train nodes, evaluate on the held-out scene of
+      the test nodes (cross-camera) and of the train nodes (same-camera).
+      Reported as the full metric set per fold plus mean +/- std over folds.
+    script: "scripts/cross_sensor_loso.py"
+    data_dir: "data/raw/custom"
+    protocol: "leave_one_scene_out"
+    scene_source: >
+      "scene"/"label" keys inside each {id}_meta.json, else a labels.csv with
+      columns id,scene,label passed via --labels_csv, else a <scene>_<label>_<n>
+      frame-id pattern.  Never inferred implicitly (src/data/custom_dataset.py
+      raises if no source annotates every frame).
+    modality: "rgb_d"
+    modalities: [rgb, depth, ir, rgb_d, rgb_d_ir]
+    epochs: 15          # = experiment_1's rounds x local_epochs (3 x 5)
+    batch_size: 8
+    lr: 0.001
+    img_size: 224
+    max_depth_m: 10
+    seeds: [42, 123, 456]
+    pooled_random_split: true   # old (leaky) frame-level split, same data
+    test_frac: 0.2              # test fraction of that baseline
+    output_dir_convention: "results/loso_<config>_<modality>_seed<S>"
+    configurations:
+      # Level 1: manufacturing variance (D435if <-> D435i)
+      - name: "a_to_b"
+        train_nodes: [node_a]
+        test_nodes: [node_b]
+        heterogeneity: "manufacturing_variance"
+      - name: "b_to_a"
+        train_nodes: [node_b]
+        test_nodes: [node_a]
+        heterogeneity: "manufacturing_variance"
+      # Level 2: cross-technology (RealSense <-> ZED); rgb_d only, the ZED
+      # node has no IR stream
+      - name: "a_to_c"
+        train_nodes: [node_a]
+        test_nodes: [node_c]
+        heterogeneity: "cross_technology"
+      - name: "c_to_a"
+        train_nodes: [node_c]
+        test_nodes: [node_a]
+        heterogeneity: "cross_technology"
+      - name: "ab_to_c"
+        train_nodes: [node_a, node_b]
+        test_nodes: [node_c]
+        heterogeneity: "cross_technology"
+      # Level 3: same-camera control (scene-independent, no sensor shift)
+      - name: "a_same"
+        train_nodes: [node_a]
+        same_node: true
+        heterogeneity: "same_camera_control"
+      - name: "b_same"
+        train_nodes: [node_b]
+        same_node: true
+        heterogeneity: "same_camera_control"
+      - name: "c_same"
+        train_nodes: [node_c]
+        same_node: true
+        heterogeneity: "same_camera_control"
+    total_runs: 24   # 8 configurations x 3 seeds
+    note: >
+      Each run internally trains one model per scene (5 folds on the paper's
+      five-scene capture), so a run costs ~5x a single training; with
+      --pooled_random_split one extra model is trained per run.
+    commands:
+      - "python3 scripts/cross_sensor_loso.py --data_dir data/raw/custom --train_nodes node_a --test_nodes node_b --modality rgb_d --epochs 15 --batch_size 8 --lr 1e-3 --seed 42 --pooled_random_split --output_dir results/loso_a_to_b_rgb_d_seed42"
+      - "python3 scripts/cross_sensor_loso.py --data_dir data/raw/custom --train_nodes node_a node_b --test_nodes node_c --modality rgb_d --epochs 15 --batch_size 8 --lr 1e-3 --seed 42 --pooled_random_split --output_dir results/loso_ab_to_c_rgb_d_seed42"
+      - "python3 scripts/cross_sensor_loso.py --data_dir data/raw/custom --train_nodes node_a --same_node --modality rgb_d_ir --epochs 15 --batch_size 8 --lr 1e-3 --seed 42 --output_dir results/loso_a_same_rgb_d_ir_seed42"

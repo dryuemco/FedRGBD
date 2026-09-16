@@ -150,3 +150,107 @@ All results include 95% confidence intervals computed from 3 independent runs.
 | Node B GPU memory crash | `pkill -f python3`, wait, restart with `batch_size=8` |
 | numpy error | Ensure numpy==1.26.4, not 2.x |
 | tegrastats permission | Run with `sudo` or add user to appropriate group |
+
+## Leave-one-scene-out cross-sensor evaluation
+
+*Added for the NCAA revision (Reviewer 3).* The original cross-camera results
+split frames of the **same** five scenes between training and testing, so part
+of the reported cross-camera accuracy may reflect scene similarity rather than
+sensor generalisation. `scripts/cross_sensor_loso.py` adds the
+scene-independent protocol: one fold per scene, training on the remaining
+scenes and evaluating on the held-out scene only.
+
+Per fold it evaluates twice:
+
+| Split | Evaluated on | Question it answers |
+|-------|--------------|---------------------|
+| `cross_camera` | `--test_nodes` × held-out scene | unseen camera *and* unseen scene |
+| `same_camera` | `--train_nodes` × held-out scene | unseen scene, same camera (control) |
+
+### Where the scene/class labels come from
+
+The custom capture writer (`src/data/realsense_capture.py`) stores only
+`frame_id`, `timestamp_ms` and the depth range in `{id}_meta.json`, so the
+scene annotation has to be supplied explicitly. `load_frame_index()` in
+`src/data/custom_dataset.py` accepts exactly three sources, in this order:
+
+1. `"scene"` and `"label"` keys inside each `{id}_meta.json`;
+2. a CSV with columns `id,scene,label` (plus an optional `node` column when
+   frame ids repeat across nodes), passed with `--labels_csv`;
+3. frame ids that follow `<scene>_<label>_<n>`, e.g. `lab_fire_00017` or
+   `kitchen_no_fire_004`.
+
+If no source annotates *every* frame the run aborts with a report of what was
+found (which sources resolved how many frames, the `meta.json` keys present,
+the first unresolved frame ids). Nothing is ever guessed silently — a
+leave-one-scene-out evaluation is only meaningful with a real scene annotation.
+Label names map to class indices with the repository convention
+(`No_Fire = 0`, `Fire = 1`); any other vocabulary is mapped in sorted order.
+
+### Commands
+
+```bash
+# Cross-camera, manufacturing variance (D435if -> D435i), RGB-D,
+# plus the old frame-level random split on the same frames for comparison
+python3 scripts/cross_sensor_loso.py \
+    --data_dir data/raw/custom --labels_csv data/raw/custom/labels.csv \
+    --train_nodes node_a --test_nodes node_b \
+    --modality rgb_d --epochs 15 --batch_size 8 --lr 1e-3 --seed 42 \
+    --img_size 224 --pooled_random_split \
+    --output_dir results/loso_a_to_b_rgb_d_seed42
+
+# Cross-technology: both RealSense nodes -> ZED node
+python3 scripts/cross_sensor_loso.py \
+    --data_dir data/raw/custom --labels_csv data/raw/custom/labels.csv \
+    --train_nodes node_a node_b --test_nodes node_c \
+    --modality rgb_d --epochs 15 --batch_size 8 --lr 1e-3 --seed 42 \
+    --pooled_random_split \
+    --output_dir results/loso_ab_to_c_rgb_d_seed42
+
+# Same-camera control (scene-independent, no sensor shift), RGB+D+IR
+python3 scripts/cross_sensor_loso.py \
+    --data_dir data/raw/custom --labels_csv data/raw/custom/labels.csv \
+    --train_nodes node_a --same_node \
+    --modality rgb_d_ir --epochs 15 --batch_size 8 --lr 1e-3 --seed 42 \
+    --output_dir results/loso_a_same_rgb_d_ir_seed42
+
+# Restrict to a subset of scenes / inspect the capture tree first
+python3 -m src.data.custom_dataset --data_dir data/raw/custom --modality rgb_d
+python3 scripts/cross_sensor_loso.py ... --scenes kitchen lab corridor
+```
+
+Flags: `--modality {rgb,depth,ir,rgb_d,rgb_d_ir}` (channel counts 3/1/1/4/5,
+matching `create_model(in_channels=...)`; ImageNet weights are reused for the
+RGB channels only), `--max_depth_m 10` (depth is read as 16-bit millimetres,
+converted to metres, clipped and normalised with `configs/model_config.yaml`'s
+`normalize_depth`), `--no_pretrained` and `--img_size 16` for the CPU unit
+tests, `--test_frac` for the random-split baseline, `--no_record_ids` to keep
+`results.json` small. The ZED node has no IR stream, so `--modality ir` /
+`rgb_d_ir` drops its frames and prints how many were dropped per node.
+
+### Output
+
+`<output_dir>/results.json` with `experiment: "cross_sensor_loso"`,
+`results_schema_version: 2`, and:
+
+- `folds[]` — one entry per scene: `held_out_scene`, `train_scenes`, `n_train`,
+  `train_ids`, per-epoch `history`, `train_time_s` / `eval_time_s` /
+  `fold_time_s`, and `eval.{cross_camera,same_camera}` each carrying the full
+  `src/evaluation/metrics` set (accuracy, balanced accuracy, precision, recall,
+  specificity, F1, macro-F1, MCC, ROC-AUC, confusion matrix, per-class support)
+  plus the evaluated frame ids;
+- `summary` — `mean`, `std` (sample, ddof=1), `min`, `max` and the per-fold
+  `values` of every metric, separately for `cross_camera` and `same_camera`,
+  plus timing;
+- `pooled_random_split` (with `--pooled_random_split`) — the same model/schedule
+  trained on a frame-level random split (stratified by node and label,
+  `--test_frac`, scenes shared between train and test), so the paper can put
+  the old random-split number next to the LOSO number in one table;
+- `label_sources` — how many frames were annotated from `meta.json` /
+  `labels.csv` / the filename pattern.
+
+Unit tests (synthetic 16-px capture tree, CPU, no pretrained weights):
+
+```bash
+python3 -m pytest tests/test_loso.py -q
+```
