@@ -9,6 +9,7 @@ leakage audit correctly flags train/test near-duplicates.
 """
 
 import itertools
+import json
 import os
 import shutil
 from collections import defaultdict
@@ -19,15 +20,20 @@ from PIL import Image
 
 from scripts.analyze_flame_leakage import (
     audit_processed,
+    cluster_hash_columns,
     cluster_hashes,
+    compute_hash_columns,
     compute_hashes,
     dataset_statistics,
     find_images,
+    format_sweep_table,
     hamming_matrix,
     hash_image,
     load_group_file,
     near_duplicate_pairs,
     run,
+    sequence_heuristic,
+    write_example_groups,
     write_group_files,
 )
 
@@ -382,3 +388,264 @@ def test_audit_processed_run_integration(flame_raw, tmp_path):
     assert "processed_splits" in report
     assert "iid" in report["processed_splits"]
     assert report["processed_splits"]["iid"]["nodes"]["node_a"]["test"]["with_train_duplicate_any_node"] == 0
+
+
+# --------------------------------------------------------------------------- #
+# ported from the authors' script: --hash both (union of dHash and pHash edges)
+# --------------------------------------------------------------------------- #
+def _partition_of(mapping):
+    """``{rel: gid}`` -> ``{frozenset(members), ...}`` (id values are irrelevant)."""
+    members = defaultdict(set)
+    for rel, gid in mapping.items():
+        members[gid].add(rel)
+    return {frozenset(v) for v in members.values()}
+
+
+def test_hash_both_is_a_superset_of_the_dhash_grouping(flame_raw, tmp_path):
+    raw_dir, expected_group_of = flame_raw
+    d_dir = tmp_path / "out_dhash"
+    b_dir = tmp_path / "out_both"
+    run(data_dir=raw_dir, output_dir=str(d_dir), method="dhash", threshold=THRESHOLD,
+        verbose=False, use_cache=False)
+    report = run(data_dir=raw_dir, output_dir=str(b_dir), method="both", threshold=THRESHOLD,
+                 phash_threshold=10, verbose=False, use_cache=False)
+
+    # groups.csv lists every image (incl. singletons), so the two partitions
+    # cover the same set of paths and can be compared directly.
+    dhash_map = load_group_file(str(d_dir / "groups.csv"))
+    both_map = load_group_file(str(b_dir / "groups.csv"))
+    assert set(dhash_map) == set(both_map)
+
+    # union of edges => every dHash group is *contained* in one union group
+    for group in _partition_of(dhash_map):
+        assert len({both_map[rel] for rel in group}) == 1, (
+            "dHash group {} was split by --hash both".format(sorted(group)))
+    assert report["settings"]["method"] == "both"
+    assert report["settings"]["phash_threshold"] == 10
+    assert report["settings"]["union_of"] == ["dhash", "phash"]
+    # the near-duplicate triplets survive the union grouping
+    for base in set(expected_group_of.values()):
+        rels = [r for r, b in expected_group_of.items() if b == base]
+        assert len({both_map[r] for r in rels}) == 1
+
+
+def test_hash_both_caches_both_hash_arrays(flame_raw, tmp_path):
+    raw_dir, _ = flame_raw
+    out_dir = tmp_path / "out_both_cache"
+    run(data_dir=raw_dir, output_dir=str(out_dir), method="both", verbose=False, use_cache=True)
+    assert (out_dir / "hashes_dhash8.npz").exists()
+    assert (out_dir / "hashes_phash8.npz").exists()
+    # a second (cached) run must reproduce the grouping exactly
+    first = load_group_file(str(out_dir / "groups.csv"))
+    run(data_dir=raw_dir, output_dir=str(out_dir), method="both", verbose=False, use_cache=True)
+    assert _partition_of(load_group_file(str(out_dir / "groups.csv"))) == _partition_of(first)
+
+
+def test_cluster_hash_columns_union_of_edges():
+    # dhash links 0-1, phash links 1-2 -> one component {0,1,2}
+    dh = np.array([0, 0, 255], dtype=np.uint64)
+    ph = np.array([7, 0, 0], dtype=np.uint64)
+    gids = cluster_hash_columns({"dhash": dh, "phash": ph}, {"dhash": 0, "phash": 0})
+    assert gids[0] == gids[1] == gids[2]
+    only_dhash = cluster_hashes(dh, 0)
+    assert only_dhash[2] != only_dhash[0]
+
+
+# --------------------------------------------------------------------------- #
+# --sweep: threshold sensitivity (must not change groups.json)
+# --------------------------------------------------------------------------- #
+def test_threshold_sweep_reported_and_monotonic(flame_raw, tmp_path):
+    raw_dir, _ = flame_raw
+    plain = tmp_path / "out_plain"
+    swept = tmp_path / "out_sweep"
+    run(data_dir=raw_dir, output_dir=str(plain), threshold=THRESHOLD, verbose=False, use_cache=False)
+    report = run(data_dir=raw_dir, output_dir=str(swept), threshold=THRESHOLD,
+                 sweep=[4, 6, 8, 10, 12], verbose=False, use_cache=False)
+
+    rows = report["threshold_sweep"]
+    assert [r["threshold"] for r in rows] == [4, 6, 8, 10, 12]
+    for row in rows:
+        for key in ("n_groups", "n_nontrivial_groups", "images_in_nontrivial_groups",
+                    "largest_group", "fraction_with_near_duplicate"):
+            assert key in row
+    # raising the threshold can only merge groups
+    assert all(a["n_groups"] >= b["n_groups"] for a, b in zip(rows, rows[1:]))
+    assert all(a["fraction_with_near_duplicate"] <= b["fraction_with_near_duplicate"]
+               for a, b in zip(rows, rows[1:]))
+    # the sweep does not change which threshold produces groups.json
+    assert _partition_of(load_group_file(str(swept / "groups.csv"))) == \
+        _partition_of(load_group_file(str(plain / "groups.csv")))
+    # ... and the reported --threshold row agrees with the written grouping
+    at_8 = next(r for r in rows if r["threshold"] == THRESHOLD)
+    assert at_8["n_nontrivial_groups"] == report["dataset"]["n_nontrivial_groups"]
+    assert at_8["largest_group"] == report["dataset"]["largest_group"]
+    # and it is printed as a table
+    assert "thr" in format_sweep_table(rows)
+    assert format_sweep_table(rows).count("\n") == len(rows) + 1
+
+
+# --------------------------------------------------------------------------- #
+# MD5 exact-duplicate count
+# --------------------------------------------------------------------------- #
+def test_md5_exact_duplicate_count(flame_raw, tmp_path):
+    raw_dir, _ = flame_raw
+    shutil.copy2(os.path.join(raw_dir, "Fire", "base0_orig.jpg"),
+                 os.path.join(raw_dir, "Fire", "base0_bytecopy.jpg"))
+    report = run(data_dir=raw_dir, output_dir=str(tmp_path / "out_md5"), threshold=THRESHOLD,
+                 verbose=False, use_cache=False)
+    stats = report["dataset"]
+    assert stats["exact_duplicate_files_md5"] == 1
+    assert stats["n_unique_md5"] == stats["n_images"] - 1
+
+    no_md5 = run(data_dir=raw_dir, output_dir=str(tmp_path / "out_nomd5"), threshold=THRESHOLD,
+                 md5=False, verbose=False, use_cache=False)
+    assert "exact_duplicate_files_md5" not in no_md5["dataset"]
+
+
+def test_md5_is_cached_and_computed_in_the_hashing_pass(flame_raw, tmp_path):
+    raw_dir, _ = flame_raw
+    out_dir = tmp_path / "out_md5_cache"
+    run(data_dir=raw_dir, output_dir=str(out_dir), verbose=False, use_cache=True)
+    assert (out_dir / "md5s.npz").exists()
+    images = find_images(raw_dir)
+    columns, md5s, failures = compute_hash_columns(
+        [os.path.join(raw_dir, p) for p, _ in images], ["dhash", "phash"], 8, 1, False, True)
+    assert not failures
+    assert set(columns) == {"dhash", "phash"}
+    assert len(md5s) == len(images)
+    # one pass, same values as the single-method helper
+    np.testing.assert_array_equal(
+        columns["dhash"], compute_hashes([os.path.join(raw_dir, p) for p, _ in images],
+                                         "dhash", 8, 1, False))
+
+
+# --------------------------------------------------------------------------- #
+# filename frame-number heuristic
+# --------------------------------------------------------------------------- #
+def test_sequence_heuristic_on_handmade_frame_numbers():
+    images = [("Fire/frame_0001.jpg", "Fire"), ("Fire/frame_0002.jpg", "Fire"),
+              ("Fire/frame_0003.jpg", "Fire"), ("Fire/frame_0009.jpg", "Fire"),
+              ("No_Fire/clip_1.jpg", "No_Fire"), ("No_Fire/clip_2.jpg", "No_Fire"),
+              ("No_Fire/no_number.jpg", "No_Fire")]
+    # frames 1-3 are one near-duplicate group, frame 9 its own, clip_1/clip_2 separate
+    group_ids = np.array([0, 0, 0, 1, 2, 3, 4], dtype=np.int64)
+    out = sequence_heuristic(images, group_ids, gap=1)
+
+    assert out["n_images_with_frame_number"] == 6      # 'no_number.jpg' has none
+    assert out["n_consecutive_pairs"] == 3             # (1,2) (2,3) in Fire, (1,2) in No_Fire
+    assert out["n_consecutive_pairs_same_group"] == 2
+    assert out["fraction_consecutive_pairs_same_group"] == pytest.approx(2 / 3, abs=1e-4)
+    assert out["per_class"]["Fire"]["consecutive_pairs"] == 2
+    assert out["per_class"]["Fire"]["fraction_consecutive_pairs_same_group"] == 1.0
+    assert out["per_class"]["No_Fire"]["consecutive_pairs_same_group"] == 0
+    assert out["per_class"]["Fire"]["min"] == 1 and out["per_class"]["Fire"]["max"] == 9
+
+    # a larger gap picks up frame 3 -> 9 only once the gap covers it
+    assert sequence_heuristic(images, group_ids, gap=6)["n_consecutive_pairs"] == 4
+
+
+def test_sequence_heuristic_is_opt_in_and_wired_into_run(flame_raw, tmp_path):
+    raw_dir, _ = flame_raw
+    off = run(data_dir=raw_dir, output_dir=str(tmp_path / "seq_off"), verbose=False, use_cache=False)
+    assert "sequence_heuristic" not in off
+    on = run(data_dir=raw_dir, output_dir=str(tmp_path / "seq_on"), sequence_heuristic_on=True,
+             verbose=False, use_cache=False)
+    seq = on["sequence_heuristic"]
+    assert seq["gap"] == 1
+    assert seq["n_images_with_frame_number"] == on["dataset"]["n_images"]
+    assert 0.0 <= seq["fraction_consecutive_pairs_same_group"] <= 1.0
+    # the grouping written to groups.json is unaffected by the diagnostic
+    assert on["dataset"]["n_nontrivial_groups"] == off["dataset"]["n_nontrivial_groups"]
+
+
+# --------------------------------------------------------------------------- #
+# example_groups.txt
+# --------------------------------------------------------------------------- #
+def test_example_groups_lists_the_largest_groups(flame_raw, tmp_path):
+    raw_dir, _ = flame_raw
+    out_dir = tmp_path / "out_examples"
+    report = run(data_dir=raw_dir, output_dir=str(out_dir), threshold=THRESHOLD,
+                 examples=3, verbose=False, use_cache=False)
+    path = out_dir / "example_groups.txt"
+    assert report["example_groups"] == str(path)
+    text = path.read_text()
+    assert text.count("# rank ") == 3
+
+    mapping = load_group_file(str(out_dir / "groups.csv"))
+    blocks = [b for b in text.split("\n\n") if b.startswith("# rank ")]
+    assert len(blocks) == 3
+    for block in blocks:
+        lines = [ln for ln in block.splitlines() if ln and not ln.startswith("#")]
+        assert len(lines) == 3                       # the synthetic triplets
+        assert len({mapping[ln] for ln in lines}) == 1
+
+    # --examples 0 still writes the file, with no group in it
+    run(data_dir=raw_dir, output_dir=str(out_dir), threshold=THRESHOLD, examples=0,
+        verbose=False, use_cache=False)
+    assert path.read_text().count("# rank ") == 0
+
+
+# --------------------------------------------------------------------------- #
+# load_group_file: the authors' inverted {path: gid} layout
+# --------------------------------------------------------------------------- #
+STANDARD_GROUPS = {"0": ["Fire/a.jpg", "Fire/b.jpg"],
+                   "1": ["Fire/c.jpg", "No_Fire/d.jpg"],
+                   "2": ["No_Fire/e.jpg"]}
+
+
+def _write_json(path, payload):
+    with open(str(path), "w") as f:
+        json.dump(payload, f)
+    return str(path)
+
+
+def test_load_group_file_inverted_layout_equals_standard_layout(tmp_path):
+    standard = _write_json(tmp_path / "standard.json", {"groups": STANDARD_GROUPS})
+    expected = load_group_file(standard)
+    assert expected == {"Fire/a.jpg": 0, "Fire/b.jpg": 0, "Fire/c.jpg": 1,
+                        "No_Fire/d.jpg": 1, "No_Fire/e.jpg": 2}
+
+    inverted = {rel: int(gid) for gid, members in STANDARD_GROUPS.items() for rel in members}
+
+    # (a) the authors' layout: {"groups": {path: gid}} next to their metadata
+    nested = _write_json(tmp_path / "inverted.json",
+                         {"thresholds": {"phash": 10, "dhash": 8}, "n_groups": 3,
+                          "groups": dict(inverted)})
+    assert load_group_file(nested) == expected
+
+    # (b) a bare top-level {path: gid} mapping (metadata keys ignored)
+    flat = _write_json(tmp_path / "flat.json", dict(inverted, n_images=5, n_groups=3))
+    assert load_group_file(flat) == expected
+
+
+def test_load_group_file_inverted_absolute_paths(tmp_path):
+    data_dir = tmp_path / "raw"
+    (data_dir / "Fire").mkdir(parents=True)
+    (data_dir / "No_Fire").mkdir(parents=True)
+    expected = load_group_file(_write_json(tmp_path / "std.json", {"groups": STANDARD_GROUPS}))
+
+    absolute = {os.path.join(str(data_dir), rel.replace("/", os.sep)): int(gid)
+                for gid, members in STANDARD_GROUPS.items() for rel in members}
+    path = _write_json(tmp_path / "abs.json", {"groups": absolute})
+
+    # with --data_dir the absolute keys are relativised
+    assert load_group_file(path, str(data_dir)) == expected
+    # the data_dir recorded inside the file is used when the argument is omitted
+    assert load_group_file(_write_json(tmp_path / "abs_meta.json",
+                                       {"data_dir": str(data_dir),
+                                        "groups": absolute})) == expected
+    # without any data_dir the keys fall back to <ClassDir>/<basename>
+    assert load_group_file(path) == expected
+    # a path outside --data_dir also falls back to <ClassDir>/<basename>
+    assert load_group_file(path, str(tmp_path / "somewhere_else")) == expected
+
+
+def test_load_group_file_standard_layout_is_unchanged(flame_raw, tmp_path):
+    raw_dir, _ = flame_raw
+    out_dir = tmp_path / "out_roundtrip"
+    run(data_dir=raw_dir, output_dir=str(out_dir), threshold=THRESHOLD, verbose=False,
+        use_cache=False)
+    mapping = load_group_file(str(out_dir / "groups.json"))
+    inverted = _write_json(tmp_path / "inv.json", {"groups": {k: int(v) for k, v in mapping.items()}})
+    assert load_group_file(inverted) == mapping
+    assert load_group_file(inverted, raw_dir) == mapping

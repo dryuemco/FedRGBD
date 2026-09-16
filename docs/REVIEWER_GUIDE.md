@@ -51,8 +51,11 @@ cd FedRGBD
 ### Step 3: Data Preparation (~30 minutes)
 ```bash
 # Download FLAME dataset from Kaggle to data/raw/flame_dataset/
-python3 src/data/data_splitter.py --data_dir data/raw/flame_dataset --output_dir data/processed --nodes 3
+python3 src/data/data_splitter.py --data_dir data/raw/flame_dataset --output_dir data/processed --nodes 3 --clean
 ```
+`--clean` removes each `data/processed/<split>/` tree before rewriting it; it is
+required whenever `data/processed` already holds a partition (otherwise the
+previous partition's files stay behind and leak train images into val/test).
 
 ### Step 4: Run All Experiments (~120 hours total compute, ~40 hours wall-clock)
 ```bash
@@ -79,8 +82,15 @@ change the model or the already-recorded results under `results/`.
 ### R1. Near-duplicate audit and sequence-level split
 ```bash
 python3 scripts/analyze_flame_leakage.py --data_dir data/raw/flame_dataset \
-    --processed_dir data/processed --output_dir analysis/leakage --threshold 8 --workers 4
+    --processed_dir data/processed --output_dir analysis/leakage --threshold 8 --workers 4 \
+    --sweep 4 6 8 10 12 --sequence_heuristic --examples 20
 ```
+`--sweep` adds a threshold-sensitivity table (`threshold_sweep`) without
+changing which threshold writes `groups.json`, `--sequence_heuristic` reports
+the share of consecutive frame numbers that fall into one near-duplicate group,
+`--examples` writes `example_groups.txt` for manual inspection, and
+`--hash both --phash_threshold 10` clusters the union of the dHash and pHash
+near-duplicate edges.
 `analysis/leakage/leakage_report.json` reports, per split and node, the share
 of val/test images that have a near-duplicate (Hamming ≤ 8 on a 64-bit dHash)
 in *any* node's training split, plus the number of near-duplicate groups that
@@ -88,8 +98,11 @@ span several nodes.  `groups.json` is then passed to the splitter:
 ```bash
 python3 src/data/data_splitter.py --data_dir data/raw/flame_dataset --output_dir data/processed \
     --nodes 3 --seed 42 --group_file analysis/leakage/groups.json \
-    --dirichlet_alpha 0.1 0.5 1.0 --subsample_frac 0.05 0.01
+    --dirichlet_alpha 0.1 0.5 1.0 --subsample_frac 0.05 0.01 --clean --verify
 ```
+`--clean` is required (this rewrites the existing `data/processed`) and
+`--verify` re-reads the manifests afterwards, failing with exit status 1 if a
+near-duplicate group ended up on two nodes or in two of train/val/test.
 This regenerates `iid/` and `non_iid_label/` group-aware and adds
 `dirichlet_<alpha>/` (per-class Dirichlet label skew) and `<split>_sub<frac>/`
 (train split reduced per node) partitions.  `data/processed/split_stats.json`

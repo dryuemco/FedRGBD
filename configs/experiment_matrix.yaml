@@ -407,9 +407,13 @@ revision:
       Regenerate data/processed with leakage-safe grouping and the new
       dirichlet/subsample splits required by the blocks above. Run once,
       after scripts/analyze_flame_leakage.py has produced
-      analysis/leakage/groups.json.
+      analysis/leakage/groups.json. --clean is mandatory because this
+      re-splits an existing data/processed (without it the files of the
+      previous partition stay behind and leak train images into val/test);
+      --verify re-reads the manifests afterwards and exits non-zero if any
+      near-duplicate group spans nodes or train/val/test.
     commands:
-      - "python3 src/data/data_splitter.py --data_dir data/raw/flame_dataset --output_dir data/processed --nodes 3 --seed 42 --group_file analysis/leakage/groups.json --dirichlet_alpha 0.1 0.5 1.0 --subsample_frac 0.05 0.01"
+      - "python3 src/data/data_splitter.py --data_dir data/raw/flame_dataset --output_dir data/processed --nodes 3 --seed 42 --group_file analysis/leakage/groups.json --dirichlet_alpha 0.1 0.5 1.0 --subsample_frac 0.05 0.01 --clean --verify"
 
   analysis:
     description: "Run after the revision matrix (or any subset of it) completes."

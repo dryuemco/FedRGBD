@@ -67,24 +67,64 @@ _SUB_RE = re.compile(r"^(?P<base>.+)_sub(?P<frac>\d+(?:\.\d+)?)$")
 # --------------------------------------------------------------------------- #
 # group-file loading (shared with scripts/analyze_flame_leakage.py)
 # --------------------------------------------------------------------------- #
-def _local_load_group_file(path: str) -> Dict[str, int]:
-    """Standalone copy of ``analyze_flame_leakage.load_group_file``."""
+#: metadata keys that may sit next to the path->gid entries of a flat group file
+_GROUP_META_KEYS = frozenset({
+    "n_images", "n_groups", "threshold", "phash_threshold", "thresholds",
+    "hash_size", "method", "data_dir", "settings", "timestamp", "dataset",
+})
+
+
+def _normalise_group_path(raw: str, data_dir: Optional[str] = None) -> str:
+    """Local copy of ``analyze_flame_leakage.normalise_group_path``."""
+    path = str(raw).replace("\\", "/")
+    while path.startswith("./"):
+        path = path[2:]
+    if not os.path.isabs(path):
+        return path
+    if data_dir:
+        for root in {os.path.abspath(data_dir), os.path.realpath(data_dir)}:
+            try:
+                rel = os.path.relpath(os.path.realpath(path), root).replace(os.sep, "/")
+            except (OSError, ValueError):
+                continue
+            if not rel.startswith(".."):
+                return rel
+    parts = [x for x in path.split("/") if x]
+    return "/".join(parts[-2:]) if len(parts) >= 2 else path
+
+
+def _local_load_group_file(path: str, data_dir: Optional[str] = None) -> Dict[str, int]:
+    """Standalone copy of ``analyze_flame_leakage.load_group_file``.
+
+    Accepts both ``{"groups": {"gid": [path, ...]}}`` (this repo) and the
+    inverted ``{"groups": {path: gid}}`` / bare ``{path: gid}`` layout.
+    """
     mapping: Dict[str, int] = {}
     if path.lower().endswith(".json"):
         with open(path) as fh:
             data = json.load(fh)
-        groups = data["groups"] if "groups" in data else data
-        for gid, members in groups.items():
-            for rel in members:
-                mapping[rel.replace("\\", "/")] = int(gid)
+        embedded = data.get("data_dir") if isinstance(data.get("data_dir"), str) else None
+        if isinstance(data.get("groups"), dict):
+            groups = data["groups"]
+        else:
+            groups = {k: v for k, v in data.items() if k not in _GROUP_META_KEYS}
+        root = data_dir or embedded
+        values = list(groups.values())
+        if values and not isinstance(values[0], (list, tuple)):  # {path: gid}
+            for raw, gid in groups.items():
+                mapping[_normalise_group_path(raw, root)] = int(gid)
+        else:  # {gid: [path, ...]}
+            for gid, members in groups.items():
+                for rel in members:
+                    mapping[_normalise_group_path(rel, root)] = int(gid)
     else:
         with open(path, newline="") as fh:
             for row in csv.DictReader(fh):
-                mapping[row["path"].replace("\\", "/")] = int(row["group_id"])
+                mapping[_normalise_group_path(row["path"], data_dir)] = int(row["group_id"])
     return mapping
 
 
-def load_group_file(path: str) -> Dict[str, int]:
+def load_group_file(path: str, data_dir: Optional[str] = None) -> Dict[str, int]:
     """Canonical parser from ``scripts/``; falls back to the local copy.
 
     The fallback keeps this script runnable on a Jetson where numpy/PIL (which
@@ -96,9 +136,9 @@ def load_group_file(path: str) -> Dict[str, int]:
             sys.path.insert(0, repo_root)
         from scripts.analyze_flame_leakage import load_group_file as _impl  # noqa: WPS433
 
-        return _impl(path)
+        return _impl(path, data_dir)
     except Exception:  # pragma: no cover - environment dependent
-        return _local_load_group_file(path)
+        return _local_load_group_file(path, data_dir)
 
 
 # --------------------------------------------------------------------------- #
@@ -854,7 +894,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     group_map = None
     if args.group_file:
-        group_map = load_group_file(args.group_file)
+        # absolute paths in the group file are resolved against the --data_dir
+        # the splitter recorded in split_stats.json["_meta"]
+        meta = (load_split_stats(args.processed_dir) or {}).get("_meta") or {}
+        group_map = load_group_file(args.group_file, meta.get("data_dir"))
         print("group file: {} ({} grouped paths)".format(args.group_file, len(group_map)))
 
     summary = verify_dir(

@@ -6,7 +6,7 @@ them across ``--nodes`` federated clients and writes a
 (or copies) plus ``<output_dir>/split_stats.json`` and a per-split
 ``manifest.csv``.
 
-Three features were added on top of the original image-level splitter.  All of
+Four features were added on top of the original image-level splitter.  All of
 them are opt-in: **with no new flag the produced partition is bit-identical to
 the original implementation for the same ``--seed``** (same sequence of
 ``random`` calls, same count arithmetic).
@@ -48,6 +48,18 @@ the original implementation for the same ``--seed``** (same sequence of
    Sampling is stratified per class, done at unit level, seeded, and always
    keeps at least one unit of a non-empty class.
 
+4. ``--verify`` -- post-write self-check
+   ------------------------------------------------------------------
+   After every split has been written, the ``manifest.csv`` files are read
+   back and checked: no ``(group_id, label)`` unit may span two nodes or two
+   of train/val/test, and the manifest counts must equal ``split_stats.json``.
+   The check is delegated to ``scripts/verify_splits.py`` when that module can
+   be imported (so it also covers duplicated rows, images shared by two nodes
+   and basename collisions) and falls back to a local minimal check otherwise.
+   It prints ``VERIFY PASS`` / ``VERIFY FAIL`` and the CLI exits with status 1
+   on FAIL.  ``scripts/verify_splits.py`` remains the full stand-alone tool
+   (cross-node comparison, on-disk checks, md5 tables).
+
 Usage
 -----
     python3 src/data/data_splitter.py --data_dir data/raw/flame_dataset \\
@@ -56,7 +68,9 @@ Usage
     python3 src/data/data_splitter.py --data_dir data/raw/flame_dataset \\
         --output_dir data/processed --nodes 3 \\
         --group_file analysis/leakage/groups.json \\
-        --dirichlet_alpha 0.1 0.5 1.0 --subsample_frac 0.05 0.01
+        --dirichlet_alpha 0.1 0.5 1.0 --subsample_frac 0.05 0.01 --clean --verify
+
+``--clean`` is REQUIRED whenever ``--output_dir`` already holds a partition.
 """
 
 from __future__ import annotations
@@ -85,41 +99,81 @@ Unit = List[str]
 # --------------------------------------------------------------------------- #
 # group-file loading (shared with scripts/analyze_flame_leakage.py)
 # --------------------------------------------------------------------------- #
-def _local_load_group_file(path: str) -> Dict[str, int]:
+#: metadata keys that may sit next to the path->gid entries of a flat group file
+_GROUP_META_KEYS = frozenset({
+    'n_images', 'n_groups', 'threshold', 'phash_threshold', 'thresholds',
+    'hash_size', 'method', 'data_dir', 'settings', 'timestamp', 'dataset',
+})
+
+
+def _normalise_group_path(raw: str, data_dir: Optional[str] = None) -> str:
+    """Local copy of ``analyze_flame_leakage.normalise_group_path``."""
+    path = str(raw).replace('\\', '/')
+    while path.startswith('./'):
+        path = path[2:]
+    if not os.path.isabs(path):
+        return path
+    if data_dir:
+        for root in {os.path.abspath(data_dir), os.path.realpath(data_dir)}:
+            try:
+                rel = os.path.relpath(os.path.realpath(path), root).replace(os.sep, '/')
+            except (OSError, ValueError):
+                continue
+            if not rel.startswith('..'):
+                return rel
+    parts = [x for x in path.split('/') if x]
+    return '/'.join(parts[-2:]) if len(parts) >= 2 else path
+
+
+def _local_load_group_file(path: str, data_dir: Optional[str] = None) -> Dict[str, int]:
     """Standalone fallback copy of ``analyze_flame_leakage.load_group_file``.
 
-    Reads ``groups.json`` (``{"groups": {"gid": ["Fire/a.jpg", ...]}}``) or
-    ``groups.csv`` (``path,group_id`` columns) into ``{relative_path: group_id}``.
+    Reads ``groups.json`` in either layout -- ``{"groups": {"gid": ["Fire/a.jpg",
+    ...]}}`` (this repo) or ``{"groups": {"<path>": gid}}`` / a bare
+    ``{"<path>": gid}`` (the authors' script) -- or ``groups.csv``
+    (``path,group_id`` columns), into ``{relative_path: group_id}``.
     """
     mapping: Dict[str, int] = {}
     if path.lower().endswith('.json'):
         with open(path) as f:
             data = json.load(f)
-        groups = data['groups'] if 'groups' in data else data
-        for gid, members in groups.items():
-            for rel in members:
-                mapping[rel.replace('\\', '/')] = int(gid)
+        embedded = data.get('data_dir') if isinstance(data.get('data_dir'), str) else None
+        if isinstance(data.get('groups'), dict):
+            groups = data['groups']
+        else:
+            groups = {k: v for k, v in data.items() if k not in _GROUP_META_KEYS}
+        root = data_dir or embedded
+        values = list(groups.values())
+        if values and not isinstance(values[0], (list, tuple)):  # {path: gid}
+            for raw, gid in groups.items():
+                mapping[_normalise_group_path(raw, root)] = int(gid)
+        else:  # {gid: [path, ...]}
+            for gid, members in groups.items():
+                for rel in members:
+                    mapping[_normalise_group_path(rel, root)] = int(gid)
     else:
         with open(path, newline='') as f:
             for row in csv.DictReader(f):
-                mapping[row['path'].replace('\\', '/')] = int(row['group_id'])
+                mapping[_normalise_group_path(row['path'], data_dir)] = int(row['group_id'])
     return mapping
 
 
-def load_group_file(path: str) -> Dict[str, int]:
+def load_group_file(path: str, data_dir: Optional[str] = None) -> Dict[str, int]:
     """Use the canonical parser from ``scripts/``; fall back to the local copy.
 
     The fallback keeps the splitter runnable standalone (e.g. on the Jetson,
     where ``scripts/`` or its numpy/PIL imports may not be available).
+    ``data_dir`` lets absolute paths (as written by the authors' own leakage
+    script) be resolved back to ``--data_dir``-relative keys.
     """
     try:
         repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         if repo_root not in sys.path:
             sys.path.insert(0, repo_root)
         from scripts.analyze_flame_leakage import load_group_file as _impl  # noqa: WPS433
-        return _impl(path)
+        return _impl(path, data_dir)
     except Exception:  # pragma: no cover - environment dependent
-        return _local_load_group_file(path)
+        return _local_load_group_file(path, data_dir)
 
 
 # --------------------------------------------------------------------------- #
@@ -468,8 +522,11 @@ def materialize(output_dir: str, split_name: str, tvt, data_dir: str,
         total = sum(s['total'] for s in node_stats.values())
         tf = sum(s['fire'] for s in node_stats.values())
         if not quiet:
-            print("  {}: {} imgs (Fire:{}, NoFire:{}, ratio:{:.1%})".format(
-                node, total, tf, total - tf, tf / max(total, 1)))
+            print("  {}: {} imgs (Fire:{}, NoFire:{}, ratio:{:.1%})  "
+                  "train/val/test={}/{}/{}".format(
+                      node, total, tf, total - tf, tf / max(total, 1),
+                      node_stats['train']['total'], node_stats['val']['total'],
+                      node_stats['test']['total']))
     stats['class_counts'] = class_counts_table(tvt)
     if extra:
         stats.update(extra)
@@ -620,6 +677,127 @@ def subsample_tvt(tvt, frac: float, which: Sequence[str], seed: int, split_name:
     return {node: out[node] for node in tvt}
 
 
+
+
+# --------------------------------------------------------------------------- #
+# --verify: re-read what was just written and check it
+# --------------------------------------------------------------------------- #
+def _read_manifest_rows(output_dir: str, split_name: str) -> List[Dict[str, str]]:
+    path = os.path.join(output_dir, split_name, 'manifest.csv')
+    with open(path, newline='') as f:
+        return [dict(row) for row in csv.DictReader(f)]
+
+
+def _local_verify_split(split_name: str, rows: Sequence[Dict[str, str]],
+                        stats: Optional[dict]) -> List[str]:
+    """Minimal standalone check (used when ``scripts/verify_splits.py`` is absent).
+
+    (1) no ``(group_id, label)`` unit spans two nodes or two of train/val/test,
+    (2) the manifest counts equal the per-node counts in ``split_stats.json``.
+    """
+    problems: List[str] = []
+    if not rows:
+        return ['{}: manifest.csv has no rows'.format(split_name)]
+
+    nodes_of_unit: Dict[Tuple[str, str], set] = {}
+    tvt_of_unit: Dict[Tuple[str, str], set] = {}
+    counts: Dict[Tuple[str, str, str], int] = {}
+    label_key = {'Fire': 'fire', 'No_Fire': 'nofire'}
+    for row in rows:
+        gid = row.get('group_id') or ''
+        key = (row['node'], row['split'], label_key.get(row['label'], row['label']))
+        counts[key] = counts.get(key, 0) + 1
+        if gid and not str(gid).startswith('singleton'):
+            unit = (gid, row['label'])
+            nodes_of_unit.setdefault(unit, set()).add(row['node'])
+            tvt_of_unit.setdefault(unit, set()).add(row['split'])
+
+    for unit, nodes in sorted(nodes_of_unit.items()):
+        if len(nodes) > 1:
+            problems.append('{}: group {} (label {}) spans nodes {}'.format(
+                split_name, unit[0], unit[1], '+'.join(sorted(nodes))))
+    order = ('train', 'val', 'test')
+    for unit, parts in sorted(tvt_of_unit.items()):
+        if len(parts) > 1:
+            ordered = sorted(parts, key=lambda v: (order.index(v) if v in order else len(order), v))
+            problems.append('{}: group {} (label {}) spans {}'.format(
+                split_name, unit[0], unit[1], '+'.join(ordered)))
+
+    block = (stats or {}).get(split_name)
+    if not isinstance(block, dict):
+        problems.append('{}: no split_stats.json entry'.format(split_name))
+        return problems
+    for node, node_block in sorted(block.items()):
+        if not isinstance(node_block, dict) or not all(k in node_block for k in ('train', 'val', 'test')):
+            continue
+        for sp in ('train', 'val', 'test'):
+            entry = node_block.get(sp) or {}
+            for key in ('fire', 'nofire'):
+                expected = int(entry.get(key, 0) or 0)
+                actual = counts.get((node, sp, key), 0)
+                if expected != actual:
+                    problems.append('{}: {}/{}/{}: manifest has {}, split_stats says {}'.format(
+                        split_name, node, sp, key, actual, expected))
+    return problems
+
+
+def verify_written_splits(output_dir: str, split_names: Sequence[str],
+                          quiet: bool = False) -> bool:
+    """Re-read the manifests written by this run and assert they are leak-free.
+
+    Reuses ``scripts/verify_splits.py`` (``check_manifest`` + ``check_stats``,
+    which also cover duplicated rows, images shared by two nodes and basename
+    collisions) when it can be imported, and falls back to the local minimal
+    check otherwise.  Returns True when every split passes.
+    """
+    problems: List[str] = []
+    verify_splits = None
+    try:
+        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        if repo_root not in sys.path:
+            sys.path.insert(0, repo_root)
+        from scripts import verify_splits as _vs  # noqa: WPS433
+        verify_splits = _vs
+    except Exception:  # pragma: no cover - environment dependent
+        verify_splits = None
+
+    if verify_splits is not None:
+        report = verify_splits.Report()
+        stats = verify_splits.load_split_stats(output_dir)
+        for split_name in split_names:
+            path = verify_splits.manifest_path(output_dir, split_name)
+            if not os.path.isfile(path):
+                report.error('manifest', 'manifest.csv is missing', split_name)
+                continue
+            rows = verify_splits.read_manifest(path)
+            verify_splits.check_manifest(split_name, rows, report)
+            verify_splits.check_stats(split_name, rows, stats, report)
+        problems = ['{}: [{}] {}'.format(i['split'] or '-', i['check'], i['message'])
+                    for i in report.errors]
+    else:
+        stats_path = os.path.join(output_dir, 'split_stats.json')
+        stats = None
+        if os.path.isfile(stats_path):
+            with open(stats_path) as f:
+                stats = json.load(f)
+        for split_name in split_names:
+            if not os.path.isfile(os.path.join(output_dir, split_name, 'manifest.csv')):
+                problems.append('{}: manifest.csv is missing'.format(split_name))
+                continue
+            problems.extend(_local_verify_split(
+                split_name, _read_manifest_rows(output_dir, split_name), stats))
+
+    if not quiet:
+        print("\n--- verify ({} split(s)) ---".format(len(split_names)))
+        for message in problems[:20]:
+            print("  {}".format(message))
+        if len(problems) > 20:
+            print("  ... and {} more".format(len(problems) - 20))
+        print("  VERIFY {}: no unit spans nodes or train/val/test and the manifest "
+              "counts match split_stats.json".format('PASS' if not problems else 'FAIL'))
+    return not problems
+
+
 # --------------------------------------------------------------------------- #
 # driver
 # --------------------------------------------------------------------------- #
@@ -645,7 +823,7 @@ def run(args) -> dict:
 
     group_map = None
     if getattr(args, 'group_file', None):
-        group_map = load_group_file(args.group_file)
+        group_map = load_group_file(args.group_file, args.data_dir)
         print("Group file: {} ({} grouped paths)".format(args.group_file, len(group_map)))
 
     fire_units, nofire_units, gid_of, ginfo = build_units(fire, nofire, args.data_dir, group_map)
@@ -712,6 +890,10 @@ def run(args) -> dict:
             all_stats[name] = materialize(
                 args.output_dir, name, sub, args.data_dir, gid_of, extra, clean=clean)
 
+    verify_ok = None
+    if getattr(args, 'verify', False):
+        verify_ok = verify_written_splits(args.output_dir, [k for k in all_stats])
+
     all_stats['_meta'] = {
         'seed': int(args.seed),
         'nodes': int(args.nodes),
@@ -729,6 +911,7 @@ def run(args) -> dict:
         'group_paths_total': ginfo['group_paths_total'],
         'group_paths_matched': ginfo['group_paths_matched'],
         'clean': clean,
+        'verify_ok': verify_ok,
     }
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -744,7 +927,7 @@ def _defaults() -> dict:
             'seed': 42, 'nodes': 3, 'group_file': None, 'dirichlet_alpha': None,
             'dirichlet_min_size': 10, 'skip_base_splits': False,
             'subsample_frac': None, 'subsample_splits': ['train'], 'link_mode': 'symlink',
-            'clean': False}
+            'clean': False, 'verify': False}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -775,11 +958,20 @@ def build_parser() -> argparse.ArgumentParser:
                              "REQUIRED when re-partitioning into an existing data/processed "
                              "(otherwise files from the previous partition stay behind and "
                              "leak train images into val/test)")
+    parser.add_argument("--verify", action="store_true",
+                        help="after writing, re-read the manifests and assert that no "
+                             "(group_id,label) unit spans nodes or train/val/test and that the "
+                             "manifest counts equal split_stats.json; prints PASS/FAIL and "
+                             "exits non-zero on FAIL (see scripts/verify_splits.py for the "
+                             "full stand-alone check)")
     return parser
 
 
 def main(argv: Optional[Sequence[str]] = None):
-    return run(build_parser().parse_args(argv))
+    stats = run(build_parser().parse_args(argv))
+    if isinstance(stats, dict) and stats.get('_meta', {}).get('verify_ok') is False:
+        raise SystemExit(1)
+    return stats
 
 
 if __name__ == "__main__":

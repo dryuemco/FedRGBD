@@ -42,6 +42,27 @@ run, new references / title change / wavelet future-work paragraph.
   node, the fraction of val/test images with a near-duplicate in any node's train split
   and the number of groups spanning several nodes.
 * `load_group_file()` is the shared reader used by the splitter.
+* **Merged from the authors' own script** (see "Notes for the authors"):
+  `--hash both` (clusters the *union* of the dHash edges at `--threshold` and the pHash
+  edges at `--phash_threshold`, default 10; both hash arrays are cached separately, and
+  the union grouping always contains the single-hash grouping);
+  `--sweep 4 6 8 10 12` (threshold-sensitivity table with n_groups /
+  n_nontrivial_groups / images_in_nontrivial_groups / largest_group /
+  fraction_with_near_duplicate per threshold in
+  `leakage_report.json["threshold_sweep"]`, printed as a table, without changing which
+  threshold writes `groups.json`);
+  `exact_duplicate_files_md5` (byte-identical duplicates, computed in the *same* pass as
+  the perceptual hashes so the ~48 k files are read once, cached in `md5s.npz`,
+  `--no_md5` to skip);
+  `--sequence_heuristic` (the authors' filename frame-number heuristic, extended into a
+  statement the paper can use: what share of pairs of consecutive frame numbers ends up
+  in the same near-duplicate group, globally and per class);
+  `--examples N` -> `example_groups.txt` with the N largest groups and their members;
+  `unreadable_files.txt` for files that could not be hashed;
+  and `load_group_file()` now also reads the authors' inverted layouts
+  (`{"groups": {path: gid}}` and a bare `{path: gid}` mapping, detected by value type),
+  relativising absolute paths against `--data_dir` and otherwise falling back to
+  `<ClassDir>/<basename>`.
 
 ### Rewritten: `src/data/data_splitter.py`
 * **Default behaviour unchanged**: without new flags the partition is bit-identical to the
@@ -64,6 +85,25 @@ run, new references / title change / wavelet future-work paragraph.
 * `--skip_base_splits`, `--link_mode {symlink,hardlink,copy}` (symlink falls back to copy
   on Windows/unsupported FS), `manifest.csv` per split, `_meta` block and `class_counts`
   table for every split in `split_stats.json`.
+* `--clean`: deletes each `<output_dir>/<split>/` tree before rewriting it.  **Required
+  when re-splitting into an existing `data/processed`** — the splitter only overwrites
+  files with the same basename, so without it images that move to another node or to
+  another train/val/test bucket are left behind by the previous partition and the tree
+  holds both at once (train images silently leak into val/test).  Without `--clean` a
+  non-empty target directory produces a loud warning.  Every re-split command in
+  `README.md`, `data/README.md`, `docs/REVIEWER_GUIDE.md`, `docs/REVISION_PLAN_TR.md` and
+  `configs/experiment_matrix.yaml:revision.data_preparation` now passes it.
+* **Merged from the authors' own splitter**: `--verify` (their `verify_no_leak()` as a
+  post-write self-check) re-reads the manifests and asserts that no `(group_id, label)`
+  unit spans nodes or train/val/test and that the manifest counts equal `split_stats.json`;
+  it reuses `scripts/verify_splits.py` when importable (so it also catches duplicated
+  rows, images shared by two nodes and basename collisions) and falls back to a local
+  minimal check otherwise, prints `VERIFY PASS`/`VERIFY FAIL`, records `_meta.verify_ok`
+  and exits non-zero on FAIL.  Their per-node `train/val/test=a/b/c` summary line was
+  also adopted, and `--group_file` accepts their inverted group-file layout.  Their
+  *part-first* group partitioning (train/val/test split at group level first, nodes
+  inside each part) was deliberately **not** adopted: it changes the partition design and
+  would break the bit-identical default path pinned by `tests/test_splitter.py`.
 
 ### New: `src/evaluation/metrics.py`
 * `compute_metrics(logits, labels)` → accuracy, balanced accuracy, precision, recall
@@ -145,8 +185,8 @@ run, new references / title change / wavelet future-work paragraph.
 | File | What it checks |
 |------|----------------|
 | `test_metrics.py` | every metric against scikit-learn (binary + multi-class), edge cases, accumulator, Flower flattening round-trip |
-| `test_leakage.py` | synthetic near-duplicate images are grouped correctly, hashing/clustering primitives, group files, audit of a processed tree with and without leakage |
-| `test_splitter.py` | bit-identity of the default partition with the original code (2 and 3 nodes), group integrity across nodes and splits, Dirichlet determinism / class-count table / min-size, subsampling, stats and manifest contract |
+| `test_leakage.py` | synthetic near-duplicate images are grouped correctly, hashing/clustering primitives, group files, audit of a processed tree with and without leakage, `--hash both` (union groups contain the dHash groups, both caches written), `--sweep` (monotone, leaves `groups.json` untouched), MD5 exact duplicates, the filename frame-number heuristic, `example_groups.txt`, and the inverted group-file layout (equal to the standard layout, relative and absolute paths) |
+| `test_splitter.py` | bit-identity of the default partition with the original code (2 and 3 nodes), group integrity across nodes and splits, Dirichlet determinism / class-count table / min-size, subsampling, stats and manifest contract, `--clean`, `--verify` (PASS on a fresh split, FAIL + exit 1 on a group spanning nodes / train+test / a stats mismatch) and the inverted group-file layout producing the same partition |
 | `test_fl_server_recorder.py` | weighted + pooled aggregation, per-client rows, round detection, v2 keys in `results.json`, strategy wiring |
 | `test_client_and_baselines.py` | client `fit`/`evaluate` metrics, payload bytes, FedProx/FedBN paths; `train_local.py` and `train_centralized.py` end-to-end on synthetic data |
 | `test_fl_end_to_end.py` | real two-client Flower 1.13.1 run on localhost (FedProx and FedBN), full v3 `results.json` |
@@ -155,9 +195,21 @@ run, new references / title change / wavelet future-work paragraph.
 
 ## Notes for the authors
 * The two files mentioned as "provided" (`scripts/analyze_flame_leakage.py`, updated
-  `data_splitter.py`) were not found in the working directory or the repository; both were
-  implemented from the description above.  Drop-in replacements will be picked up by the
-  same tests.
+  `data_splitter.py`) **were received and have been merged**.  The repository versions
+  stay the base (they are supersets: multi-index hashing instead of the O(N²) pairwise
+  scan, unit-level Dirichlet/subsample partitions, manifests, the bit-identical default
+  path) and every extra of the authors' files that adds information was ported into them:
+  `--hash both`, `--sweep`, the MD5 exact-duplicate count, the filename frame-number
+  heuristic (`--sequence_heuristic`), `example_groups.txt` (`--examples`), the inverted
+  `{path: gid}` group-file layout, the authors' `verify_no_leak()` as
+  `data_splitter.py --verify`, and their per-node `train/val/test` summary line.
+  Deliberately not adopted: the authors' *part-first* group split (train/val/test chosen
+  before the nodes) and their greedy "largest remaining deficit" group assignment, because
+  they are a different partition design — the default path must stay bit-identical to the
+  submitted one (`tests/test_splitter.py::test_default_path_identical_to_original`), and
+  the group-level path deliberately reuses the original label-skew arithmetic.  Their
+  `realpath`-based group-file keys were replaced by `--data_dir`-relative keys (the same
+  information, but portable across machines and symlinked dataset roots).
 * Existing `data/processed` trees produced by the v1 splitter are *not* group-safe; rerun
   the splitter with `--group_file` before the revision experiments.
 * Old result files carry no timing/communication per round; the analysis script marks

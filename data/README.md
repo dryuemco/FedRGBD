@@ -57,10 +57,16 @@ python3 src/data/data_splitter.py \
     --data_dir data/raw/flame_dataset \
     --output_dir data/processed \
     --nodes 3 \
-    --seed 42
+    --seed 42 \
+    --clean
 ```
 Without any of the new flags the partition is bit-identical to the one used in
 the first submission (same `random` call sequence for the same seed).
+`--clean` does not affect the partition, but it is **required** whenever
+`data/processed` already contains a split: the splitter only overwrites files
+with the *same* basename, so without `--clean` images that move to another node
+or to another train/val/test bucket are left behind by the previous partition
+and the tree then holds both at once (training images leak into val/test).
 
 #### Revision: near-duplicate audit and sequence-level (group) splits
 FLAME frames come from video, so consecutive frames are near-identical and a
@@ -72,8 +78,16 @@ First cluster near-duplicates with a perceptual hash, then split by *group*:
 python3 scripts/analyze_flame_leakage.py \
     --data_dir data/raw/flame_dataset \
     --processed_dir data/processed \
-    --output_dir analysis/leakage --threshold 8 --workers 4
-#    -> analysis/leakage/groups.json, groups.csv, leakage_report.json
+    --output_dir analysis/leakage --threshold 8 --workers 4 \
+    --sweep 4 6 8 10 12 --sequence_heuristic --examples 20
+#    -> analysis/leakage/groups.json, groups.csv, leakage_report.json,
+#       example_groups.txt
+#    --hash both --phash_threshold 10 clusters the UNION of the dHash and the
+#    pHash near-duplicate edges (a strictly coarser, more conservative grouping);
+#    --sweep reports the threshold sensitivity without changing groups.json;
+#    --sequence_heuristic reports what share of consecutive frame numbers in the
+#    file names land in the same group; byte-identical duplicates are counted as
+#    exact_duplicate_files_md5 (--no_md5 to skip that pass)
 
 # 2. re-split so that no near-duplicate group is split across nodes or
 #    across train/val/test, and add the revision partitions
@@ -82,8 +96,10 @@ python3 src/data/data_splitter.py \
     --nodes 3 --seed 42 \
     --group_file analysis/leakage/groups.json \
     --dirichlet_alpha 0.1 0.5 1.0 \
-    --subsample_frac 0.05 0.01
+    --subsample_frac 0.05 0.01 \
+    --clean --verify
 ```
+`--clean` is mandatory here: this rewrites the existing `data/processed`.
 Splitter options added in the revision:
 
 | Flag | Effect |
@@ -93,6 +109,8 @@ Splitter options added in the revision:
 | `--subsample_frac F [F ...]` | after splitting, reduce each node's `train` split (stratified per class, group-aware) to fraction F -> `<split>_sub<F>/`; `--subsample_splits` can also shrink val/test |
 | `--skip_base_splits` | only produce Dirichlet / subsample variants |
 | `--link_mode {symlink,hardlink,copy}` | symlink (default, Jetson) falls back to copy automatically |
+| `--clean` | delete each `<output_dir>/<split>/` tree before rewriting it; **required** when re-splitting into an existing `data/processed` |
+| `--verify` | after writing, re-read the manifests and assert that no `(group_id,label)` unit spans nodes or train/val/test and that the manifest counts equal `split_stats.json`; prints `VERIFY PASS`/`VERIFY FAIL` and exits non-zero on FAIL |
 
 `split_stats.json` contains, for every split, the per-node train/val/test
 counts (unchanged keys) plus a `class_counts` table

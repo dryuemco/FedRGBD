@@ -69,8 +69,12 @@ cd ~/FedRGBD
 ### 3. Prepare Dataset
 ```bash
 # Download FLAME dataset from Kaggle to data/raw/flame_dataset/
-python3 src/data/data_splitter.py --data_dir data/raw/flame_dataset --output_dir data/processed --nodes 3
+python3 src/data/data_splitter.py --data_dir data/raw/flame_dataset --output_dir data/processed --nodes 3 --clean
 ```
+`--clean` deletes each `data/processed/<split>/` tree before rewriting it and is
+**required** whenever `data/processed` already holds a partition: without it the
+files of the previous partition stay behind and silently leak training images
+into val/test.
 
 ### 4. Run FL Experiment
 ```bash
@@ -113,8 +117,30 @@ python3 scripts/analyze_flame_leakage.py --data_dir data/raw/flame_dataset \
     --processed_dir data/processed --output_dir analysis/leakage --threshold 8 --workers 4
 python3 src/data/data_splitter.py --data_dir data/raw/flame_dataset --output_dir data/processed \
     --nodes 3 --seed 42 --group_file analysis/leakage/groups.json \
-    --dirichlet_alpha 0.1 0.5 1.0 --subsample_frac 0.05 0.01
+    --dirichlet_alpha 0.1 0.5 1.0 --subsample_frac 0.05 0.01 --clean --verify
 ```
+`--clean` is required here because this re-splits an existing `data/processed`;
+`--verify` re-reads the manifests afterwards and fails (exit 1) if any
+near-duplicate group ended up on two nodes or in two of train/val/test.
+
+The leakage script also accepts `--hash both` (cluster the union of the dHash
+edges at `--threshold` and the pHash edges at `--phash_threshold`),
+`--sweep 4 6 8 10 12` (threshold-sensitivity table in
+`leakage_report.json["threshold_sweep"]`), `--sequence_heuristic` (how often
+consecutive frame numbers in the file names fall into one group),
+`--examples N` (`example_groups.txt`) and reports byte-identical duplicates
+(`exact_duplicate_files_md5`, computed in the same pass; `--no_md5` to skip).
+`--group_file` additionally reads the inverted `{"groups": {path: gid}}` layout
+with absolute paths.
+
+The splitter's `--clean` (delete each `<output_dir>/<split>/` tree before rewriting
+it) is required for every re-split of an existing `data/processed`, and `--verify`
+re-reads the manifests afterwards.  Both scripts merge the extras of the authors'
+own versions: `--hash both`, `--sweep`, the MD5 exact-duplicate count,
+`--sequence_heuristic`, `example_groups.txt` (`--examples`) and the inverted
+`{path: gid}` group-file layout in the leakage script, and `--verify`
+(their `verify_no_leak()`) plus the per-node `train/val/test` summary line in the
+splitter — see `docs/REVISION_CHANGES.md`.
 
 ### Dirichlet label skew and low-data regimes
 `--dirichlet_alpha 0.1 0.5 1.0` produces `data/processed/dirichlet_<alpha>/`

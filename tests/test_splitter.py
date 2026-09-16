@@ -564,3 +564,141 @@ def test_warn_group_coverage_threshold():
     assert ds.warn_group_coverage({"group_paths_total": 0, "group_paths_matched": 0}) is False
     assert ds.warn_group_coverage({"group_paths_total": 100, "group_paths_matched": 60}) is False
     assert ds.warn_group_coverage({"group_paths_total": 100, "group_paths_matched": 49}) is True
+
+
+# --------------------------------------------------------------------------- #
+# 6. --verify: post-write self-check (ported from the authors' verify_no_leak)
+# --------------------------------------------------------------------------- #
+def test_verify_flag_passes_on_a_freshly_written_split(dataset, tmp_path, capsys):
+    out = tmp_path / "out_verify_ok"
+    stats = run_split(dataset["raw"], out, seed=42, nodes=3,
+                      group_file=dataset["group_file"], verify=True)
+    captured = capsys.readouterr().out
+    assert stats["_meta"]["verify_ok"] is True
+    assert "VERIFY PASS" in captured
+    assert "VERIFY FAIL" not in captured
+
+
+def test_verify_is_opt_in(dataset, tmp_path, capsys):
+    out = tmp_path / "out_verify_off"
+    stats = run_split(dataset["raw"], out, seed=42, nodes=3)
+    assert stats["_meta"]["verify_ok"] is None
+    assert "VERIFY" not in capsys.readouterr().out
+
+
+def _fake_split_tree(root, rows, stats):
+    """Write a minimal ``<root>/iid/manifest.csv`` + ``split_stats.json``."""
+    os.makedirs(os.path.join(str(root), "iid"), exist_ok=True)
+    with open(os.path.join(str(root), "iid", "manifest.csv"), "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["node", "split", "label", "path", "group_id"])
+        w.writerows(rows)
+    with open(os.path.join(str(root), "split_stats.json"), "w") as f:
+        json.dump(stats, f)
+
+
+def _counts_block(rows):
+    """``split_stats`` block that matches ``rows`` exactly."""
+    key = {"Fire": "fire", "No_Fire": "nofire"}
+    block = {}
+    for node, sp, label, _path, _gid in rows:
+        node_block = block.setdefault(
+            node, {s: {"fire": 0, "nofire": 0, "total": 0, "fire_ratio": 0.0}
+                   for s in ("train", "val", "test")})
+        node_block[sp][key[label]] += 1
+        node_block[sp]["total"] += 1
+    class_counts = {}
+    for node, node_block in block.items():
+        nf = sum(node_block[s]["fire"] for s in ("train", "val", "test"))
+        nn = sum(node_block[s]["nofire"] for s in ("train", "val", "test"))
+        class_counts[node] = {"Fire": nf, "No_Fire": nn, "total": nf + nn,
+                              "fire_ratio": round(nf / max(nf + nn, 1), 3)}
+    block = dict(block)
+    block["class_counts"] = class_counts
+    return {"iid": block}
+
+
+def test_verify_detects_a_group_spanning_two_nodes(tmp_path, capsys):
+    rows = [
+        ("node_a", "train", "Fire", "Fire/a.jpg", "7"),
+        ("node_b", "train", "Fire", "Fire/b.jpg", "7"),   # same unit, other node
+        ("node_a", "val", "No_Fire", "No_Fire/c.jpg", "singleton_0"),
+        ("node_b", "test", "No_Fire", "No_Fire/d.jpg", "singleton_1"),
+    ]
+    _fake_split_tree(tmp_path, rows, _counts_block(rows))
+    assert ds.verify_written_splits(str(tmp_path), ["iid"]) is False
+    out = capsys.readouterr().out
+    assert "VERIFY FAIL" in out
+    assert "7" in out
+    # the standalone fallback finds the same problem
+    problems = ds._local_verify_split("iid", ds._read_manifest_rows(str(tmp_path), "iid"),
+                                      _counts_block(rows))
+    assert any("spans nodes" in p for p in problems)
+
+
+def test_verify_detects_a_group_spanning_train_and_test(tmp_path):
+    rows = [
+        ("node_a", "train", "Fire", "Fire/a.jpg", "3"),
+        ("node_a", "test", "Fire", "Fire/b.jpg", "3"),    # same unit, other part
+        ("node_a", "val", "No_Fire", "No_Fire/c.jpg", "singleton_0"),
+    ]
+    _fake_split_tree(tmp_path, rows, _counts_block(rows))
+    assert ds.verify_written_splits(str(tmp_path), ["iid"], quiet=True) is False
+    problems = ds._local_verify_split("iid", ds._read_manifest_rows(str(tmp_path), "iid"),
+                                      _counts_block(rows))
+    assert any("train+test" in p for p in problems)
+
+
+def test_verify_detects_a_manifest_vs_split_stats_mismatch(tmp_path):
+    rows = [
+        ("node_a", "train", "Fire", "Fire/a.jpg", "singleton_0"),
+        ("node_a", "val", "No_Fire", "No_Fire/c.jpg", "singleton_1"),
+    ]
+    stats = _counts_block(rows)
+    stats["iid"]["node_a"]["train"]["fire"] = 99          # lie about the count
+    _fake_split_tree(tmp_path, rows, stats)
+    assert ds.verify_written_splits(str(tmp_path), ["iid"], quiet=True) is False
+    problems = ds._local_verify_split("iid", ds._read_manifest_rows(str(tmp_path), "iid"), stats)
+    assert any("split_stats says 99" in p for p in problems)
+
+
+def test_verify_passes_on_a_consistent_fake_tree(tmp_path):
+    rows = [
+        ("node_a", "train", "Fire", "Fire/a.jpg", "7"),
+        ("node_a", "train", "Fire", "Fire/b.jpg", "7"),
+        ("node_b", "val", "No_Fire", "No_Fire/c.jpg", "singleton_0"),
+        ("node_b", "test", "No_Fire", "No_Fire/d.jpg", "singleton_1"),
+    ]
+    _fake_split_tree(tmp_path, rows, _counts_block(rows))
+    assert ds.verify_written_splits(str(tmp_path), ["iid"], quiet=True) is True
+    assert ds._local_verify_split("iid", ds._read_manifest_rows(str(tmp_path), "iid"),
+                                  _counts_block(rows)) == []
+
+
+def test_verify_failure_exits_non_zero(dataset, tmp_path, monkeypatch):
+    monkeypatch.setattr(ds, "verify_written_splits", lambda *a, **k: False)
+    with pytest.raises(SystemExit) as excinfo:
+        run_split(dataset["raw"], tmp_path / "out_verify_exit", seed=42, nodes=3, verify=True)
+    assert excinfo.value.code == 1
+
+
+# --------------------------------------------------------------------------- #
+# 7. the authors' inverted {path: gid} group-file layout
+# --------------------------------------------------------------------------- #
+def test_inverted_group_file_produces_the_same_partition(dataset, tmp_path):
+    standard = ds.load_group_file(dataset["group_file"])
+    inverted_file = tmp_path / "groups_inverted.json"
+    inverted_file.write_text(json.dumps({
+        "thresholds": {"phash": 10, "dhash": 8},
+        "n_groups": len(set(standard.values())),
+        "groups": {os.path.join(dataset["raw"], rel.replace("/", os.sep)): gid
+                   for rel, gid in standard.items()},
+    }))
+    assert ds.load_group_file(str(inverted_file), dataset["raw"]) == standard
+
+    out_a = tmp_path / "out_std"
+    out_b = tmp_path / "out_inv"
+    run_split(dataset["raw"], out_a, seed=42, nodes=3, group_file=dataset["group_file"])
+    run_split(dataset["raw"], out_b, seed=42, nodes=3, group_file=str(inverted_file))
+    for split in ("iid", "non_iid_label"):
+        assert assignment_from_manifest(out_a, split) == assignment_from_manifest(out_b, split)

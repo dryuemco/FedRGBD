@@ -135,6 +135,10 @@ def test_data_preparation_command(revision):
     assert "--group_file analysis/leakage/groups.json" in cmd
     assert "--dirichlet_alpha 0.1 0.5 1.0" in cmd
     assert "--subsample_frac 0.05 0.01" in cmd
+    # re-splitting an existing data/processed REQUIRES --clean, otherwise the
+    # previous partition is left behind and leaks train images into val/test
+    assert "--clean" in cmd
+    assert "--verify" in cmd
 
 
 def test_analysis_commands(revision):

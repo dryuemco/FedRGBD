@@ -46,8 +46,16 @@ Sıra önemli; 2.1–2.4 tamamen CPU işidir ve masaüstünde yapılabilir.
 ### 2.1 Sızıntı analizini **gerçek** FLAME verisi üzerinde çalıştır (kararı bu belirler)
 ```bash
 python3 scripts/analyze_flame_leakage.py --data_dir data/raw/flame_dataset \
-    --processed_dir data/processed --output_dir analysis/leakage --threshold 8 --workers 4
+    --processed_dir data/processed --output_dir analysis/leakage --threshold 8 --workers 4 \
+    --sweep 4 6 8 10 12 --sequence_heuristic --examples 20
 ```
+`--sweep` eşik duyarlılığı tablosunu (`threshold_sweep`) `groups.json`'u
+değiştirmeden ekler; `--sequence_heuristic` dosya adlarındaki ardışık kare
+numaralarının ne kadarının aynı yakın-kopya grubuna düştüğünü raporlar;
+`--examples` en büyük grupları `example_groups.txt`'ye yazar;
+`--hash both --phash_threshold 10` dHash ve pHash kenarlarının **birleşimini**
+kümeler (daha temkinli, daha kaba gruplama); bayt düzeyinde birebir kopyalar
+`exact_duplicate_files_md5` olarak raporlanır.
 `analysis/leakage/leakage_report.json` içindeki `global_test_leak_rate_any_node` ve
 `groups_spanning_multiple_nodes` sayılarına bak. Beklenti: FLAME video karesi olduğu için
 oran yüksek çıkar. **Eşik seçimi** (`--threshold 6/8/10`) için `group_size_histogram`'ı ve
@@ -70,8 +78,17 @@ yalnızca 789/1011 koşulur; bu durumda makalede sızıntı oranını raporlamak
 ```bash
 python3 src/data/data_splitter.py --data_dir data/raw/flame_dataset --output_dir data/processed \
     --nodes 3 --seed 42 --group_file analysis/leakage/groups.json \
-    --dirichlet_alpha 0.1 0.5 1.0 --subsample_frac 0.05 0.01
+    --dirichlet_alpha 0.1 0.5 1.0 --subsample_frac 0.05 0.01 --clean --verify
 ```
+`--clean` **zorunludur**: `data/processed` zaten bir bölme içerdiği için bu komut
+yeniden bölme yapar. Bölücü yalnızca *aynı* dosya adını üzerine yazar; `--clean`
+olmadan başka bir node'a veya başka bir train/val/test kovasına taşınan
+görüntüler eski bölmeden kalır ve ağaç iki bölmeyi birden tutar (eğitim
+görüntüleri sessizce val/test'e sızar). `--verify` yazma bittikten sonra
+`manifest.csv` dosyalarını yeniden okur; hiçbir `(group_id,label)` biriminin
+node'lara veya train/val/test'e bölünmediğini ve manifest sayımlarının
+`split_stats.json` ile eşleştiğini doğrular, `VERIFY PASS`/`VERIFY FAIL` basar ve
+FAIL durumunda 1 koduyla çıkar.
 Dikkat: bölücü `os.walk` sırasına dayanır (v1'de de öyleydi). Her node kendi kopyasında
 çalıştırıyorsa dosya sistemi sırası farklıysa bölmeler **farklı** çıkabilir ve node'lar
 arası örtüşme oluşur. Doğrulama: üç node'da
