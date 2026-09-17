@@ -287,3 +287,77 @@ FL satırları (`\PHs`) Jetson koşularını bekliyor. `analyze_results.py` art�
 ya bu ağaç kopyalanır ya da her node'da `run_p0_leakage_and_split.py --skip_download` koşulup
 `P0_SUMMARY.md`'deki manifest md5'leri karşılaştırılır (bölücü `os.walk` sırasına bağlıdır;
 md5'ler tutmuyorsa tek kopyayı dağıt).
+
+---
+
+## 6. Jetson devir teslim notu (17 Eylül 2026 akşamı, cihazlar geldi)
+
+Masaüstünde yapılacak iş bitti. Bu bölüm, oturum kapandıktan sonra cihazlarda kaldığı
+yerden devam etmek için gereken her şeyi içerir.
+
+### 6.1 Sırayla yapılacaklar
+
+1. **Bölmeleri node'lara taşı.** `data/processed` (1,6 GB, hardlink) bu masaüstünde üretildi.
+   Ya olduğu gibi kopyala ya da her node'da
+   `python scripts/run_p0_leakage_and_split.py --skip_download --link_mode hardlink --nodes 3 --seed 42 --dirichlet_min_size 200`
+   koş. **Zorunlu doğrulama:** `analysis/leakage/P0_SUMMARY.md` içindeki
+   "Split digests" tablosundaki `manifest.csv` md5'leri üç node'da birebir aynı olmalı.
+   Tutmuyorsa (bölücü `os.walk` sırasına bağlıdır) tek kopyayı dağıt, yeniden üretme.
+2. **Kod ve test** (plan §2.5): `git fetch && git checkout revision-ncaa`,
+   `python -m pytest tests -q -k "not end_to_end"` → 242 test geçmeli.
+3. **Duman testi** (plan §2.6): `iid_sub0.01` ile 1 tur FedAvg; `results/smoke` sonra silinir.
+4. **Matris** (§6.2 sırası). Her blok sonrası:
+   `python scripts/analyze_results.py --results_dir results --output_dir analysis` ve
+   `python scripts/export_latex_tables.py --analysis_dir analysis --output_dir paper/tables`.
+   Hiçbir sayı tabloya elle yazılmaz.
+
+### 6.2 Kalan 98 FL koşusu — ölçüme dayalı süre tahmini
+
+Süreler v1'de ölçülen `total_time_s` değerlerinden (3 tur, 5 yerel epoch): FedAvg ≈ 1,7 sa,
+FedProx ≈ 2,9 sa, FedBN ≈ 1,75 sa, 10 tur ≈ 3,3×. Testbed aynı anda tek FL koşusu yapar.
+
+| Sıra | Blok | Koşu | Tahmini | Hangi hakem maddesi |
+|---|---|---|---|---|
+| 1 | `seed_extension` (IID + skew, FedAvg + FedProx 0.01, 5 seed) | 20 | ≈ 46 sa | R3-b, R3-d, R5-a |
+| 2 | `low_data` (ρ = 0,05 / 0,01) | 24 | ≈ 10 sa | R3-e |
+| 3 | `dirichlet_skew` (α = 0,1 / 0,5 / 1,0) | 18 | ≈ 72 sa | R3-e, R5-c |
+| 4 | `mu_grid` (0,001 / 0,05 / 0,1 / 0,5) | 12 | ≈ 35 sa | R5-d |
+| 5 | `local_epochs` (E = 1, 2) + `learning_rate` (1e-4) | 18 | ≈ 23 sa | R5-d |
+| 6 | `long_horizon_fedbn` (10 tur FedAvg + FedBN) | 6 | ≈ 35 sa | R3-f, R5-e |
+| | **Toplam** | **98** | **≈ 220 sa ≈ 9 gün kesintisiz** | |
+
+**Dikkat:** Dirichlet bloğu ilk planda 41 sa idi, şimdi ≈ 72 sa. Sebep: yeni grup-güvenli
+bölmede α = 0,5'te node_b 29.249 eğitim görüntüsü tutuyor ve tur süresini en yavaş node
+belirliyor (bkz. `tab:group_counts`). Süre bütçesi yaparken bunu kullan.
+
+Gerçekçi takvim: kurulum + duman testi yarım gün, %10–15 yeniden koşu payıyla **10–12 gün
+kesintisiz**. Yalnızca gece koşulursa 3 haftayı aşar. Teslime (13 Kasım) 57 gün var.
+
+Komutlar kaldığı yerden üretilir; biten koşular atlanır:
+`python scripts/print_revision_commands.py --all_seeds --block seed_extension --format bash`.
+**`--all_seeds` zorunludur**: yeniden bölme sonrası eski 3 seed'lik koşular karşılaştırılamaz.
+
+### 6.3 Blok bitince makalede dolacak yerler
+
+| Blok | Tablo / şekil |
+|---|---|
+| `seed_extension` | `tab:protocol_effect` FL satırları, `tab:fullmetrics` FL satırları, `tab:perclient_metrics`, `tab:stats`, `fig:convergence` |
+| `low_data` | `tab:lowdata` FL satırları |
+| `dirichlet_skew` | `tab:dirichlet` FL satırları + α eğrisi şekli |
+| `mu_grid`, `local_epochs`, `learning_rate` | `tab:sensitivity`, `fig:mu_tradeoff` |
+| `long_horizon_fedbn` | `tab:fedbn10`, FedBN paragrafının yeniden yazımı |
+| Süre/iletişim (her bloktan) | `tab:time`, `fig:timecomm` üç panel |
+
+### 6.4 Cihaz verisi gerektiren, kodu hazır olan iki iş
+
+* **LOSO çapraz-sensör** (R3-g): `scripts/cross_sensor_loso.py` hazır, birkaç saat sürer.
+  **Eksik:** özel RGB-D kayıtlarının sahne etiketleri (`labels.csv`) ve sahne sayısının
+  teyidi (metin `S=5` varsayıyor). Bu tamamen yazar girdisi.
+* **Sensör heterojenliğini FL'ye bağlamak** (R3): her node kendi kamerasının verisiyle
+  küçük bir FL koşusu. Kapsam kararı yazarın.
+
+### 6.5 Yalnızca yazarın yapabileceği metin işleri
+
+* Fon/hibe numarası ve AI-assistance beyanının dergi politikasına göre teyidi.
+* Testbed fotoğrafı (Şekil 1).
+* Sahne sayısı `S` teyidi (§6.4).
