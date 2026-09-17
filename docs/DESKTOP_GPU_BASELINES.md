@@ -113,7 +113,9 @@ command lines of the generated script dealt round-robin into
 `logs/lane_<k>.sh`, each with per-run logs `logs/<run>.log` and a
 `[START]/[DONE]/[FAIL]` line in `logs/lane_<k>.out`; `logs/` is git-ignored).
 The first 50 runs finished in 5 h 48 min (12:15-18:03), the 12 old-seed
-iid / non_iid_label runs in a second batch of four lanes.  Four lanes fit in
+iid / non_iid_label runs in a second batch of four lanes (18:05-20:23).  All 62
+runs completed without failure; `analysis/summary_table.md` lists them under the
+`{group}` protocol marker.  Four lanes fit in
 about 8 GB of GPU memory.
 
 Equivalent in PowerShell:

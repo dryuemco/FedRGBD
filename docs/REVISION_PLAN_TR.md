@@ -235,7 +235,7 @@ WSL'de torch **yok**; komutları bu venv'lerle çalıştır.
 | 4 | Masaüstü GPU ortamı: torch 2.11+cu128, CUDA doğrulandı, 227 test geçti, sentetik veride `Device: cuda` duman testi; `results.json`'a `device` alanı eklendi | **bitti** | `docs/DESKTOP_GPU_BASELINES.md`, `setup_desktop_windows.ps1` |
 | 5 | P0 zinciri tek komut: v1 sızıntı denetimi → ham veri denetimi (sweep, sekans, MD5) → karar özeti → `--clean --verify` yeniden bölme → sıfır-sızıntı denetimi + manifest md5'leri | **bitti (17 Eylül, gerçek veri)** | `scripts/run_p0_leakage_and_split.py`, `analysis/leakage/P0_SUMMARY.md` |
 | 6 | FLAME ham verisi (Kaggle `archive.zip`, 47.992 jpg) masaüstüne indirildi, `data/raw/flame_dataset/{Fire,No_Fire}` olarak düzleştirildi; yeni `data/processed` 15 bölme, hepsi sızıntısız | **bitti** | `data/processed/split_stats.json`, §5.1 |
-| 7 | P2 baseline'lar (centralized + local, 50 koşu) masaüstü GPU'da | **şimdi başlatılabilir** | `docs/DESKTOP_GPU_BASELINES.md` komut dizisi |
+| 7 | P2 baseline'lar (centralized + local, **62 koşu**: iid/skew 5 seed, Dirichlet ve low-data 3 seed) masaüstü GPU'da | **bitti (17 Eylül 12:15–20:23, 4 paralel şerit)** | `results/rev_*_{centralized,local}_seed*`, §5.2 |
 | 8 | Fon numarası / AI-disclosure ifadesi; testbed fotoğrafı | yazar girdisi | `paper/main.tex` `\todo` |
 
 Kalan 27 `\todo` yer tutucusunun hepsi Jetson koşularına veya cihazdaki özel veriye (sahne
@@ -264,6 +264,24 @@ iş 7. satır (masaüstü GPU baseline'ları).
    doğrulayıcı (`scripts/verify_splits.py`, bölücü içi) artık etiketten bağımsız da kontrol ediyor.
 Alt örnekleme grup modunda node'un kendi grupları içinde **kare düzeyinde** (kesin %5 / %1);
 makalede "kare sayısı azalır, sahne sayısı değil" dendi. Dirichlet için `--dirichlet_min_size 200`.
+
+### 5.2 Baseline bulguları (grup düzeyinde bölme, masaüstü GPU)
+
+| Koşul | Centralized | Local-only (node ortalaması) | Not |
+|---|---|---|---|
+| IID (n=5) | acc 90,9 ± 2,4; bal 92,0 | acc 78,3 ± 5,0; bal 76,6 | v1'de 99,6 / 99,5 idi; 12,6 puanlık boşluk açıldı |
+| Label-skew (n=5) | acc 94,2; bal 94,5; MCC 0,88 | acc 94,1; bal 87,9; MCC 0,78 | accuracy eşit, balanced/MCC değil → hakemin metrik itirazı kendi verimizde görünüyor |
+| Dirichlet α=0,1 (n=3) | bal 90,5 | **bal 58,7** (acc 90,7) | iki node hiç no-fire görmüyor → tek sınıf tahmini |
+| Dirichlet α=0,5 / 1,0 | bal 88,8 / 76,0 | bal 80,1 / 87,7 | centralized'ın 90→76 düşüşü test sekans bileşiminden |
+| Low-data ρ=0,05 / 0,01 (IID) | bal 89,7 / 89,1 | bal 81,0 / 80,4 | kare düzeyinde alt örnek sekansları koruyor; local az kaybediyor |
+| Low-data ρ=0,05 / 0,01 (skew) | bal 91,6 / 90,8 | bal 85,3 / 79,8 | |
+
+Makalede dolduruldu: `tab:protocol_effect` (Centralized/Local-only satırları iki protokolde),
+`tab:fullmetrics`, `tab:dirichlet`, `tab:lowdata` baseline satırları; IV-C/IV-E/IV-F metinleri;
+Limitations'a "sonuçlar tutulan sekans kümesine koşullu" paragrafı; cevap mektubu R3.4 sonrası.
+FL satırları (`\PHs`) Jetson koşularını bekliyor. `analyze_results.py` artık `{group}` /
+`{image}` protokolünü ayrı tutuyor (v1 ile yeni koşular asla aynı hücrede toplanmaz);
+`print_revision_commands.py --all_seeds` baseline bloğunu da 5 seed'e çıkarıyor.
 
 **Jetson'lara taşınacak:** `data/processed` bu makinede hardlink ile üretildi (1,6 GB). Üç node'a
 ya bu ağaç kopyalanır ya da her node'da `run_p0_leakage_and_split.py --skip_download` koşulup

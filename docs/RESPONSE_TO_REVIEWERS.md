@@ -225,6 +225,21 @@ resolution of accuracy-based comparisons"). Two harder conditions were added:
 
 **PENDING EXPERIMENT** — Tables XI and XII are placeholders.
 
+*Reference conditions already executed (desktop GPU, Jetson hyperparameters).* The centralized
+and local-only baselines of every new condition have been run under the audited protocol (62
+runs: five seeds for IID and label skew, three for each Dirichlet and low-data partition).
+Removing the sequence leakage moves the centralized reference from 99.7 % to 90.9 ± 2.4 % (IID)
+and 94.2 ± 2.2 % (label skew) test accuracy and the local-only reference to 78.3 ± 5.0 % and
+94.1 ± 2.0 %, so the task is no longer saturated (Section IV-C, Table IX). Under label skew the
+local-only accuracy matches the centralized one while balanced accuracy (87.9 vs. 94.5 %) and
+MCC (0.78 vs. 0.88) do not — the metric issue the reviewer raised is now visible in our own
+data. Under Dirichlet skew the local-only balanced accuracy falls to 58.7 % at α = 0.1 (two
+clients never see a no-fire frame), 80.1 % at α = 0.5 and 87.7 % at α = 1.0 (Table XI). In the
+low-data regime the local-only reference loses little under IID and about eight points under
+label skew when a node is reduced to ~112 training frames, because the frame-level subsample
+still covers most of a node's sequences; we state this conservative reading in the manuscript.
+The federated rows of these tables await the Jetson runs.
+
 ### R3.5 — "Report balanced accuracy, macro-F1, sensitivity, specificity, and per-client confusion matrices."
 
 **Response — DONE (code), DONE (manuscript), PENDING EXPERIMENT.** A new methodology subsection

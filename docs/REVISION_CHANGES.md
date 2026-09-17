@@ -304,7 +304,19 @@ Everything below was done on the desktop without the Jetson testbed; 227 CPU tes
   low-data subsample; the response letter R3.2 reports the audit.  Outputs are committed under
   `analysis/leakage/` (`P0_SUMMARY.md`, `leakage_report.json`, `groups.{json,csv}`, the
   `v1_audit/` and `post_split_audit/` reports); hash caches are git-ignored.
+* **Baseline block executed on the desktop GPU (same day, 12:15-20:23).**  62 runs under the
+  group-level split: centralized and local-only for IID and label skew (5 seeds each), the three
+  Dirichlet partitions and the four low-data partitions (3 seeds each), four parallel lanes,
+  ~46 min per full run.  `results/rev_*_{centralized,local}_seed*` are committed.  Findings:
+  centralized 90.9 % (IID) / 94.2 % (skew) and local-only 78.3 % / 94.1 % test accuracy (v1:
+  99.5-99.7 %); local-only balanced accuracy 58.7 % at Dirichlet 0.1; the low-data regime costs
+  the local model little under IID because the frame-level subsample keeps most sequences.
+  `analyze_results.py` gained a `protocol` dimension (`{group}` / `{image}`) and node-averaged
+  full metrics for local-only batches; `print_revision_commands.py --all_seeds` also covers the
+  baseline block and treats `summary.json` as a finished run.  Paper: `tab:protocol_effect`,
+  `tab:fullmetrics`, `tab:dirichlet`, `tab:lowdata` baseline rows and the IV-C/E/F prose are
+  filled; a Limitations paragraph states that group-level results are conditional on the
+  held-out sequences of the partition seed.  Response letter: paragraph after R3.4.
 * Not done (needs the author): funding / AI-disclosure wording; testbed photo; copying
   `data/processed` to the Jetsons (or re-running the splitter there and comparing the manifest
-  MD5s in `P0_SUMMARY.md`).  Everything else that remains is a Jetson run, and the desktop GPU
-  baseline block can start now.
+  MD5s in `P0_SUMMARY.md`).  Everything else that remains is a Jetson run.

@@ -810,6 +810,30 @@ def load_local_run(
         float(np.mean(final_accs)) if final_accs else None,
     )
     record["final_loss"] = float(np.mean(final_losses)) if final_losses else None
+
+    # Full metric set of the schema-2 baseline scripts: every node's
+    # ``final_test_metrics`` (its own held-out test split).  Ratio metrics are
+    # averaged over nodes (the same "mean over nodes" convention as the local-only
+    # accuracy), confusion-matrix counts are summed, and the per-node values are
+    # kept in ``node_metrics`` for per-client tables.
+    count_keys = {"tp", "fp", "fn", "tn", "n_examples", "support"}
+    per_metric: Dict[str, List[float]] = {}
+    node_metrics: Dict[str, Dict[str, float]] = {}
+    for name, nj in node_data.items():
+        fm = nj.get("final_test_metrics")
+        if not isinstance(fm, dict):
+            continue
+        clean = {str(k): _as_float(v) for k, v in fm.items() if _as_float(v) is not None}
+        node_metrics[name] = clean
+        for k, v in clean.items():
+            per_metric.setdefault(k, []).append(v)
+    for k, vals in per_metric.items():
+        if len(vals) != len(node_metrics):
+            continue  # only metrics every node reports
+        agg = float(np.sum(vals)) if k in count_keys else float(np.mean(vals))
+        record["metrics_final"].setdefault(k, agg)
+    record["node_metrics"] = node_metrics
+
     if record["final_accuracy"] is not None:
         record["metrics_final"]["accuracy"] = record["final_accuracy"]
     if record["final_loss"] is not None:
