@@ -317,6 +317,18 @@ Everything below was done on the desktop without the Jetson testbed; 227 CPU tes
   `tab:fullmetrics`, `tab:dirichlet`, `tab:lowdata` baseline rows and the IV-C/E/F prose are
   filled; a Limitations paragraph states that group-level results are conditional on the
   held-out sequences of the partition seed.  Response letter: paragraph after R3.4.
-* Not done (needs the author): funding / AI-disclosure wording; testbed photo; copying
-  `data/processed` to the Jetsons (or re-running the splitter there and comparing the manifest
-  MD5s in `P0_SUMMARY.md`).  Everything else that remains is a Jetson run.
+* **The partition is now shipped, not re-derived** (`data_splitter.py --export_manifests` /
+  `--from_manifest`, `data/splits/`).  `find_images()` discovers images with `os.walk`, whose
+  order is not guaranteed across machines, so running the splitter independently on each Jetson
+  could produce *different* partitions -- breaking the federated protocol and the leakage
+  guarantee at once.  `--export_manifests DIR` writes one gzipped `manifest.csv` per split plus
+  `split_stats.json` (1.1 MB for all 15 FLAME splits, tracked in git, `mtime=0` so re-exports
+  are byte-stable); `--from_manifest DIR` rebuilds the tree from it with no RNG at all and
+  reproduces every manifest MD5 in `analysis/leakage/P0_SUMMARY.md`.  Verified against the real
+  archive and covered by `tests/test_splitter_manifest_replay.py` (10 tests, including a
+  reversed-`os.walk` run that still reproduces the digests).
+* **`CLAUDE.md`** added at the repo root so that an agent starting on a Jetson has the
+  conventions, the hard rules (never commit `*.eml`, never re-derive the partition, always
+  `--all_seeds`, never hand-type a number into the paper) and the run recipe in front of it.
+* Not done (needs the author): funding / AI-disclosure wording; testbed photo; scene labels for
+  the cross-sensor experiment.  Everything else that remains is a Jetson run.

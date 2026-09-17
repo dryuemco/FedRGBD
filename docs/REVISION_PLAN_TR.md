@@ -297,12 +297,18 @@ yerden devam etmek için gereken her şeyi içerir.
 
 ### 6.1 Sırayla yapılacaklar
 
-1. **Bölmeleri node'lara taşı.** `data/processed` (1,6 GB, hardlink) bu masaüstünde üretildi.
-   Ya olduğu gibi kopyala ya da her node'da
-   `python scripts/run_p0_leakage_and_split.py --skip_download --link_mode hardlink --nodes 3 --seed 42 --dirichlet_min_size 200`
-   koş. **Zorunlu doğrulama:** `analysis/leakage/P0_SUMMARY.md` içindeki
-   "Split digests" tablosundaki `manifest.csv` md5'leri üç node'da birebir aynı olmalı.
-   Tutmuyorsa (bölücü `os.walk` sırasına bağlıdır) tek kopyayı dağıt, yeniden üretme.
+1. **Bölmeleri node'larda kur.** Bölmenin kendisi artık repoda: `data/splits/` (15 gzipli
+   manifest + `split_stats.json`, 1,2 MB). Her node'da önce ham veri, sonra:
+   ```bash
+   python src/data/data_splitter.py --from_manifest data/splits \
+       --data_dir data/raw/flame_dataset --output_dir data/processed \
+       --link_mode hardlink --clean --verify
+   ```
+   Bu mod **hiç rastgelelik kullanmaz** ve `os.walk` sırasına bağlı değildir; ağacı bayt bayt
+   aynı üretir. Bölmeyi node'da **yeniden türetme** (`--group_file` ile koşma): bölücü dosya
+   keşif sırasına bağlıdır, iki node farklı bölme üretebilir ve hem FL protokolü hem sızıntı
+   garantisi bozulur. **Zorunlu doğrulama:** `analysis/leakage/P0_SUMMARY.md` "Split digests"
+   tablosundaki `manifest.csv` md5'leri üç node'da birebir aynı olmalı.
 2. **Kod ve test** (plan §2.5): `git fetch && git checkout revision-ncaa`,
    `python -m pytest tests -q -k "not end_to_end"` → 242 test geçmeli.
 3. **Duman testi** (plan §2.6): `iid_sub0.01` ile 1 tur FedAvg; `results/smoke` sonra silinir.

@@ -86,6 +86,22 @@ per-node totals and the 70/15/15 ratios to deviate by up to one unit; quote the
 achieved numbers, not the targets.  Use `--dirichlet_min_size 200` (the P0
 driver flag) so every Dirichlet node keeps a measurable val/test set.
 
+#### Reproduce the revision partition exactly (recommended on every node)
+
+The partition used in the revised manuscript is committed in `data/splits/` (one gzipped
+manifest per split, ~1.1 MB). Replay it instead of re-deriving it -- the splitter discovers
+images with `os.walk`, whose order is not guaranteed across machines, so an independent
+re-derivation can yield a *different* partition on each node:
+
+```bash
+python3 src/data/data_splitter.py --from_manifest data/splits \
+    --data_dir data/raw/flame_dataset --output_dir data/processed \
+    --link_mode hardlink --clean --verify
+```
+
+Then compare the manifest MD5s with the "Split digests" table of
+`analysis/leakage/P0_SUMMARY.md`. See `data/splits/README.md`.
+
 #### Paper v1 splits (image-level, unchanged)
 ```bash
 python3 src/data/data_splitter.py \

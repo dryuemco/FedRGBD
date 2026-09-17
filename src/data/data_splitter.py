@@ -76,7 +76,30 @@ the original implementation for the same ``--seed``** (same sequence of
    untouched -- but the low-data regime reduces the number of *frames* per
    client, not the number of sequences (state this in the paper).
 
-4. ``--verify`` -- post-write self-check
+4. ``--export_manifests DIR`` / ``--from_manifest DIR`` -- ship the partition itself
+
+   The partition depends on the order in which :func:`find_images` walks the
+   dataset (``os.walk``), which is **not** guaranteed to match across machines
+   or filesystems.  Regenerating the split independently on every node is
+   therefore unsafe: two nodes could end up with different partitions, which
+   destroys both the federated protocol and the leakage guarantee.  Instead the
+   authoritative partition is exported once and replayed everywhere:
+
+       # once, on the machine that produced data/processed
+       python src/data/data_splitter.py --export_manifests data/splits
+
+       # on every node, after the raw dataset is in place
+       python src/data/data_splitter.py --from_manifest data/splits \
+           --data_dir data/raw/flame_dataset --output_dir data/processed \
+           --link_mode hardlink --clean --verify
+
+   ``--export_manifests`` writes one gzipped ``manifest.csv`` per split (about
+   1.1 MB for all 15 FLAME splits, small enough to track in git) plus
+   ``split_stats.json``.  ``--from_manifest`` places exactly the listed files,
+   uses no random number generator at all and reproduces the tree byte for byte,
+   so the manifest MD5s of ``analysis/leakage/P0_SUMMARY.md`` match on every node.
+
+5. ``--verify`` -- post-write self-check
    ------------------------------------------------------------------
    After every split has been written, the ``manifest.csv`` files are read
    back and checked: no ``(group_id, label)`` unit may span two nodes or two
@@ -105,6 +128,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gzip
+import io
 import json
 import os
 import random
@@ -1070,6 +1095,148 @@ def verify_written_splits(output_dir: str, split_names: Sequence[str],
 
 
 # --------------------------------------------------------------------------- #
+# --export_manifests / --from_manifest: ship the partition, do not re-derive it
+# --------------------------------------------------------------------------- #
+MANIFEST_HEADER = ['node', 'split', 'label', 'path', 'group_id']
+
+
+def _manifest_archive_files(manifest_dir: str) -> Dict[str, str]:
+    """``{split_name: path}`` for every ``<split>.csv.gz`` / ``<split>.csv`` in ``manifest_dir``."""
+    out: Dict[str, str] = {}
+    if not os.path.isdir(manifest_dir):
+        return out
+    for name in sorted(os.listdir(manifest_dir)):
+        if name.endswith('.csv.gz'):
+            out.setdefault(name[:-len('.csv.gz')], os.path.join(manifest_dir, name))
+        elif name.endswith('.csv'):
+            out.setdefault(name[:-len('.csv')], os.path.join(manifest_dir, name))
+    return out
+
+
+def _read_manifest_text(path: str) -> str:
+    if path.endswith('.gz'):
+        with gzip.open(path, 'rt', newline='') as f:
+            return f.read()
+    with open(path, 'rt', newline='') as f:
+        return f.read()
+
+
+def export_manifests(output_dir: str, manifest_dir: str, quiet: bool = False) -> List[str]:
+    """Copy every ``<output_dir>/<split>/manifest.csv`` into ``manifest_dir`` as
+    ``<split>.csv.gz``, together with ``split_stats.json``.
+
+    This is the archival record of the partition used in the paper: it is small
+    enough to track in git and replaying it needs no RNG.
+    """
+    os.makedirs(manifest_dir, exist_ok=True)
+    written: List[str] = []
+    for entry in sorted(os.listdir(output_dir)):
+        src = os.path.join(output_dir, entry, 'manifest.csv')
+        if not os.path.isfile(src):
+            continue
+        dst = os.path.join(manifest_dir, entry + '.csv.gz')
+        with open(src, 'rb') as fin:
+            payload = fin.read()
+        # mtime=0 keeps the archive byte-stable across runs (no timestamp in the header)
+        with gzip.GzipFile(dst, 'wb', compresslevel=9, mtime=0) as fout:
+            fout.write(payload)
+        written.append(dst)
+    stats_src = os.path.join(output_dir, 'split_stats.json')
+    if os.path.isfile(stats_src):
+        shutil.copy2(stats_src, os.path.join(manifest_dir, 'split_stats.json'))
+        written.append(os.path.join(manifest_dir, 'split_stats.json'))
+    if not quiet:
+        print("Exported {} manifest(s) + split_stats.json to {}".format(
+            len(written) - 1, manifest_dir))
+    return written
+
+
+def replay_manifests(manifest_dir: str, data_dir: str, output_dir: str,
+                     clean: bool = False, quiet: bool = False) -> dict:
+    """Rebuild ``output_dir`` exactly as recorded in ``manifest_dir``.
+
+    No shuffling, no seeds, no ``os.walk`` order: every image named by the
+    manifest is placed where the manifest says.  Raises ``FileNotFoundError``
+    when source images are missing (the dataset must be in place first).
+    """
+    archives = _manifest_archive_files(manifest_dir)
+    if not archives:
+        raise FileNotFoundError(
+            "no <split>.csv[.gz] manifests in {} -- run --export_manifests first".format(
+                manifest_dir))
+    root_dir = os.path.abspath(data_dir)
+    all_stats: Dict[str, dict] = {}
+    committed_stats: Dict[str, dict] = {}
+    stats_path = os.path.join(manifest_dir, 'split_stats.json')
+    if os.path.isfile(stats_path):
+        with open(stats_path) as f:
+            committed_stats = json.load(f)
+
+    missing: List[str] = []
+    for split_name, archive in archives.items():
+        rows = list(csv.DictReader(io.StringIO(_read_manifest_text(archive))))
+        if not rows:
+            raise ValueError("{}: manifest is empty".format(archive))
+        prepare_split_dir(output_dir, split_name, clean)
+        # (node, tvt, label) -> [absolute source paths]
+        buckets: Dict[Tuple[str, str, str], List[str]] = {}
+        for row in rows:
+            src = os.path.join(root_dir, row['path'].replace('/', os.sep))
+            if not os.path.isfile(src):
+                if len(missing) < 10:
+                    missing.append(src)
+                continue
+            buckets.setdefault((row['node'], row['split'], row['label']), []).append(src)
+        if missing:
+            continue
+        stats: Dict[str, dict] = {}
+        nodes = sorted({row['node'] for row in rows})
+        for node in nodes:
+            node_stats = {}
+            for sp in ('train', 'val', 'test'):
+                dest = os.path.join(output_dir, split_name, node, sp)
+                fire_paths = buckets.get((node, sp, 'Fire'), [])
+                nofire_paths = buckets.get((node, sp, 'No_Fire'), [])
+                link_files(fire_paths, dest, 'Fire')
+                link_files(nofire_paths, dest, 'No_Fire')
+                node_stats[sp] = _counts(len(fire_paths), len(nofire_paths))
+            stats[node] = node_stats
+            total = sum(v['total'] for v in node_stats.values())
+            tf = sum(v['fire'] for v in node_stats.values())
+            if not quiet:
+                print("  {} {}: {} imgs (Fire:{}, NoFire:{}, ratio:{:.1%})  "
+                      "train/val/test={}/{}/{}".format(
+                          split_name, node, total, tf, total - tf, tf / max(total, 1),
+                          node_stats['train']['total'], node_stats['val']['total'],
+                          node_stats['test']['total']))
+        # the manifest is copied verbatim: it IS the record
+        dst_manifest = os.path.join(output_dir, split_name, 'manifest.csv')
+        os.makedirs(os.path.dirname(dst_manifest), exist_ok=True)
+        with open(dst_manifest, 'w', newline='') as f:
+            f.write(_read_manifest_text(archive))
+        block = dict(committed_stats.get(split_name) or {})
+        block.update(stats)
+        all_stats[split_name] = block
+
+    if missing:
+        raise FileNotFoundError(
+            "{} source image(s) named by the manifests are missing, e.g.\n  {}\n"
+            "Put the dataset in {} first (see data/README.md).".format(
+                len(missing), "\n  ".join(missing[:10]), root_dir))
+
+    meta = dict(committed_stats.get('_meta') or {})
+    meta.update({
+        'data_dir': root_dir,
+        'link_mode': _LINK_STATE['mode'],
+        'clean': bool(clean),
+        'replayed_from': os.path.abspath(manifest_dir),
+        'verify_ok': None,
+    })
+    all_stats['_meta'] = meta
+    return all_stats
+
+
+# --------------------------------------------------------------------------- #
 # driver
 # --------------------------------------------------------------------------- #
 def run(args) -> dict:
@@ -1080,6 +1247,31 @@ def run(args) -> dict:
 
     set_link_mode(getattr(args, 'link_mode', 'symlink'))
     node_names = NODE_NAMES[:args.nodes]
+
+    export_dir = getattr(args, 'export_manifests', None)
+    if export_dir:
+        export_manifests(args.output_dir, export_dir)
+        return {'_meta': {'exported_to': os.path.abspath(export_dir)}}
+
+    manifest_dir = getattr(args, 'from_manifest', None)
+    if manifest_dir:
+        print("=" * 50)
+        print("  FedRGBD Data Splitter -- replaying {}".format(manifest_dir))
+        print("=" * 50)
+        all_stats = replay_manifests(manifest_dir, args.data_dir, args.output_dir,
+                                     clean=bool(getattr(args, 'clean', False)))
+        os.makedirs(args.output_dir, exist_ok=True)
+        stats_path = os.path.join(args.output_dir, 'split_stats.json')
+        with open(stats_path, 'w') as f:
+            json.dump(all_stats, f, indent=2)
+        if getattr(args, 'verify', False):
+            ok = verify_written_splits(
+                args.output_dir, [k for k in all_stats if k != '_meta'])
+            all_stats['_meta']['verify_ok'] = ok
+            with open(stats_path, 'w') as f:
+                json.dump(all_stats, f, indent=2)
+        print("\nStats saved to {}/split_stats.json".format(args.output_dir))
+        return all_stats
 
     print("=" * 50)
     print("  FedRGBD Data Splitter ({} nodes)".format(args.nodes))
@@ -1214,12 +1406,13 @@ def run(args) -> dict:
     return all_stats
 
 
-def _defaults() -> dict:
+def _defaults() -> dict:  # noqa: D401
     return {'data_dir': 'data/raw/flame_dataset', 'output_dir': 'data/processed',
             'seed': 42, 'nodes': 3, 'group_file': None, 'dirichlet_alpha': None,
             'dirichlet_min_size': 10, 'skip_base_splits': False,
             'subsample_frac': None, 'subsample_splits': ['train'], 'link_mode': 'symlink',
-            'clean': False, 'verify': False}
+            'clean': False, 'verify': False,
+            'export_manifests': None, 'from_manifest': None}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1250,6 +1443,14 @@ def build_parser() -> argparse.ArgumentParser:
                              "REQUIRED when re-partitioning into an existing data/processed "
                              "(otherwise files from the previous partition stay behind and "
                              "leak train images into val/test)")
+    parser.add_argument("--export_manifests", default=None, metavar="DIR",
+                        help="write <split>.csv.gz + split_stats.json of an existing "
+                             "--output_dir tree into DIR (the archival record of the "
+                             "partition; ~1.1 MB for the 15 FLAME splits) and exit")
+    parser.add_argument("--from_manifest", default=None, metavar="DIR",
+                        help="rebuild --output_dir exactly as recorded in DIR instead of "
+                             "re-deriving the partition; uses no RNG and does not depend on "
+                             "os.walk order, so every node gets a bit-identical tree")
     parser.add_argument("--verify", action="store_true",
                         help="after writing, re-read the manifests and assert that no "
                              "(group_id,label) unit spans nodes or train/val/test and that the "
