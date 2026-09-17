@@ -22,12 +22,33 @@ the original implementation for the same ``--seed``** (same sequence of
 
    This is implemented with a **unit** abstraction: a unit is a list of image
    paths that must stay together (size 1 when no group file is given).  Units
-   are built *per class*, so a group that spans both labels becomes one Fire
-   unit and one No_Fire unit (counted as ``cross_label_groups``).  Because
+   are built *per class* for bookkeeping, so a group that spans both labels
+   becomes one Fire unit and one No_Fire unit (counted as
+   ``cross_label_groups``) -- but in group mode the two are **bundled** and
+   always land on the same node and in the same one of train/val/test.  On
+   FLAME this matters: 22 cross-label groups hold 20,006 of the 47,992 images
+   (a video in which fire appears and disappears is one near-duplicate group
+   with frames of both labels), and splitting them by label leaked up to 72 %
+   of a node's test images into another node's train split.  Because
    ``random.shuffle`` on a list of N size-1 units draws exactly the same
    numbers as ``random.shuffle`` on a list of N paths, and because
    :func:`take_units` reduces to plain slicing when every unit has size 1, the
    default (no group file) code path is unchanged.
+
+   With a real group file the units are *large* (on FLAME a whole video
+   sequence is one unit -- 47,863 of 47,992 images fall into 265 groups, the
+   largest holding 4,341 images of one class).  Cutting a shuffled unit list at
+   a cumulative-count boundary then leaves some buckets empty (a node with no
+   validation images, a Dirichlet node with 12 images).  Therefore, **whenever
+   at least one unit has size > 1**, every assignment (nodes, train/val/test,
+   Dirichlet proportions) uses the *largest-first greedy* rule of the authors'
+   own grouped splitter: units are processed in descending size (ties broken by
+   a seeded shuffle) and each one goes to the bucket with the largest remaining
+   deficit ``quota - assigned`` (LPT scheduling).  The image quotas are the very
+   same numbers the image-level arithmetic produces, so the partition *design*
+   (equal nodes, 80/50/20 label skew, Dirichlet proportions, 70/15/15) is
+   unchanged; only the rounding to whole groups differs.  The achieved counts
+   are reported in ``split_stats.json`` and must be quoted in the paper.
 
 2. ``--dirichlet_alpha A [A ...]`` -- label-skew partitions
    ------------------------------------------------------------------
@@ -45,8 +66,15 @@ the original implementation for the same ``--seed``** (same sequence of
    ``<split>_sub{frac:g}`` in which the splits named by ``--subsample_splits``
    (default: ``train`` only, so val/test stay full and results remain
    comparable with the full-data runs) are reduced to the given fraction.
-   Sampling is stratified per class, done at unit level, seeded, and always
-   keeps at least one unit of a non-empty class.
+   Sampling is stratified per class and seeded.  Without a group file it is
+   done at unit (= image) level and keeps at least one image of a non-empty
+   class.  With a group file the units are whole sequences, so unit-level
+   sampling cannot produce a 5 % or 1 % training set (one unit may be 30 % of a
+   node); the subsample is therefore drawn at *image* level **inside** the
+   node's own units.  Dropped images go nowhere, so no near-duplicate group
+   ever spans two nodes or two of train/val/test -- the leakage guarantee is
+   untouched -- but the low-data regime reduces the number of *frames* per
+   client, not the number of sequences (state this in the paper).
 
 4. ``--verify`` -- post-write self-check
    ------------------------------------------------------------------
@@ -236,6 +264,133 @@ def split_units_into(units: Sequence[Unit], n: int) -> List[List[Unit]]:
     return parts
 
 
+def is_grouped(*unit_lists: Sequence[Unit]) -> bool:
+    """True when at least one unit holds more than one image (group mode)."""
+    return any(len(u) > 1 for units in unit_lists for u in units)
+
+
+def assign_units_greedy(units: Sequence[Unit], quotas: Sequence[float],
+                        seed: int) -> List[List[Unit]]:
+    """Largest-first greedy assignment of whole units to ``len(quotas)`` buckets.
+
+    Units are visited in descending image count (ties broken by a shuffle from
+    a private ``random.Random(seed)``) and each goes to the bucket with the
+    largest remaining deficit ``quota - assigned`` (LPT rule; the authors'
+    grouped splitter uses the same deficit rule in shuffled order).  Every unit
+    is placed, so the bucket sums add up to the input; each bucket deviates
+    from its quota by at most the largest unit it received.  Deterministic.
+    """
+    n_buckets = len(quotas)
+    if n_buckets == 0:
+        return []
+    order = list(range(len(units)))
+    random.Random(seed).shuffle(order)
+    order.sort(key=lambda i: -len(units[i]))  # stable: shuffled order breaks ties
+    parts: List[List[Unit]] = [[] for _ in range(n_buckets)]
+    filled = [0] * n_buckets
+    for i in order:
+        deficits = [q - f for q, f in zip(quotas, filled)]
+        b = max(range(n_buckets), key=lambda k: (deficits[k], -k))
+        parts[b].append(units[i])
+        filled[b] += len(units[i])
+    return parts
+
+
+#: a bundle is the per-class view of ONE near-duplicate group: ``(fire_unit, nofire_unit)``
+#: where either side may be empty.  Pure groups have one side, cross-label groups both.
+Bundle = Tuple[Unit, Unit]
+
+
+def bundle_units(fire_units: Sequence[Unit], nofire_units: Sequence[Unit],
+                 gid_of: Optional[Dict[str, str]]) -> List[Bundle]:
+    """Pair the Fire and No_Fire units that belong to the same group id.
+
+    Without ``gid_of`` (or for singleton ids) every unit is its own bundle.
+    The order is fire units first, then the nofire units that were not paired.
+    """
+    def gid(unit: Unit) -> Optional[str]:
+        if not gid_of or not unit:
+            return None
+        g = gid_of.get(unit[0])
+        return None if g is None or str(g).startswith('singleton') else str(g)
+
+    bundles: List[Bundle] = []
+    index: Dict[str, int] = {}
+    for u in fire_units:
+        g = gid(u)
+        if g is not None:
+            index[g] = len(bundles)
+        bundles.append((list(u), []))
+    for u in nofire_units:
+        g = gid(u)
+        pos = index.get(g) if g is not None else None
+        if pos is None:
+            bundles.append(([], list(u)))
+        else:
+            fire_part, nofire_part = bundles[pos]
+            bundles[pos] = (fire_part, list(nofire_part) + list(u))
+    return bundles
+
+
+def assign_bundles_greedy(bundles: Sequence[Bundle], quotas_fire: Sequence[float],
+                          quotas_nofire: Sequence[float], seed: int
+                          ) -> List[Tuple[List[Unit], List[Unit]]]:
+    """Largest-first greedy assignment of whole *bundles* to buckets with per-class quotas.
+
+    Bundles are visited in descending total image count (ties broken by a
+    seeded shuffle).  A bundle goes to the bucket with the largest
+    composition-weighted remaining deficit
+    ``w_f * (qf - filled_f) + w_n * (qn - filled_n)`` with ``w = share of the
+    bundle's images in that class``; for a pure bundle this is exactly the
+    per-class deficit rule of :func:`assign_units_greedy`.  Returns, per bucket,
+    ``(fire_units, nofire_units)``.
+    """
+    n_buckets = len(quotas_fire)
+    assert n_buckets == len(quotas_nofire)
+    if n_buckets == 0:
+        return []
+    order = list(range(len(bundles)))
+    random.Random(seed).shuffle(order)
+    order.sort(key=lambda i: -(len(bundles[i][0]) + len(bundles[i][1])))
+    out: List[Tuple[List[Unit], List[Unit]]] = [([], []) for _ in range(n_buckets)]
+    filled_f = [0] * n_buckets
+    filled_n = [0] * n_buckets
+    for i in order:
+        fire_part, nofire_part = bundles[i]
+        nf, nn = len(fire_part), len(nofire_part)
+        tot = max(nf + nn, 1)
+        wf, wn = nf / tot, nn / tot
+        scores = [wf * (quotas_fire[b] - filled_f[b]) + wn * (quotas_nofire[b] - filled_n[b])
+                  for b in range(n_buckets)]
+        b = max(range(n_buckets), key=lambda k: (scores[k], -k))
+        if fire_part:
+            out[b][0].append(list(fire_part))
+            filled_f[b] += nf
+        if nofire_part:
+            out[b][1].append(list(nofire_part))
+            filled_n[b] += nn
+    return out
+
+
+def _tvt_quotas(n: int, train: float = 0.7, val: float = 0.15) -> List[int]:
+    """The original ``int(n*0.7)`` / ``int(n*0.85)`` arithmetic as three quotas."""
+    t, v = int(n * train), int(n * (train + val))
+    return [t, v - t, n - v]
+
+
+def split_node_bundled(fire_units: Sequence[Unit], nofire_units: Sequence[Unit],
+                       gid_of: Optional[Dict[str, str]], seed: int,
+                       train: float = 0.7, val: float = 0.15) -> Dict[str, Dict[str, List[Unit]]]:
+    """Group-mode 70/15/15 split of one node: whole bundles, per-class quotas."""
+    bundles = bundle_units(fire_units, nofire_units, gid_of)
+    qf = _tvt_quotas(n_images(fire_units), train, val)
+    qn = _tvt_quotas(n_images(nofire_units), train, val)
+    parts = assign_bundles_greedy(bundles, qf, qn, seed)
+    names = ('train', 'val', 'test')
+    return {'fire': {nm: parts[i][0] for i, nm in enumerate(names)},
+            'nofire': {nm: parts[i][1] for i, nm in enumerate(names)}}
+
+
 def split_into(lst, n):
     """Original image-level helper, kept for backwards compatibility."""
     k, m = divmod(len(lst), n)
@@ -355,13 +510,22 @@ def warn_group_coverage(info: dict, group_file: Optional[str] = None,
 # --------------------------------------------------------------------------- #
 # train / val / test
 # --------------------------------------------------------------------------- #
-def split_units(units: Sequence[Unit], train=0.7, val=0.15, seed=42) -> Dict[str, List[Unit]]:
-    """70/15/15 split of a list of units -- reseeds ``random`` exactly like the original."""
+def split_units(units: Sequence[Unit], train=0.7, val=0.15, seed=42,
+                grouped: bool = False) -> Dict[str, List[Unit]]:
+    """70/15/15 split of a list of units -- reseeds ``random`` exactly like the original.
+
+    In group mode (``grouped=True``) the same 70/15/15 image quotas are filled
+    with :func:`assign_units_greedy` so that oversized units cannot empty a
+    bucket; the global ``random`` state is still advanced exactly as before.
+    """
     random.seed(seed)
     s = list(units)
     random.shuffle(s)
     n = n_images(s)
     t, v = int(n * train), int(n * (train + val))
+    if grouped:
+        tr, va, te = assign_units_greedy(s, [t, v - t, n - v], seed)
+        return {'train': tr, 'val': va, 'test': te}
     tr, rest = take_units(s, t)
     va, te = take_units(rest, v - n_images(tr))
     return {'train': tr, 'val': va, 'test': te}
@@ -492,12 +656,18 @@ def write_manifest(output_dir: str, split_name: str,
 # --------------------------------------------------------------------------- #
 # split creation
 # --------------------------------------------------------------------------- #
-def partition_to_tvt(node_units: Dict[str, Dict[str, List[Unit]]], seed: int):
+def partition_to_tvt(node_units: Dict[str, Dict[str, List[Unit]]], seed: int,
+                     grouped: bool = False, gid_of: Optional[Dict[str, str]] = None):
     """Per-node 70/15/15 split.
 
     The ``random`` calls happen in exactly the original order (node by node,
-    fire then nofire) so the global RNG state evolves as it did before.
+    fire then nofire) so the global RNG state evolves as it did before.  In
+    group mode each node is split with :func:`split_node_bundled` instead, so a
+    cross-label group stays in one of train/val/test.
     """
+    if grouped:
+        return {node: split_node_bundled(nd['fire'], nd['nofire'], gid_of, seed)
+                for node, nd in node_units.items()}
     return {node: {'fire': split_units(nd['fire'], seed=seed),
                    'nofire': split_units(nd['nofire'], seed=seed)}
             for node, nd in node_units.items()}
@@ -535,9 +705,9 @@ def materialize(output_dir: str, split_name: str, tvt, data_dir: str,
 
 
 def create_split(output_dir, split_name, node_data, seed, data_dir='.', gid_of=None,
-                 extra=None, quiet=False, clean=False):
+                 extra=None, quiet=False, clean=False, grouped=False):
     """Split each node 70/15/15 and materialise it (original entry point)."""
-    tvt = partition_to_tvt(node_data, seed)
+    tvt = partition_to_tvt(node_data, seed, grouped=grouped, gid_of=gid_of)
     return materialize(output_dir, split_name, tvt, data_dir, gid_of or {}, extra, quiet,
                        clean), tvt
 
@@ -545,22 +715,70 @@ def create_split(output_dir, split_name, node_data, seed, data_dir='.', gid_of=N
 # --------------------------------------------------------------------------- #
 # partitioners
 # --------------------------------------------------------------------------- #
-def partition_iid(fire_units, nofire_units, node_names):
-    """Equal random split -- caller must have shuffled the unit lists already."""
-    fp = split_units_into(fire_units, len(node_names))
-    np_ = split_units_into(nofire_units, len(node_names))
-    return {name: {'fire': f, 'nofire': n} for name, f, n in zip(node_names, fp, np_)}
+def _equal_quotas(total: int, n: int) -> List[int]:
+    k, m = divmod(total, n)
+    return [k + (1 if i < m else 0) for i in range(n)]
 
 
-def partition_non_iid_label(fire_units, nofire_units, node_names):
+def _from_bundle_parts(parts, node_names):
+    return {name: {'fire': parts[i][0], 'nofire': parts[i][1]} for i, name in enumerate(node_names)}
+
+
+def partition_iid(fire_units, nofire_units, node_names, grouped: bool = False, seed: int = 0,
+                  gid_of: Optional[Dict[str, str]] = None):
+    """Equal random split -- caller must have shuffled the unit lists already.
+
+    Group mode fills the same equal per-class quotas greedily (largest bundle
+    first; a cross-label group is one bundle).
+    """
+    n = len(node_names)
+    if grouped:
+        parts = assign_bundles_greedy(bundle_units(fire_units, nofire_units, gid_of),
+                                      _equal_quotas(n_images(fire_units), n),
+                                      _equal_quotas(n_images(nofire_units), n), seed)
+        return _from_bundle_parts(parts, node_names)
+    else:
+        fp = split_units_into(fire_units, n)
+        np_ = split_units_into(nofire_units, n)
+    return {name: {'fire': f, 'nofire': n_} for name, f, n_ in zip(node_names, fp, np_)}
+
+
+def label_skew_quotas(n_fire: int, n_nofire: int, n_nodes: int) -> Tuple[List[int], List[int]]:
+    """Per-node (fire, nofire) image quotas of the original label-skew heuristic.
+
+    2 nodes: A is 70% fire.  3 nodes: A=80% fire, B absorbs the remainder
+    (~88.5% fire on FLAME), C=80% no-fire.  Exactly the original arithmetic.
+    """
+    total = n_fire + n_nofire
+    per_node = total // n_nodes
+    if n_nodes == 2:
+        a_fire = min(int(per_node * 0.7), n_fire)
+        a_nofire = per_node - a_fire
+        return [a_fire, n_fire - a_fire], [a_nofire, n_nofire - a_nofire]
+    a_fire = min(int(per_node * 0.8), n_fire)
+    a_nofire = per_node - a_fire
+    c_nofire = min(int(per_node * 0.8), n_nofire - a_nofire)
+    c_fire = per_node - c_nofire
+    b_fire = n_fire - a_fire - c_fire
+    b_nofire = n_nofire - a_nofire - c_nofire
+    return [a_fire, b_fire, c_fire], [a_nofire, b_nofire, c_nofire]
+
+
+def partition_non_iid_label(fire_units, nofire_units, node_names, grouped: bool = False,
+                            seed: int = 0, gid_of: Optional[Dict[str, str]] = None):
     """Original label-skew heuristic, expressed with unit-wise takes.
 
     2 nodes: A is 70% fire.  3 nodes: A=80% fire, B balanced, C=80% no-fire.
     The arithmetic is exactly the original one; ``take_units`` replaces the
-    image-index slicing and is equivalent when units have size 1.
+    image-index slicing and is equivalent when units have size 1.  In group
+    mode the same quotas are filled greedily (largest unit first).
     """
     n_nodes = len(node_names)
     n_fire, n_nofire = n_images(fire_units), n_images(nofire_units)
+    if grouped:
+        qf, qn = label_skew_quotas(n_fire, n_nofire, n_nodes)
+        parts = assign_bundles_greedy(bundle_units(fire_units, nofire_units, gid_of), qf, qn, seed)
+        return _from_bundle_parts(parts, node_names)
     total = n_fire + n_nofire
     per_node = total // n_nodes
 
@@ -587,9 +805,16 @@ def partition_non_iid_label(fire_units, nofire_units, node_names):
             'node_c': {'fire': cf, 'nofire': cn}}
 
 
-def _assign_by_proportions(units: Sequence[Unit], p: np.ndarray) -> List[List[Unit]]:
-    """Hand units to nodes at the cumulative-image-count boundaries ``cumsum(p)*N``."""
+def _assign_by_proportions(units: Sequence[Unit], p: np.ndarray, grouped: bool = False,
+                           seed: int = 0) -> List[List[Unit]]:
+    """Hand units to nodes at the cumulative-image-count boundaries ``cumsum(p)*N``.
+
+    Group mode: the quotas ``p * N`` are filled greedily (largest unit first).
+    """
     total = n_images(units)
+    if grouped:
+        quotas = [float(x) * total for x in np.asarray(p, dtype=float)]
+        return assign_units_greedy(units, quotas, seed)
     bounds = np.cumsum(np.asarray(p, dtype=float)) * total
     parts, rest, taken = [], list(units), 0
     n_nodes = len(p)
@@ -604,7 +829,8 @@ def _assign_by_proportions(units: Sequence[Unit], p: np.ndarray) -> List[List[Un
 
 
 def partition_dirichlet(fire_units, nofire_units, node_names, alpha, seed,
-                        min_size=10, max_tries=1000):
+                        min_size=10, max_tries=1000, grouped: bool = False,
+                        gid_of: Optional[Dict[str, str]] = None):
     """Label-skew partition: ``p_c ~ Dirichlet(alpha * 1_nodes)`` per class.
 
     Redraws (advancing the same ``RandomState``) until every node holds at least
@@ -626,13 +852,21 @@ def partition_dirichlet(fire_units, nofire_units, node_names, alpha, seed,
     shuffler.shuffle(nu)
 
     classes = (('fire', fu), ('nofire', nu))
+    bundles = bundle_units(fu, nu, gid_of) if grouped else None
     for _ in range(max_tries):
         props = {}
         parts = {}
         for key, units in classes:
             p = rng.dirichlet(np.repeat(float(alpha), n_nodes))
             props[key] = p
-            parts[key] = _assign_by_proportions(units, p)
+            if not grouped:
+                parts[key] = _assign_by_proportions(units, p)
+        if grouped:
+            # whole bundles (a cross-label group stays on one node), per-class quotas p*N
+            qf = [float(x) * n_images(fu) for x in props['fire']]
+            qn = [float(x) * n_images(nu) for x in props['nofire']]
+            bparts = assign_bundles_greedy(bundles, qf, qn, seed)
+            parts = {'fire': [bp[0] for bp in bparts], 'nofire': [bp[1] for bp in bparts]}
         sizes = [n_images(parts['fire'][i]) + n_images(parts['nofire'][i]) for i in range(n_nodes)]
         if min(sizes) >= min_size:
             node_units = {name: {'fire': parts['fire'][i], 'nofire': parts['nofire'][i]}
@@ -654,8 +888,27 @@ def _stable_seed(seed: int, name: str) -> int:
     return (seed + zlib.crc32(name.encode('utf-8'))) % (2 ** 31)
 
 
-def subsample_tvt(tvt, frac: float, which: Sequence[str], seed: int, split_name: str):
-    """Reduce the named splits to ``frac`` of their units, stratified per class."""
+def _subsample_images_within_units(units: Sequence[Unit], target: int,
+                                   rng: random.Random) -> List[Unit]:
+    """Keep ``target`` images (>= 1) drawn uniformly from ``units``; the survivors
+    stay in their original unit (group) so ``group_id`` stays meaningful."""
+    flat = [(ui, p) for ui, u in enumerate(units) for p in u]
+    rng.shuffle(flat)
+    keep = flat[:max(target, 1)]
+    kept: Dict[int, List[str]] = {}
+    for ui, p in sorted(keep):
+        kept.setdefault(ui, []).append(p)
+    return [kept[ui] for ui in sorted(kept)]
+
+
+def subsample_tvt(tvt, frac: float, which: Sequence[str], seed: int, split_name: str,
+                  grouped: bool = False):
+    """Reduce the named splits to ``frac`` of their images, stratified per class.
+
+    Unit level (identical to the original behaviour) without a group file;
+    image level *inside* the node's own units in group mode -- see the module
+    docstring for why.
+    """
     rng = random.Random(_stable_seed(seed, '{}|{:g}'.format(split_name, frac)))
     out = {}
     for node, per_class in sorted(tvt.items()):
@@ -666,8 +919,11 @@ def subsample_tvt(tvt, frac: float, which: Sequence[str], seed: int, split_name:
                 if sp not in which or not units:
                     node_out[key][sp] = units
                     continue
-                rng.shuffle(units)
                 target = int(round(frac * n_images(units)))
+                if grouped:
+                    node_out[key][sp] = _subsample_images_within_units(units, target, rng)
+                    continue
+                rng.shuffle(units)
                 taken, _ = take_units(units, target)
                 if not taken:
                     taken = units[:1]  # keep >= 1 unit of a non-empty class
@@ -693,6 +949,8 @@ def _local_verify_split(split_name: str, rows: Sequence[Dict[str, str]],
     """Minimal standalone check (used when ``scripts/verify_splits.py`` is absent).
 
     (1) no ``(group_id, label)`` unit spans two nodes or two of train/val/test,
+    (1b) no ``group_id`` does so either, regardless of label (a cross-label
+    group split by label is exactly what the leakage audit flags),
     (2) the manifest counts equal the per-node counts in ``split_stats.json``.
     """
     problems: List[str] = []
@@ -701,6 +959,8 @@ def _local_verify_split(split_name: str, rows: Sequence[Dict[str, str]],
 
     nodes_of_unit: Dict[Tuple[str, str], set] = {}
     tvt_of_unit: Dict[Tuple[str, str], set] = {}
+    nodes_of_group: Dict[str, set] = {}
+    tvt_of_group: Dict[str, set] = {}
     counts: Dict[Tuple[str, str, str], int] = {}
     label_key = {'Fire': 'fire', 'No_Fire': 'nofire'}
     for row in rows:
@@ -711,6 +971,17 @@ def _local_verify_split(split_name: str, rows: Sequence[Dict[str, str]],
             unit = (gid, row['label'])
             nodes_of_unit.setdefault(unit, set()).add(row['node'])
             tvt_of_unit.setdefault(unit, set()).add(row['split'])
+            nodes_of_group.setdefault(str(gid), set()).add(row['node'])
+            tvt_of_group.setdefault(str(gid), set()).add(row['split'])
+
+    for gid, nodes in sorted(nodes_of_group.items()):
+        if len(nodes) > 1:
+            problems.append('{}: group {} spans nodes {} (across labels)'.format(
+                split_name, gid, '+'.join(sorted(nodes))))
+    for gid, parts in sorted(tvt_of_group.items()):
+        if len(parts) > 1:
+            problems.append('{}: group {} spans {} (across labels)'.format(
+                split_name, gid, '+'.join(sorted(parts))))
 
     for unit, nodes in sorted(nodes_of_unit.items()):
         if len(nodes) > 1:
@@ -834,6 +1105,12 @@ def run(args) -> dict:
                   ginfo['n_units'], ginfo['largest_unit'], ginfo['cross_label_groups']))
         warn_group_coverage(ginfo, args.group_file)
 
+    grouped = is_grouped(fire_units, nofire_units)
+    if grouped:
+        print("Group mode: oversized units -> largest-first greedy assignment of whole "
+              "groups (cross-label groups bundled) to the image quotas (nodes, "
+              "train/val/test, Dirichlet); subsampling at image level inside units")
+
     random.seed(args.seed)
     all_stats: Dict[str, dict] = {}
     base_tvt: Dict[str, dict] = {}
@@ -846,18 +1123,21 @@ def run(args) -> dict:
         rf, rn = list(fire_units), list(nofire_units)
         random.shuffle(rf)
         random.shuffle(rn)
-        iid_nodes = partition_iid(rf, rn, node_names)
+        iid_nodes = partition_iid(rf, rn, node_names, grouped=grouped, seed=args.seed,
+                                  gid_of=gid_of)
         all_stats['iid'], base_tvt['iid'] = create_split(
-            args.output_dir, 'iid', iid_nodes, args.seed, args.data_dir, gid_of, clean=clean)
+            args.output_dir, 'iid', iid_nodes, args.seed, args.data_dir, gid_of, clean=clean,
+            grouped=grouped)
 
         # --- Non-IID label skew ------------------------------------------ #
         print("\n--- Non-IID Label Skew ({} nodes) ---".format(args.nodes))
         random.shuffle(rf)
         random.shuffle(rn)
-        noniid_nodes = partition_non_iid_label(rf, rn, node_names)
+        noniid_nodes = partition_non_iid_label(rf, rn, node_names, grouped=grouped,
+                                               seed=args.seed, gid_of=gid_of)
         all_stats['non_iid_label'], base_tvt['non_iid_label'] = create_split(
             args.output_dir, 'non_iid_label', noniid_nodes, args.seed, args.data_dir, gid_of,
-            clean=clean)
+            clean=clean, grouped=grouped)
 
     # --- Dirichlet label skew -------------------------------------------- #
     for alpha in (getattr(args, 'dirichlet_alpha', None) or []):
@@ -865,13 +1145,13 @@ def run(args) -> dict:
         print("\n--- Dirichlet Split alpha={:g} ({} nodes) ---".format(alpha, args.nodes))
         nodes_units, proportions = partition_dirichlet(
             fire_units, nofire_units, node_names, alpha, args.seed,
-            min_size=getattr(args, 'dirichlet_min_size', 10))
+            min_size=getattr(args, 'dirichlet_min_size', 10), grouped=grouped, gid_of=gid_of)
         extra = {'dirichlet_alpha': float(alpha),
                  'dirichlet_proportions': proportions,
                  'seed': int(args.seed)}
         all_stats[name], base_tvt[name] = create_split(
             args.output_dir, name, nodes_units, args.seed, args.data_dir, gid_of, extra,
-            clean=clean)
+            clean=clean, grouped=grouped)
 
     # --- Subsampling ------------------------------------------------------ #
     fracs = getattr(args, 'subsample_frac', None) or []
@@ -881,7 +1161,8 @@ def run(args) -> dict:
             name = '{}_sub{:g}'.format(base_name, frac)
             print("\n--- Subsample {} (frac={:g}, splits={}) ---".format(
                 name, frac, ','.join(which)))
-            sub = subsample_tvt(base_tvt[base_name], frac, which, args.seed, base_name)
+            sub = subsample_tvt(base_tvt[base_name], frac, which, args.seed, base_name,
+                                grouped=grouped)
             extra = {'subsample_frac': float(frac), 'subsample_splits': which,
                      'source_split': base_name, 'seed': int(args.seed)}
             if 'dirichlet_alpha' in all_stats.get(base_name, {}):
@@ -890,8 +1171,19 @@ def run(args) -> dict:
             all_stats[name] = materialize(
                 args.output_dir, name, sub, args.data_dir, gid_of, extra, clean=clean)
 
+    def _write_stats(stats: dict) -> str:
+        os.makedirs(args.output_dir, exist_ok=True)
+        path = os.path.join(args.output_dir, 'split_stats.json')
+        with open(path, 'w') as f:
+            json.dump(stats, f, indent=2)
+        return path
+
     verify_ok = None
     if getattr(args, 'verify', False):
+        # The verifier compares the manifests against split_stats.json ON DISK, so the
+        # fresh stats must be written first -- otherwise a stale file from a previous
+        # partition (the normal --clean re-split situation) is what gets compared.
+        _write_stats(dict(all_stats, _meta={'verify_ok': None, 'partial': True}))
         verify_ok = verify_written_splits(args.output_dir, [k for k in all_stats])
 
     all_stats['_meta'] = {
@@ -911,13 +1203,13 @@ def run(args) -> dict:
         'group_paths_total': ginfo['group_paths_total'],
         'group_paths_matched': ginfo['group_paths_matched'],
         'clean': clean,
+        'grouped': grouped,
+        'assignment': 'greedy_largest_first' if grouped else 'sequential_cut',
+        'subsample_level': 'image_within_units' if grouped else 'unit',
         'verify_ok': verify_ok,
     }
 
-    os.makedirs(args.output_dir, exist_ok=True)
-    stats_path = os.path.join(args.output_dir, 'split_stats.json')
-    with open(stats_path, 'w') as f:
-        json.dump(all_stats, f, indent=2)
+    _write_stats(all_stats)
     print("\nStats saved to {}/split_stats.json".format(args.output_dir))
     return all_stats
 

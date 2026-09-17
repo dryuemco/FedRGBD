@@ -357,8 +357,9 @@ def test_subsample_applies_to_dirichlet_and_unit_granularity(dataset, tmp_path):
         for (node, tvt, label), n_full in full_counts.items():
             n_sub = sub_counts.get((node, tvt, label), 0)
             if tvt == "train":
-                # unit granularity: within one (triplet-sized) unit of the target
-                assert 1 <= n_sub <= frac * n_full + TRIPLET
+                # group mode samples at image level inside the node's own units,
+                # so the fraction is exact (and never empties a non-empty class)
+                assert n_sub == max(1, int(round(frac * n_full)))
             else:
                 assert n_sub == n_full
         # groups still intact after subsampling

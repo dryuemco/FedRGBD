@@ -97,6 +97,21 @@ aynı olmalı. Aynı değilse tek node'da üretip `data/processed`'ı (sembolik 
 diğerlerine kopyala ya da `manifest.csv`'yi paylaş.
 `split_stats.json` → `class_counts` tabloları makaledeki "veri dağılımı" tablosuna girer.
 
+**Grup modunda birimler devasa (17 Eylül 2026 gerçek veri bulgusu):** 47.992 görüntünün
+47.863'ü 265 gruba düşüyor; en büyük birim tek sınıftan 4.341 görüntü (bir video). İlk gerçek
+koşuda IID bölmesinde node_b'nin val kümesi **boş** kaldı, Dirichlet(0.1) bir node'a 12 görüntü
+verdi, "%5" alt örnek bir node'da %69 çıktı. Bu yüzden bölücü grup modunda artık (a) aynı
+görüntü kotalarını **en-büyük-önce greedy** ile dolduruyor (yazarların kendi "en büyük açık"
+kuralı), (b) alt örneklemeyi node'un kendi birimleri **içinde görüntü düzeyinde** yapıyor
+(kesin oran; düşen görüntü hiçbir yere gitmediği için sızıntı garantisi bozulmaz; makalede
+"kare sayısı azalır, sahne sayısı değil" denmeli), (c) `--verify` öncesi taze
+`split_stats.json` yazıyor (eskiden diskteki bayat dosyayla karşılaştırıp yanlış FAIL
+veriyordu). Varsayılan (grupsuz) yol bit-birebir aynı. Dirichlet için `--dirichlet_min_size
+200` kullanıldı: 10 ile node 12 görüntüde kalıyor ve val/test ölçülemiyor; 200 ≈ node başına
+30 val + 30 test görüntüsünün alt sınırı. Gerçekleşen sayılar `split_stats.json` →
+`class_counts`'ta; hedef 70/15/15 ve eşit node büyüklüğünden sapmalar (en büyük birim
+kadar) makalede açıkça raporlanacak.
+
 ### 2.4 Yeni bölmelerin sızıntısını doğrula (sıfır olmalı)
 ```bash
 python3 scripts/analyze_flame_leakage.py --data_dir data/raw/flame_dataset \
@@ -218,12 +233,39 @@ WSL'de torch **yok**; komutları bu venv'lerle çalıştır.
 | 2 | v1'den kalan boş bölümler (Modality Ablation, Resource Profiling, Network Constraint Sensitivity) kaldırıldı; enerji/latency vaatleri metinden çıkarıldı; üç ölçüm Limitations + Future Work'te "kapsam dışı" olarak yazıldı | **bitti** | `paper/main.tex` §Limitations, §Future Work; cevap mektubu R3.1 |
 | 3 | v1 (image-level) sonuçları yeni analiz boru hattından geçirildi; `tab:v1_ci`, `tab:time`, `tab:stats` hücreleri birebir doğrulandı; tek tutarsızlık (IID'de p<0.05 çift sayısı 3 değil 2) düzeltildi | **bitti** | `analysis/` (CSV/MD/grafikler), `paper/tables/*.tex` |
 | 4 | Masaüstü GPU ortamı: torch 2.11+cu128, CUDA doğrulandı, 227 test geçti, sentetik veride `Device: cuda` duman testi; `results.json`'a `device` alanı eklendi | **bitti** | `docs/DESKTOP_GPU_BASELINES.md`, `setup_desktop_windows.ps1` |
-| 5 | P0 zinciri tek komut: Kaggle indirme (kimlik varsa) → v1 sızıntı denetimi → ham veri denetimi (sweep, sekans, MD5) → karar özeti → `--clean --verify` yeniden bölme → sıfır-sızıntı denetimi + manifest md5'leri; sentetik veride uçtan uca test edildi | **betik hazır, veri bekliyor** | `scripts/run_p0_leakage_and_split.py`, `tests/test_run_p0_pipeline.py`, `analysis/leakage/P0_SUMMARY.md` (çıktı) |
-| 6 | FLAME ham verisini masaüstüne indirmek (Kaggle hesabı gerekir) ve 5'i çalıştırmak | **senin adımın** | `python scripts/run_p0_leakage_and_split.py` (Kaggle kimliği yoksa çıkış kodu 2 ve talimat basar) |
-| 7 | P2 baseline'lar (centralized + local, 50 koşu) masaüstü GPU'da | 5–6 bitince | `docs/DESKTOP_GPU_BASELINES.md` komut dizisi |
+| 5 | P0 zinciri tek komut: v1 sızıntı denetimi → ham veri denetimi (sweep, sekans, MD5) → karar özeti → `--clean --verify` yeniden bölme → sıfır-sızıntı denetimi + manifest md5'leri | **bitti (17 Eylül, gerçek veri)** | `scripts/run_p0_leakage_and_split.py`, `analysis/leakage/P0_SUMMARY.md` |
+| 6 | FLAME ham verisi (Kaggle `archive.zip`, 47.992 jpg) masaüstüne indirildi, `data/raw/flame_dataset/{Fire,No_Fire}` olarak düzleştirildi; yeni `data/processed` 15 bölme, hepsi sızıntısız | **bitti** | `data/processed/split_stats.json`, §5.1 |
+| 7 | P2 baseline'lar (centralized + local, 50 koşu) masaüstü GPU'da | **şimdi başlatılabilir** | `docs/DESKTOP_GPU_BASELINES.md` komut dizisi |
 | 8 | Fon numarası / AI-disclosure ifadesi; testbed fotoğrafı | yazar girdisi | `paper/main.tex` `\todo` |
 
-Kalan 28 `\todo` yer tutucusunun hepsi Jetson koşularına veya cihazdaki özel veriye (sahne
-etiketleri, LOSO) bağlıdır. Cihazlar gelmeden yapılacak tek büyük iş **6. satırdır**; o
-bittiğinde 7 hemen başlatılabilir ve makalenin sızıntı oranı paragrafı (`tab:leakage`)
-`analysis/leakage/P0_SUMMARY.md`'den doldurulur.
+Kalan 27 `\todo` yer tutucusunun hepsi Jetson koşularına veya cihazdaki özel veriye (sahne
+etiketleri, LOSO) bağlıdır. Sızıntı tablosu (`tab:leakage`) ve gerçekleşen bölme sayıları
+tablosu (`tab:group_counts`) gerçek sayılarla dolduruldu. Cihazlar gelmeden yapılabilecek tek
+iş 7. satır (masaüstü GPU baseline'ları).
+
+### 5.1 P0 bulguları (17 Eylül 2026, gerçek FLAME verisi)
+
+| Bulgu | Değer | Nereye gitti |
+|---|---|---|
+| v1 image-level bölmede val/test görüntülerinin bir node'un train'inde yakın-kopyası olan payı | IID %99,64 / %99,65; label-skew %99,58 / %99,65 | `tab:leakage` (c), §IV-B metni, cevap mektubu R3.2 |
+| Node'lara yayılan grup sayısı (v1) | 235 (IID) / 219 (skew) | aynı |
+| Grup istatistiği (τ=8) | 394 grup, 265'i >1 görüntü, 47.863 görüntü (%99,73); en büyük grup 4.924 | `tab:leakage` (a) |
+| Eşik taraması | τ=4: 2.051 grup; τ=8: 394; τ=10: en büyük bileşen 34.337 (%72) → τ=8 seçimi gerekçesi | `tab:leakage` (b), §III-D |
+| Ardışık kare çiftlerinin aynı gruba düşme oranı | %99,06 | §III-D |
+| **Çapraz-etiketli gruplar** | 22 grup, 20.006 görüntü (%42); en büyüğü 4.341 Fire + 583 No_Fire | §III-D: grup etiketten bağımsız bütün tutulur |
+| Yeni bölmelerin denetimi | 15 bölmenin hepsinde L = 0, node'lara yayılan grup 0 | `tab:leakage` (c), `analysis/leakage/post_split_audit/` |
+| Gerçekleşen node sayıları | IID 11.139–11.346 train / 2.326–2.519 val-test; Dirichlet(0.1) node A %9 ateş, B %95; Dirichlet(0.5) en küçük istemci 911 görüntü | `tab:group_counts` |
+
+**Bölücüde üç düzeltme gerekti** (hepsi yalnızca grup modunda, varsayılan yol bit-birebir):
+1. `--verify` bayat `split_stats.json` ile karşılaştırıyordu → taze dosya doğrulamadan önce yazılıyor.
+2. Kümülatif kesme dev birimlerle boş kova bırakıyordu (node_b val = 0) → en-büyük-önce greedy.
+3. Çapraz-etiketli grubun Fire ve No_Fire parçaları ayrı birimlerdi → iki node'a / train-test'e dağılıyor,
+   bağımsız denetim %72'ye kadar sızıntı buluyordu → grup **etiketten bağımsız tek paket**; iki
+   doğrulayıcı (`scripts/verify_splits.py`, bölücü içi) artık etiketten bağımsız da kontrol ediyor.
+Alt örnekleme grup modunda node'un kendi grupları içinde **kare düzeyinde** (kesin %5 / %1);
+makalede "kare sayısı azalır, sahne sayısı değil" dendi. Dirichlet için `--dirichlet_min_size 200`.
+
+**Jetson'lara taşınacak:** `data/processed` bu makinede hardlink ile üretildi (1,6 GB). Üç node'a
+ya bu ağaç kopyalanır ya da her node'da `run_p0_leakage_and_split.py --skip_download` koşulup
+`P0_SUMMARY.md`'deki manifest md5'leri karşılaştırılır (bölücü `os.walk` sırasına bağlıdır;
+md5'ler tutmuyorsa tek kopyayı dağıt).

@@ -76,6 +76,16 @@ every `manifest.csv` / `split_stats.json` to `P0_SUMMARY.md` for the cross-node
 comparison.  Every sub-command is echoed, so the log doubles as the exact
 reproduction recipe.  The individual commands are documented below.
 
+Group mode note: on FLAME a near-duplicate group is a whole video sequence
+(265 groups cover 47,863 of 47,992 images; the largest unit is 4,341 images), so
+the splitter fills the image quotas of each design with whole units by a
+largest-first greedy rule, subsamples at image level inside a node's own units
+(exact `--subsample_frac`, still leak-free), and reports the achieved counts in
+`split_stats.json` (`_meta.assignment = greedy_largest_first`).  Expect the
+per-node totals and the 70/15/15 ratios to deviate by up to one unit; quote the
+achieved numbers, not the targets.  Use `--dirichlet_min_size 200` (the P0
+driver flag) so every Dirichlet node keeps a measurable val/test set.
+
 #### Paper v1 splits (image-level, unchanged)
 ```bash
 python3 src/data/data_splitter.py \

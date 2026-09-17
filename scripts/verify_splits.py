@@ -284,6 +284,8 @@ def check_manifest(split: str, rows: Sequence[Dict[str, str]], report: Report) -
     tvt_of_path: Dict[str, set] = defaultdict(set)
     nodes_of_unit: Dict[Tuple[str, str], set] = defaultdict(set)
     tvt_of_unit: Dict[Tuple[str, str], set] = defaultdict(set)
+    nodes_of_group: Dict[str, set] = defaultdict(set)
+    tvt_of_group: Dict[str, set] = defaultdict(set)
     basenames: Dict[Tuple[str, str, str], Counter] = defaultdict(Counter)
 
     for row in rows:
@@ -295,6 +297,8 @@ def check_manifest(split: str, rows: Sequence[Dict[str, str]], report: Report) -
             unit = (row["group_id"], row["label"])
             nodes_of_unit[unit].add(row["node"])
             tvt_of_unit[unit].add(row["split"])
+            nodes_of_group[row["group_id"]].add(row["node"])
+            tvt_of_group[row["group_id"]].add(row["split"])
 
     shared = sorted(p for p, n in nodes_of_path.items() if len(n) > 1)
     if shared:
@@ -321,6 +325,21 @@ def check_manifest(split: str, rows: Sequence[Dict[str, str]], report: Report) -
             u[0], u[1], "+".join(order_tvt(tvt_of_unit[u]))) for u in unit_tvt]
         report.error("manifest", "{} near-duplicate group(s) split across train/val/test: "
                                  "{}".format(len(unit_tvt), _join(detail)), split)
+
+    # label-agnostic: a cross-label group whose Fire part sits on one node (or in
+    # train) and whose No_Fire part sits elsewhere is what the leakage audit flags
+    group_nodes = sorted(g for g, n in nodes_of_group.items() if len(n) > 1)
+    if group_nodes:
+        detail = ["group={} -> {}".format(g, "+".join(sorted(nodes_of_group[g]))) for g in group_nodes]
+        report.error("manifest", "{} near-duplicate group(s) split across nodes when labels are "
+                                 "ignored (cross-label group split by label): {}".format(
+                                     len(group_nodes), _join(detail)), split)
+    group_tvt = sorted(g for g, s_ in tvt_of_group.items() if len(s_) > 1)
+    if group_tvt:
+        detail = ["group={} -> {}".format(g, "+".join(order_tvt(tvt_of_group[g]))) for g in group_tvt]
+        report.error("manifest", "{} near-duplicate group(s) split across train/val/test when "
+                                 "labels are ignored (cross-label group split by label): {}".format(
+                                     len(group_tvt), _join(detail)), split)
 
     collisions = []
     for key, counter in basenames.items():

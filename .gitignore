@@ -62,6 +62,11 @@ paper/*.fdb_latexmk
 
 # Derived analysis outputs (scripts/analyze_results.py, analyze_flame_leakage.py)
 analysis/**/hashes_*.npz
+analysis/**/md5s.npz
+# the sub-audits re-emit the same group files as analysis/leakage/ -- keep only their reports
+analysis/leakage/v1_audit/groups.*
+analysis/leakage/post_split_audit/groups.*
+analysis/leakage/*/example_groups.txt
 
 # Confidential correspondence (editor/reviewer e-mails) must never be committed
 *.eml

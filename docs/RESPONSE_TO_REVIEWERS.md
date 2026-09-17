@@ -144,8 +144,28 @@ they are listed as future work.
 
 ### R3.2 — "FLAME is randomly split: related frames from the same acquisition sequence may be in train and test. Use a sequence/source-level split."
 
-**Response — DONE (code), DONE (manuscript), PENDING EXPERIMENT (numbers).** We agree, and this
-is the change with the largest potential effect on our reported accuracies.
+**Response — DONE (code), DONE (manuscript), DONE (leakage audit), PENDING EXPERIMENT (accuracy
+under the new protocol).** We agree, and this is the change with the largest potential effect on
+our reported accuracies.
+
+*Audit result (Table VII, Section IV-B).* We ran the near-duplicate audit on the full FLAME tree
+(47,992 images, 64-bit difference hash, τ = 8 bits, chosen from a sweep over τ ∈ {4,…,12}).
+The reviewer's suspicion is confirmed in the strongest form: 265 non-trivial near-duplicate
+groups cover 99.73 % of the images, the largest group holds 4,924 frames of one sequence, and
+99.06 % of consecutive frame numbers fall into the same group, i.e. the groups recover the
+acquisition sequences. Under the image-level split of the original submission **99.6 % of all
+validation and test images have a near-duplicate in the training split of some node**, and
+235 (IID) / 219 (label skew) groups were spread over several nodes. We state in the revised
+manuscript that the v1 accuracies therefore largely measure recognition of sequences seen in
+training. A further finding required a protocol decision: 22 groups (20,006 images) contain
+both fire and no-fire frames, because a FLAME sequence is a video in which the fire appears and
+disappears in a fixed scene. We keep such groups whole regardless of label (a group is a
+sequence), since splitting them by label re-creates the leakage. Under the group-level protocol
+an independent audit of all 15 written partitions (IID, label skew, Dirichlet α ∈ {0.1, 0.5, 1},
+and their 5 % / 1 % low-data variants) gives a leak rate of exactly 0 and no group spanning two
+nodes. Because the units of assignment are whole sequences, the quotas of each design are filled
+with a largest-first greedy rule; the achieved per-node counts are reported in a new table
+(Table VIII in the revision) rather than the nominal ones.
 
 *Manuscript.* A new methodology subsection III-D, **"Sequence-Level Data Splitting and Leakage
 Audit"**, explains why a random image-level split of a frame-extracted dataset measures partly
@@ -159,13 +179,13 @@ report per node and pooled.
 `src/data/data_splitter.py --group_file` performs the group-safe partitioning (with the
 no-flags path pinned bit-identical to the original splitter by a regression test).
 
-*Results.* Section IV-B contains two tables: Table VII (leakage audit of the image-level vs.
-group-level protocol: number of groups, largest group, exact duplicates, cross-label groups,
-leak rate L, groups spanning several nodes) and Table VIII (final accuracy under both
-protocols). **PENDING EXPERIMENT** — both tables are placeholders until
-`analyze_flame_leakage.py` has been run on the real FLAME tree and the `rev_*` runs have been
-executed. All v1 results are now labelled "image-level split" so that the reader can see which
-protocol produced which number.
+*Results.* Section IV-B contains three tables: Table VII (leakage audit: dataset statistics,
+threshold sweep, and leak rate L / groups spanning several nodes for both protocols — **filled
+with the measured values**), Table VIII (achieved per-node counts of every group-level
+partition — **filled**), and the protocol-effect table (final accuracy under both protocols).
+**PENDING EXPERIMENT** — only the group-level accuracy column of the protocol-effect table is a
+placeholder until the `rev_*` runs have been executed. All v1 results are labelled "image-level
+split" so that the reader can see which protocol produced which number.
 
 Because the partition changes, the previously collected seeds cannot be reused; all five seeds
 of every configuration will be re-run under the group-level split.
@@ -444,7 +464,6 @@ The following runs are scripted and resumable
 
 | Block | Reviewer comment | Manuscript location |
 |---|---|---|
-| Leakage audit on the real FLAME tree + re-split | R3.2 | Table VII |
 | Seed extension (5 seeds, group-level split) | R3.8, R5.2, R3.5 | Tables V, VIII, IX, X, XVI |
 | Dirichlet sweep (α = 0.1, 0.5, 1.0) | R3.4, R5.4 | Table XI, Fig. (Dirichlet) |
 | Low-data (ρ = 0.05, 0.01) | R3.4 | Table XII |

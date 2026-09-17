@@ -73,6 +73,44 @@ credentials) so that the P0 leakage/re-split chain can run (see the 2026-09-17 s
   original (same `random` call order and count arithmetic) — pinned by
   `tests/test_splitter.py::test_default_path_identical_to_original`, which imports the
   pre-revision module from `git show main:` and compares full assignments.
+* **Group mode with oversized units (2026-09-17, after the first real FLAME run).** The real
+  group file makes whole video sequences single units: 47,863 of 47,992 images fall into
+  265 groups, the largest unit holds 4,341 images of one class.  The first re-split on the
+  real data therefore left node_b of the IID split with **zero** validation images, gave a
+  Dirichlet(0.1) node 12 images, and turned the "5 %" low-data subsample into 69 % on one
+  node (one unit taken = one whole sequence).  Three changes, all gated on
+  `is_grouped()` (at least one unit of size > 1), so the default path stays bit-identical:
+  1. **largest-first greedy assignment** (`assign_units_greedy`, LPT rule = the authors'
+     own "largest remaining deficit" rule with a size-descending order) fills the *same*
+     image quotas the image-level arithmetic produces — equal thirds for IID
+     (`_equal_quotas`), the original 80/–/20 label-skew numbers (`label_skew_quotas`,
+     ~88.5 % fire on node_b), `p × N` for Dirichlet, 70/15/15 per node and class — with whole
+     units.  Every bucket deviates from its quota by at most the largest unit it received;
+     the achieved counts are in `split_stats.json` and must be quoted in the paper.
+  2. **image-level subsampling inside the node's own units** for `--subsample_frac` in
+     group mode: exact fraction, survivors keep their `group_id`, dropped images go
+     nowhere, so no group ever spans two nodes or two of train/val/test.  The low-data
+     regime therefore reduces *frames per client*, not sequences (say so in the paper).
+  3. **`--verify` writes the fresh `split_stats.json` before checking**: the verifier
+     compares manifests against the stats file on disk, so with a stale file from the
+     previous partition (the normal `--clean` re-split case) it reported a spurious
+     `VERIFY FAIL` on every count.  `_meta` now also records `grouped`, `assignment`
+     (`greedy_largest_first` / `sequential_cut`) and `subsample_level`.
+  4. **Cross-label groups are one bundle.**  The second real run passed `--verify` but the
+     independent audit still found up to 72 % of a node's test images leaking: 22 groups
+     (20,006 images, the largest 4,341 Fire + 583 No_Fire) contain frames of both labels — a
+     FLAME sequence is a video in which the fire appears and disappears — and the splitter
+     treated the Fire part and the No_Fire part as independent units.  `bundle_units()` pairs
+     the two per-class units of a group and `assign_bundles_greedy()` places the bundle as a
+     whole (composition-weighted deficit over the per-class quotas; identical to the unit
+     rule for pure groups); nodes, train/val/test and Dirichlet all use it in group mode.
+     Both verifiers (`scripts/verify_splits.py::check_manifest` and the splitter's fallback)
+     now also check group integrity **ignoring the label**, so this class of leak can no
+     longer pass `--verify`.
+  Tests: `tests/test_splitter_grouped.py` (FLAME-shaped synthetic groups: no empty bucket,
+  quota arithmetic, exact subsample, stale-stats verify) and `tests/test_splitter_bundles.py`
+  (cross-label bundles stay on one node and in one bucket; label-split group rejected by both
+  verifiers), plus the tightened subsample assertion in `tests/test_splitter.py`.
 * Unit abstraction: a *unit* is a list of paths that must stay together (size 1 without a
   group file; units are built per class, cross-label groups are counted).
 * `--group_file PATH` (JSON/CSV): whole groups assigned to one node and one of
@@ -252,5 +290,21 @@ Everything below was done on the desktop without the Jetson testbed; 227 CPU tes
   reproduces it; `docs/DESKTOP_GPU_BASELINES.md` records versions, verification and the exact run
   sequence (`PYTHONUTF8=1` is required on Windows because the training scripts print Unicode arrows).
   `train_centralized.py` / `train_local.py` now record `"device"` in their results JSON.
-* Not done (needs the author): downloading FLAME from Kaggle and running the P0 chain; funding /
-  AI-disclosure wording; testbed photo. Everything else that remains is a Jetson run.
+* **P0 executed on the real FLAME data (same day).**  The author downloaded the Kaggle archive
+  (47,992 JPEGs, Training/Test layout flattened to `Fire/` + `No_Fire/`); the v1 image-level
+  split was regenerated with seed 42 (per-node counts identical to the paper) and audited, then
+  the group-safe re-split was produced with `--link_mode hardlink --dirichlet_min_size 200`.
+  Measured: 265 non-trivial groups cover 99.73 % of the images (largest 4,924); under the v1
+  split 99.6 % of val/test images have a near-duplicate in some node's train split and
+  235 / 219 groups span nodes; under the group-level protocol all 15 partitions audit at
+  L = 0 with no group spanning two nodes.  `paper/main.tex` Table `tab:leakage` (dataset
+  statistics, threshold sweep, both protocols) and the new Table `tab:group_counts` (achieved
+  per-node counts) are filled with these numbers; Sections III-D/E/F describe the
+  label-agnostic groups, the largest-first assignment, `n_min = 200` and the frame-level
+  low-data subsample; the response letter R3.2 reports the audit.  Outputs are committed under
+  `analysis/leakage/` (`P0_SUMMARY.md`, `leakage_report.json`, `groups.{json,csv}`, the
+  `v1_audit/` and `post_split_audit/` reports); hash caches are git-ignored.
+* Not done (needs the author): funding / AI-disclosure wording; testbed photo; copying
+  `data/processed` to the Jetsons (or re-running the splitter there and comparing the manifest
+  MD5s in `P0_SUMMARY.md`).  Everything else that remains is a Jetson run, and the desktop GPU
+  baseline block can start now.

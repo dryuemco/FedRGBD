@@ -228,7 +228,10 @@ Sequence identifiers are not distributed with FLAME, so we recover groups of rel
 d_H\bigl(h(x_i), h(x_j)\bigr) \le \tau ,
 \label{eq:hamming}
 \end{equation}
-with $\tau = 8$ bits by default. Candidate pairs are retrieved by multi-index hashing (the pigeonhole principle over $\tau+1$ hash chunks) rather than by an $O(N^2)$ scan, and \emph{groups} are the connected components of the resulting near-duplicate graph. A group is the atomic unit of assignment: every image in a group is assigned to the same node \emph{and} the same split. The threshold $\tau$ is validated by inspecting the group-size histogram and the number of \emph{cross-label} groups (groups containing both fire and no-fire images); a large number of cross-label groups indicates that $\tau$ is too permissive.
+with $\tau = 8$ bits by default. Candidate pairs are retrieved by multi-index hashing (the pigeonhole principle over $\tau+1$ hash chunks) rather than by an $O(N^2)$ scan, and \emph{groups} are the connected components of the resulting near-duplicate graph. A group is the atomic unit of assignment: every image in a group is assigned to the same node \emph{and} the same split. The threshold $\tau$ was chosen from a sensitivity sweep over $\tau \in \{4, 6, 8, 10, 12\}$ (Table~\ref{tab:leakage}): the fraction of images with at least one near-duplicate is already 97.6\% at $\tau=4$ and saturates at $\tau=8$ (99.7\%), whereas at $\tau=10$ the largest connected component absorbs 34{,}337 images (72\% of the dataset) and at $\tau=12$ the whole dataset collapses into a handful of groups, so $\tau=8$ is the largest threshold at which the groups still separate sequences. Groups are \emph{label-agnostic}: 22 groups contain both fire and no-fire frames (20{,}006 images), because FLAME sequences are videos in which the fire appears and disappears while the camera and the scene stay fixed. Such a group is still one sequence and is kept whole; splitting it by label would put fire frames of a video into one node's training split and the visually identical no-fire frames of the same video into another node's test split, which is exactly the leakage the protocol is meant to remove. A filename heuristic confirms that the groups recover sequences: 99.06\% of all pairs of consecutive frame numbers fall into the same near-duplicate group.
+
+\subsubsection{Group-level assignment}
+Because a group is a whole sequence, the units of assignment are large: 265 non-trivial groups cover 47{,}863 of the 47{,}992 images and the largest holds 4{,}924 images (10.3\% of the dataset). Cutting a shuffled list of such units at a cumulative image count would leave some node without validation images, so every partition of Sections~\ref{sec:noniid} and~\ref{sec:lowdata} is produced by the same rule: the image quotas that the corresponding image-level design prescribes for every node and class (equal thirds, the 80/88.5/20\% label skew, $p_{c,k}\,N_c$ for the Dirichlet skew, and 70/15/15 for train/validation/test within a node) are filled with whole groups in order of decreasing size, each group going to the bucket with the largest remaining deficit (the longest-processing-time rule of scheduling). The design is therefore unchanged; only the rounding to whole sequences differs, and every bucket deviates from its target by at most one group. The achieved per-node counts are reported in Table~\ref{tab:group_counts} and are the numbers used in all revised experiments; a post-hoc audit of every written partition confirms $L=0$ and no group spanning two nodes.
 
 \subsubsection{Leakage metric}
 For a given processed partition, let $\mathcal{E}$ be the union of the validation and test images of all nodes and let $\mathcal{T}$ be the union of all training images. The leakage rate is
@@ -241,7 +244,7 @@ We report $L$ per node and pooled over the federation, together with the number 
 \subsection{Non-IID Partitions}
 \label{sec:noniid}
 
-Three partitioning regimes are used, all applied at group level under the revised protocol.
+Three partitioning regimes are used, all applied at group level under the revised protocol with the largest-first assignment of Section~\ref{sec:leakage}; the achieved counts are given in Table~\ref{tab:group_counts}.
 
 \textbf{IID.} Groups are distributed across nodes so that each node receives approximately the same number of images and the same class ratio ($\sim$62.8\% fire per node).
 
@@ -252,17 +255,17 @@ Three partitioning regimes are used, all applied at group level under the revise
 \bigl(p_{c,1},\dots,p_{c,K}\bigr) \sim \mathrm{Dir}_K(\alpha), \qquad \sum_{k=1}^{K} p_{c,k} = 1 ,
 \label{eq:dirichlet}
 \end{equation}
-with $\alpha \in \{0.1, 0.5, 1.0\}$; small $\alpha$ concentrates each class on few nodes, while $\alpha \to \infty$ recovers the IID case. Groups are assigned to nodes by cumulative image count according to $p_{c,k}$, and the draw is repeated until every node holds at least $n_{\min}=10$ images (a node holding very few images is a legitimate and intended difficulty at $\alpha=0.1$; only degenerate empty clients are excluded). The seed of the draw is fixed per experiment so that all strategies see identical partitions.
+with $\alpha \in \{0.1, 0.5, 1.0\}$; small $\alpha$ concentrates each class on few nodes, while $\alpha \to \infty$ recovers the IID case. Whole groups are assigned to nodes so that node $k$ receives approximately $p_{c,k}\,N_c$ images of class $c$, and the draw is repeated (advancing the same seeded generator) until every node holds at least $n_{\min}=200$ images. A very small client is a legitimate and intended difficulty at $\alpha=0.1$, but with a 70/15/15 split a node below $n_{\min}$ would have fewer than about 30 validation and 30 test images and its per-client metrics could not be reported; with $n_{\min}=200$ the smallest client of the study holds 911 images (Table~\ref{tab:group_counts}). The seed of the draw is fixed per experiment so that all strategies see identical partitions.
 
 \subsection{Low-Data Regime}
 \label{sec:lowdata}
 
-With the full FLAME partitions the task is close to saturation for every method, which compresses all differences into the last fraction of a percentage point. To obtain a condition in which collaboration can actually pay off, each node's \emph{training} split is subsampled, stratified per class and at group level, to a fraction
+With the full FLAME partitions the task is close to saturation for every method, which compresses all differences into the last fraction of a percentage point. To obtain a condition in which collaboration can actually pay off, each node's \emph{training} split is subsampled, stratified per class, to a fraction
 \begin{equation}
 \rho \in \{1.00,\; 0.05,\; 0.01\}
 \label{eq:subsample}
 \end{equation}
-of its original size, leaving the validation and test splits untouched so that all regimes are evaluated on the same data. At $\rho = 0.01$ a node holds on the order of $10^2$ training images, i.e.\ a regime in which a locally trained model is expected to be clearly inferior to a federated one. The low-data regime is crossed with the IID and manual-skew partitions.
+of its original size, leaving the validation and test splits untouched so that all regimes are evaluated on the same data. Because a node holds only a few dozen sequences, subsampling whole groups cannot realise a 5\% or 1\% training set (a single sequence can be 30\% of a node); the subsample is therefore drawn uniformly over the \emph{frames} of the node's own training groups. Dropped frames are simply removed, so no group crosses a node or split boundary and the leakage guarantee is unaffected. The regime thus reduces the number of frames per client rather than the number of scenes; given the near-duplicate structure of the sequences this is a conservative low-data condition, and we say so when interpreting the results. At $\rho = 0.01$ a node holds on the order of $10^2$ training images, i.e.\ a regime in which a locally trained model is expected to be clearly inferior to a federated one. The low-data regime is crossed with the IID and manual-skew partitions.
 
 \subsection{Model Architecture}
 
@@ -549,26 +552,79 @@ Fig.~\ref{fig:2v3} compares the 2-node and 3-node configurations of the v1 proto
 \subsection{Leakage Audit and the Sequence-Level Split}
 \label{sec:res_leakage}
 
-Table~\ref{tab:leakage} reports the near-duplicate audit of the v1 image-level partition and confirms that the group-level partition removes the leakage by construction.
+Table~\ref{tab:leakage} reports the near-duplicate audit of the FLAME frames and of the two partitioning protocols. The result settles the reviewers' concern in the strongest possible way: under the v1 image-level split, 99.6\% of all validation and test images have a near-duplicate in the training split of some node, and 235 (IID) and 219 (label skew) of the 265 non-trivial groups were spread over several nodes. The near-perfect v1 accuracies of Section~\ref{sec:res_v1} therefore measure, to a large extent, recognition of sequences seen during training. Under the group-level protocol the independent audit of all 15 written partitions (IID, label skew, three Dirichlet skews, and their two low-data variants each) finds $L=0$ and no group spanning two nodes. Table~\ref{tab:group_counts} lists the achieved per-node counts: the equal and label-skew designs are met to within a few dozen images, the Dirichlet skews are as extreme as intended (a node with 9\% fire next to a node with 95\%; one client with 911 images next to one with 41{,}786), and every client keeps at least 137 validation and 137 test images.
 
 \begin{table}[t]
 \centering
-\caption{Near-Duplicate Leakage Audit of the Two Partitioning Protocols ($\tau=8$ bits)}
+\caption{Near-Duplicate Audit of FLAME and of the Two Partitioning Protocols (dHash, $\tau=8$ bits, 47{,}992 images)}
 \label{tab:leakage}
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}lcc@{}}
 \toprule
-\textbf{Quantity} & \textbf{Image-level (v1)} & \textbf{Group-level} \\
+\multicolumn{3}{@{}l}{\textit{(a) Dataset}} \\
 \midrule
-Near-duplicate groups & \PH{} & \PH{} \\
-Largest group (images) & \PH{} & \PH{} \\
-Exact duplicates & \PH{} & \PH{} \\
-Cross-label groups & \PH{} & \PH{} \\
-Leak rate $L$, Eq.~\eqref{eq:leak} (\%) & \PH{} & 0.00 \\
-Groups spanning $>1$ node & \PH{} & 0 \\
+Near-duplicate groups (non-trivial / all) & \multicolumn{2}{c}{265 / 394} \\
+Images in non-trivial groups & \multicolumn{2}{c}{47{,}863 (99.73\%)} \\
+Largest group (images) & \multicolumn{2}{c}{4{,}924} \\
+Images sharing an identical hash & \multicolumn{2}{c}{31{,}979} \\
+Byte-identical files & \multicolumn{2}{c}{39} \\
+Cross-label groups (images) & \multicolumn{2}{c}{22 (20{,}006)} \\
+Consecutive frame pairs in one group & \multicolumn{2}{c}{99.06\%} \\
+\midrule
+\multicolumn{3}{@{}l}{\textit{(b) Threshold sweep: groups / largest / images with a near-duplicate}} \\
+\midrule
+$\tau=4$ & \multicolumn{2}{c}{2{,}051 / 4{,}252 / 97.6\%} \\
+$\tau=6$ & \multicolumn{2}{c}{927 / 4{,}255 / 99.1\%} \\
+$\tau=8$ (used) & \multicolumn{2}{c}{394 / 4{,}924 / 99.7\%} \\
+$\tau=10$ & \multicolumn{2}{c}{140 / 34{,}337 / 99.9\%} \\
+$\tau=12$ & \multicolumn{2}{c}{41 / 46{,}294 / 100.0\%} \\
+\midrule
+\multicolumn{3}{@{}l}{\textit{(c) Partitioning protocol}} \\
+ & \textbf{Image-level (v1)} & \textbf{Group-level} \\
+\midrule
+Leak rate $L$, Eq.~\eqref{eq:leak}, val / test (\%), IID & 99.64 / 99.65 & 0.00 / 0.00 \\
+Leak rate $L$, val / test (\%), label skew & 99.58 / 99.65 & 0.00 / 0.00 \\
+Leak rate $L$ (\%), Dirichlet and low-data partitions & -- & 0.00 \\
+Groups spanning $>1$ node, IID / label skew & 235 / 219 & 0 / 0 \\
+Worst per-node test leak rate (\%) & 99.88 & 0.00 \\
 \bottomrule
 \end{tabular}
 \vspace{2pt}
-\footnotesize{\todo{Fill from \texttt{analysis/leakage/leakage\_report.json} after running \texttt{scripts/analyze\_flame\_leakage.py} on the real FLAME tree; also report the group-size histogram and justify $\tau$ from the cross-label group count.}}
+\footnotesize{Parts (a) and (b) are properties of the dataset and the hash; part (c) audits the written partitions (\texttt{analysis/leakage/}). The v1 column is the image-level split of the original submission regenerated with its published seed; the group-level column covers all 15 partitions used in the revision. Groups are label-agnostic (Section~\ref{sec:leakage}).}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Achieved Per-Node Counts of the Group-Level Partitions (3 Nodes, Seed 42): Train / Val / Test Images and Fire Share}
+\label{tab:group_counts}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+\textbf{Partition} & \textbf{Node} & \textbf{Train} & \textbf{Val} & \textbf{Test} & \textbf{Fire (\%)} \\
+\midrule
+\multirow{3}{*}{IID} & A & 11{,}139 & 2{,}340 & 2{,}519 & 62.8 \\
+ & B & 11{,}346 & 2{,}326 & 2{,}326 & 62.8 \\
+ & C & 11{,}196 & 2{,}400 & 2{,}400 & 62.8 \\
+\midrule
+\multirow{3}{*}{Label skew} & A & 11{,}197 & 2{,}400 & 2{,}400 & 80.0 \\
+ & B & 11{,}201 & 2{,}399 & 2{,}398 & 88.5 \\
+ & C & 11{,}197 & 2{,}400 & 2{,}400 & 20.0 \\
+\midrule
+\multirow{3}{*}{Dirichlet $\alpha=0.1$} & A & 11{,}971 & 2{,}586 & 2{,}647 & 9.0 \\
+ & B & 14{,}199 & 3{,}178 & 2{,}959 & 95.2 \\
+ & C & 7{,}462 & 1{,}392 & 1{,}598 & 88.4 \\
+\midrule
+\multirow{3}{*}{Dirichlet $\alpha=0.5$} & A & 3{,}706 & 794 & 795 & 97.0 \\
+ & B & 29{,}249 & 6{,}268 & 6{,}269 & 57.7 \\
+ & C & 637 & 137 & 137 & 97.8 \\
+\midrule
+\multirow{3}{*}{Dirichlet $\alpha=1.0$} & A & 11{,}168 & 2{,}393 & 2{,}394 & 18.5 \\
+ & B & 14{,}939 & 3{,}201 & 3{,}202 & 88.7 \\
+ & C & 7{,}486 & 1{,}604 & 1{,}605 & 77.4 \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}
+\footnotesize{Low-data variants keep the validation and test columns and reduce the training column to $\rho$ of its size at frame level: $557$--$568$ images per node at $\rho=0.05$ and $111$--$113$ at $\rho=0.01$ for the IID and label-skew partitions. Targets: 11{,}198 / 2{,}400 / 2{,}400 per node for IID and label skew; the deviations are the cost of assigning whole sequences. Full per-class tables: \texttt{data/processed/split\_stats.json}.}
 \end{table}
 
 \begin{table}[t]

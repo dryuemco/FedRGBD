@@ -1,0 +1,264 @@
+{
+  "settings": {
+    "method": "dhash",
+    "hash_size": 8,
+    "threshold": 8,
+    "data_dir": "C:\\Users\\CORSAIR\\projects\\FedRGBD\\data\\raw\\flame_dataset"
+  },
+  "dataset": {
+    "n_images": 47992,
+    "n_groups": 394,
+    "n_nontrivial_groups": 265,
+    "images_in_nontrivial_groups": 47863,
+    "fraction_images_with_near_duplicate": 0.9973,
+    "largest_group": 4924,
+    "mean_group_size": 121.807,
+    "exact_duplicate_images": 31979,
+    "cross_label_groups": 22,
+    "group_size_histogram": {
+      "1": 129,
+      "2": 70,
+      "3": 31,
+      "4": 25,
+      "5": 12,
+      "6": 10,
+      "7": 3,
+      "8": 7,
+      "9": 3,
+      "10": 2,
+      "11": 1,
+      "13": 2,
+      "14": 1,
+      "15": 1,
+      "16": 2,
+      "18": 2,
+      "19": 2,
+      "20": 2,
+      "21": 2,
+      "23": 3,
+      "25": 3,
+      "26": 2,
+      "27": 1,
+      "28": 1,
+      "29": 1,
+      "31": 4,
+      "32": 2,
+      "34": 1,
+      "36": 1,
+      "40": 2,
+      "41": 1,
+      "45": 2,
+      "47": 3,
+      "48": 1,
+      "54": 2,
+      "60": 1,
+      "62": 1,
+      "63": 1,
+      "64": 2,
+      "65": 1,
+      "69": 1,
+      "82": 1,
+      "89": 1,
+      "94": 1,
+      "95": 1,
+      "105": 1,
+      "110": 1,
+      "114": 1,
+      "121": 1,
+      "135": 1,
+      "147": 1,
+      "149": 1,
+      "154": 1,
+      "155": 1,
+      "198": 1,
+      "219": 1,
+      "227": 1,
+      "279": 1,
+      "293": 1,
+      "314": 1,
+      "354": 1,
+      "397": 1,
+      "400": 1,
+      "402": 1,
+      "414": 1,
+      "442": 1,
+      "446": 1,
+      "461": 1,
+      "466": 1,
+      "480": 1,
+      "503": 1,
+      "532": 1,
+      "545": 1,
+      "576": 1,
+      "603": 1,
+      "800": 1,
+      "886": 1,
+      "1020": 1,
+      "1038": 1,
+      "1045": 1,
+      "1060": 1,
+      "1150": 1,
+      "1191": 1,
+      "1356": 1,
+      "2556": 1,
+      "3141": 1,
+      "3314": 1,
+      "3396": 1,
+      "4262": 1,
+      "4299": 1,
+      "4924": 1
+    },
+    "per_class": {
+      "Fire": {
+        "n_images": 30155,
+        "n_groups": 199,
+        "images_in_nontrivial_groups": 30098
+      },
+      "No_Fire": {
+        "n_images": 17837,
+        "n_groups": 217,
+        "images_in_nontrivial_groups": 17764
+      }
+    },
+    "exact_duplicate_files_md5": 39,
+    "n_unique_md5": 47953,
+    "clustering_time_s": 0.69
+  },
+  "group_file": "C:\\Users\\CORSAIR\\projects\\FedRGBD\\analysis\\leakage\\v1_audit\\groups.json",
+  "group_csv": "C:\\Users\\CORSAIR\\projects\\FedRGBD\\analysis\\leakage\\v1_audit\\groups.csv",
+  "example_groups": "C:\\Users\\CORSAIR\\projects\\FedRGBD\\analysis\\leakage\\v1_audit\\example_groups.txt",
+  "processed_splits": {
+    "iid": {
+      "nodes": {
+        "node_a": {
+          "train": {
+            "n": 11198
+          },
+          "val": {
+            "n": 2400,
+            "with_train_duplicate_same_node": 2382,
+            "with_train_duplicate_any_node": 2389,
+            "leak_rate_same_node": 0.9925,
+            "leak_rate_any_node": 0.9954
+          },
+          "test": {
+            "n": 2400,
+            "with_train_duplicate_same_node": 2379,
+            "with_train_duplicate_any_node": 2392,
+            "leak_rate_same_node": 0.9912,
+            "leak_rate_any_node": 0.9967
+          }
+        },
+        "node_b": {
+          "train": {
+            "n": 11198
+          },
+          "val": {
+            "n": 2400,
+            "with_train_duplicate_same_node": 2383,
+            "with_train_duplicate_any_node": 2394,
+            "leak_rate_same_node": 0.9929,
+            "leak_rate_any_node": 0.9975
+          },
+          "test": {
+            "n": 2400,
+            "with_train_duplicate_same_node": 2377,
+            "with_train_duplicate_any_node": 2389,
+            "leak_rate_same_node": 0.9904,
+            "leak_rate_any_node": 0.9954
+          }
+        },
+        "node_c": {
+          "train": {
+            "n": 11196
+          },
+          "val": {
+            "n": 2400,
+            "with_train_duplicate_same_node": 2380,
+            "with_train_duplicate_any_node": 2391,
+            "leak_rate_same_node": 0.9917,
+            "leak_rate_any_node": 0.9962
+          },
+          "test": {
+            "n": 2400,
+            "with_train_duplicate_same_node": 2383,
+            "with_train_duplicate_any_node": 2394,
+            "leak_rate_same_node": 0.9929,
+            "leak_rate_any_node": 0.9975
+          }
+        }
+      },
+      "unresolved_files": 0,
+      "groups_spanning_multiple_nodes": 235,
+      "n_groups_in_split": 394,
+      "global_val_leak_rate_any_node": 0.9964,
+      "global_test_leak_rate_any_node": 0.9965
+    },
+    "non_iid_label": {
+      "nodes": {
+        "node_a": {
+          "train": {
+            "n": 11197
+          },
+          "val": {
+            "n": 2400,
+            "with_train_duplicate_same_node": 2387,
+            "with_train_duplicate_any_node": 2392,
+            "leak_rate_same_node": 0.9946,
+            "leak_rate_any_node": 0.9967
+          },
+          "test": {
+            "n": 2400,
+            "with_train_duplicate_same_node": 2383,
+            "with_train_duplicate_any_node": 2388,
+            "leak_rate_same_node": 0.9929,
+            "leak_rate_any_node": 0.995
+          }
+        },
+        "node_b": {
+          "train": {
+            "n": 11198
+          },
+          "val": {
+            "n": 2400,
+            "with_train_duplicate_same_node": 2385,
+            "with_train_duplicate_any_node": 2394,
+            "leak_rate_same_node": 0.9938,
+            "leak_rate_any_node": 0.9975
+          },
+          "test": {
+            "n": 2400,
+            "with_train_duplicate_same_node": 2387,
+            "with_train_duplicate_any_node": 2397,
+            "leak_rate_same_node": 0.9946,
+            "leak_rate_any_node": 0.9988
+          }
+        },
+        "node_c": {
+          "train": {
+            "n": 11197
+          },
+          "val": {
+            "n": 2400,
+            "with_train_duplicate_same_node": 2373,
+            "with_train_duplicate_any_node": 2384,
+            "leak_rate_same_node": 0.9888,
+            "leak_rate_any_node": 0.9933
+          },
+          "test": {
+            "n": 2400,
+            "with_train_duplicate_same_node": 2382,
+            "with_train_duplicate_any_node": 2390,
+            "leak_rate_same_node": 0.9925,
+            "leak_rate_any_node": 0.9958
+          }
+        }
+      },
+      "unresolved_files": 0,
+      "groups_spanning_multiple_nodes": 219,
+      "n_groups_in_split": 394,
+      "global_val_leak_rate_any_node": 0.9958,
+      "global_test_leak_rate_any_node": 0.9965
+    }
+  }
+}
