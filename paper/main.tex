@@ -67,7 +67,7 @@ Federated learning, edge computing, edge GPU cluster, RGB-D cameras, sensor hete
 
 Federated learning (FL) has emerged as a promising paradigm for privacy-preserving distributed model training, allowing multiple edge devices to collaboratively train a shared model without exchanging raw data~\cite{mcmahan2017fedavg}. Despite extensive research on FL algorithms and communication efficiency, the vast majority of studies operate in simulated environments where virtual clients are created by partitioning a single dataset on one GPU~\cite{li2020fedprox, kairouz2021advances, seo2025iidnoniid}. This simulation-based approach does not capture several properties of FL on physical edge hardware: genuine memory constraints, actual power budgets, true network latency, and the wall-clock cost of algorithmic choices that appear free in simulation.
 
-Three gaps motivated this study. First, per-round energy, latency and communication measurements for FL on modern edge AI hardware such as the NVIDIA Jetson Orin platform remain scarce, even though the training-time behaviour of these devices has been characterised for the centralised case~\cite{prashanthi2022jetson, banerjee2025fedjoule}. Second, non-IID behaviour in FL is almost always induced artificially by partitioning one dataset, and the partitioning protocol itself is rarely audited for leakage between training and evaluation splits~\cite{zhao2018noniid, domini2025profed, borazjani2026embeddings}. Third, physically different depth cameras observing comparable scenes constitute a natural source of feature shift whose magnitude has not been quantified on real devices.
+Three gaps motivated this study. First, per-round wall-clock and communication measurements for FL on modern edge AI hardware such as the NVIDIA Jetson Orin platform remain scarce, even though the training-time behaviour of these devices has been characterised for the centralised case~\cite{prashanthi2022jetson, banerjee2025fedjoule}. Second, non-IID behaviour in FL is almost always induced artificially by partitioning one dataset, and the partitioning protocol itself is rarely audited for leakage between training and evaluation splits~\cite{zhao2018noniid, domini2025profed, borazjani2026embeddings}. Third, physically different depth cameras observing comparable scenes constitute a natural source of feature shift whose magnitude has not been quantified on real devices.
 
 \subsection{Scope of this study}
 \label{sec:scope}
@@ -111,7 +111,7 @@ The remainder of this paper is organized as follows. Section~\ref{sec:related} r
 
 McMahan et al.\ introduced \fedavg{}, which performs multiple local stochastic gradient descent (SGD) steps before aggregating model updates~\cite{mcmahan2017fedavg}. Subsequent work has addressed communication efficiency~\cite{konevcny2016communication}, privacy guarantees~\cite{bonawitz2017practical}, and robustness to heterogeneous data~\cite{li2020fedprox}. However, most FL experiments are conducted in simulated environments where all clients run as separate processes on a single machine.
 
-Only a limited number of studies deploy FL on actual edge hardware. Edge-FLGuard~\cite{reis2025edgeflguard} evaluates a lightweight federated anomaly-detection pipeline on Raspberry Pi~4 and Jetson Nano platforms for 5G-enabled IoT, but does not profile per-round energy or use image sensors. Prashanthi et al.~\cite{prashanthi2022jetson} characterise deep-learning \emph{training} performance and power on several Jetson classes, providing the centralised counterpart of the measurements we report for the federated case. Banerjee et al.~\cite{banerjee2025fedjoule} schedule federated training under a global energy budget using real traces from four Jetson device types, confirming that on accelerated edge devices the relevant comparison axis is energy and wall-clock time rather than communication rounds alone. Zhang et al.~\cite{zhang2025lcfed} reduce the server-side cost of clustered FL for heterogeneous clients, which is complementary to the per-node measurements considered here.
+Only a limited number of studies deploy FL on actual edge hardware. Edge-FLGuard~\cite{reis2025edgeflguard} evaluates a lightweight federated anomaly-detection pipeline on Raspberry Pi~4 and Jetson Nano platforms for 5G-enabled IoT, but does not profile per-round energy or use image sensors. Prashanthi et al.~\cite{prashanthi2022jetson} characterise deep-learning \emph{training} performance and power on several Jetson classes, providing the centralised counterpart of the wall-clock measurements we report for the federated case. Banerjee et al.~\cite{banerjee2025fedjoule} schedule federated training under a global energy budget using real traces from four Jetson device types, confirming that on accelerated edge devices the relevant comparison axis is energy and wall-clock time rather than communication rounds alone. Zhang et al.~\cite{zhang2025lcfed} reduce the server-side cost of clustered FL for heterogeneous clients, which is complementary to the per-node measurements considered here.
 
 \subsection{Multimodal Sensor Fusion and RGB-D Data}
 
@@ -266,7 +266,7 @@ of its original size, leaving the validation and test splits untouched so that a
 
 \subsection{Model Architecture}
 
-We use MobileNetV3-Small~\cite{howard2019mobilenetv3} as the base model, with 1.52\,M parameters and a serialized weight size of 6.1\,MB. This architecture was selected for three reasons: (1)~it fits comfortably in the 8\,GB shared memory of the Jetson Orin Nano during FL training; (2)~its small model size ensures low communication overhead per FL round; and (3)~it is well-studied, making our results comparable to existing work. The model is initialized with ImageNet pre-trained weights. The first convolutional layer accepts a configurable number of input channels (1, 3, 4, or 5), which is used only by the modality ablation of Section~\ref{sec:modality}; all federated runs reported here use the 3-channel RGB configuration.
+We use MobileNetV3-Small~\cite{howard2019mobilenetv3} as the base model, with 1.52\,M parameters and a serialized weight size of 6.1\,MB. This architecture was selected for three reasons: (1)~it fits comfortably in the 8\,GB shared memory of the Jetson Orin Nano during FL training; (2)~its small model size ensures low communication overhead per FL round; and (3)~it is well-studied, making our results comparable to existing work. The model is initialized with ImageNet pre-trained weights. The first convolutional layer accepts a configurable number of input channels (1, 3, 4, or 5), which is retained for future multi-channel (depth/IR) experiments; all runs reported here use the 3-channel RGB configuration.
 
 \subsection{Federated Optimisation Objectives}
 \label{sec:objectives}
@@ -818,7 +818,7 @@ This asymmetry matters for the interpretation of the first-round advantage of \f
 \subsection{Statistical Analysis}
 \label{sec:res_stats}
 
-Table~\ref{tab:stats} lists the paired comparisons of the v1 protocol. With $n \le 3$ seeds these tests have very low power, and we report them for completeness rather than as confirmatory evidence: only three of the fifteen pairs per distribution reach $p<0.05$ uncorrected, and none survives a Bonferroni correction for the fifteen comparisons ($\alpha = 0.0033$). The Friedman omnibus test over the six methods is not significant in either distribution ($\chi^2 = 10.00$, $p = 0.075$ for IID and $\chi^2 = 8.29$, $p = 0.141$ for label skew), but it is computed on only $n = 2$ seeds that are complete across all six methods, so it is uninformative. Several paired effect sizes are numerically very large (for example $d = -7.30$ for \fedprox{}~0.01 versus local-only under IID, where the mean difference is only $-0.31$ percentage points); as argued in Section~\ref{sec:stats}, such values reflect a very small paired standard deviation at $n=3$ and must not be read as evidence of a practically important difference.
+Table~\ref{tab:stats} lists the paired comparisons of the v1 protocol. With $n \le 3$ seeds these tests have very low power, and we report them for completeness rather than as confirmatory evidence: only two of the fifteen pairs under IID and three under label skew reach $p<0.05$ uncorrected, and none survives a Bonferroni correction for the fifteen comparisons ($\alpha = 0.0033$). The Friedman omnibus test over the six methods is not significant in either distribution ($\chi^2 = 10.00$, $p = 0.075$ for IID and $\chi^2 = 8.29$, $p = 0.141$ for label skew), but it is computed on only $n = 2$ seeds that are complete across all six methods, so it is uninformative. Several paired effect sizes are numerically very large (for example $d = -7.30$ for \fedprox{}~0.01 versus local-only under IID, where the mean difference is only $-0.31$ percentage points); as argued in Section~\ref{sec:stats}, such values reflect a very small paired standard deviation at $n=3$ and must not be read as evidence of a practically important difference.
 
 \begin{table}[t]
 \centering
@@ -867,24 +867,6 @@ ZED 2i & \PHs & \PHs & \PHs \\
 \todo{The v1 manuscript reported near-perfect cross-camera accuracy under a random frame-level split of five shared scenes. That number is not reported here because it cannot be separated from scene overlap; replace this paragraph with the leave-one-scene-out result and an explicit comparison against the earlier protocol.}
 
 
-\subsection{Modality Ablation}
-\label{sec:modality}
-
-\todo{Complete after Experiment~2 (RGB-only, Depth-only, IR-only, RGB+D, RGB+D+IR: accuracy, convergence, and communication cost per modality). Note in the text that this ablation is centralised unless the federated variant is also executed.}
-
-
-\subsection{Resource Profiling}
-\label{sec:profiling}
-
-\todo{Complete after tegrastats profiling is integrated: per-round GPU and board power (W), energy (Wh) per round and per run, peak GPU memory (MB), model transfer size (KB) and transfer latency (ms), per strategy.}
-
-
-\subsection{Network Constraint Sensitivity}
-\label{sec:network}
-
-\todo{Complete after Experiment~5 with tc bandwidth throttling: baseline WiFi, 10~Mbps, 1~Mbps, and 1~Mbps with 5\% packet loss; impact on round time and convergence.}
-
-
 % ============================================================
 % V. DISCUSSION
 % ============================================================
@@ -919,6 +901,8 @@ We separate the findings by how far they can be carried.
 
 First, the federation has three clients with full participation; convergence dynamics at scale are outside the evidence of this study. Second, one dataset and one binary task are used, and the task is close to saturation under full data, which is why the low-data regime of Section~\ref{sec:lowdata} was added; even so, a single task cannot establish task-independence. Third, one backbone is evaluated; strategy rankings, and particularly the behaviour of \fedbn{}, depend on the normalisation structure of the architecture. Fourth, the main comparison uses a three-round budget, with a ten-round block only for \fedbn{}; nothing here describes asymptotic behaviour. Fifth, batch size is fixed at~8 by the device memory and is therefore not part of the sensitivity analysis, and the sweep varies one factor at a time, so interactions between $\mu$, $E$ and $\eta$ are not resolved. Sixth, the number of seeds is five, which yields wide confidence intervals; we consequently report intervals rather than significance verdicts and avoid equivalence claims. Seventh, the depth modality is not an input to the federated classifier, so sensor heterogeneity is characterised only in the separate centralised cross-sensor study. Eighth, per-round evaluation uses the validation split, as in v1; test-split numbers are reported only for final models.
 
+Three measurements that a complete characterisation of this testbed would include are outside the scope of the present study. We do not ablate the input modality: the classifier consumes RGB only, and the effect of adding the depth and infrared channels of the cameras is not evaluated. We do not report per-round energy or power, so the cost comparison of Section~\ref{sec:timecomm} is restricted to wall-clock time and transmitted bytes. Finally, all runs use the unconstrained network of the testbed, and the sensitivity of round time and convergence to limited bandwidth or packet loss is not measured. These three studies are left to future work.
+
 
 % ============================================================
 % VI. CONCLUSION
@@ -939,7 +923,7 @@ Three directions follow directly from the limitations above.
 
 \textbf{Scene-independent, multi-site data collection.} The strongest limitation of the present cross-sensor evidence is that the custom captures share a small set of scenes. We are collecting RGB-D recordings at several physically distinct sites, with each camera fixed to one site, so that the client partitions are defined by \emph{where} and \emph{with what} the data were recorded rather than by an artificial label split. Such a corpus would make sensor heterogeneity an intrinsic property of the federated experiment instead of a separately characterised effect, and would allow the leave-one-scene-out protocol of Section~\ref{sec:loso} to be extended to a leave-one-site-out federated evaluation.
 
-\textbf{Scale, budget and search.} Larger client counts with partial participation, longer communication budgets, additional backbones, and joint rather than one-factor-at-a-time hyperparameter search are required before any of the rankings reported here can be claimed to hold generally.
+\textbf{Scale, budget and search.} Larger client counts with partial participation, longer communication budgets, additional backbones, and joint rather than one-factor-at-a-time hyperparameter search are required before any of the rankings reported here can be claimed to hold generally. The same applies to the three measurements deferred in Section~\ref{sec:limitations}: a depth/IR modality ablation, per-round energy profiling and a constrained-network sensitivity study.
 
 
 % ============================================================
@@ -1000,49 +984,49 @@ J.~Ngiam, A.~Khosla, M.~Kim, J.~Nam, H.~Lee, and A.~Y.~Ng, ``Multimodal deep lea
 % ---------- References added in the revision ----------
 
 \bibitem{shamsoshoara2021flame}
-A.~Shamsoshoara, F.~Afghah, A.~Razi, L.~Zheng, P.~Z.~Ful\'{e}, and E.~Blasch, ``Aerial imagery pile burn detection using deep learning: The FLAME dataset,'' \emph{Comput. Netw.}, vol.~193, art.~108001, Jul. 2021, doi: 10.1016/j.comnet.2021.108001. % VERIFY
+A.~Shamsoshoara, F.~Afghah, A.~Razi, L.~Zheng, P.~Z.~Ful\'{e}, and E.~Blasch, ``Aerial imagery pile burn detection using deep learning: The FLAME dataset,'' \emph{Comput. Netw.}, vol.~193, art.~108001, Jul. 2021, doi: 10.1016/j.comnet.2021.108001.
 
 \bibitem{reis2025edgeflguard}
-M.~J.~C.~S.~Reis, ``Edge-FLGuard: A federated learning framework for real-time anomaly detection in 5G-enabled IoT ecosystems,'' \emph{Appl. Sci.}, vol.~15, no.~12, art.~6452, Jun. 2025, doi: 10.3390/app15126452. % VERIFY
+M.~J.~C.~S.~Reis, ``Edge-FLGuard: A federated learning framework for real-time anomaly detection in 5G-enabled IoT ecosystems,'' \emph{Appl. Sci.}, vol.~15, no.~12, art.~6452, Jun. 2025, doi: 10.3390/app15126452.
 
 \bibitem{banerjee2025fedjoule}
-R.~Banerjee, T.~Chandrashekar, A.~Eswar, and Y.~Simmhan, ``Federated learning within global energy budget over heterogeneous edge accelerators,'' in \emph{Proc. 31st Int. Eur. Conf. Parallel Distrib. Comput. (Euro-Par)}, 2025. [Online]. Available: \url{https://arxiv.org/abs/2506.10413} % VERIFY
+R.~Banerjee, T.~Chandrashekar, A.~Eswar, and Y.~Simmhan, ``Federated learning within global energy budget over heterogeneous edge accelerators,'' in \emph{Euro-Par 2025: Parallel Processing} (Lecture Notes in Computer Science, vol.~15900). Cham, Switzerland: Springer, 2025, pp. 264--278, doi: 10.1007/978-3-031-99854-6\_18.
 
 \bibitem{prashanthi2022jetson}
-Prashanthi~S.~K., S.~A.~Kesanapalli, and Y.~Simmhan, ``Characterizing the performance of accelerated Jetson edge devices for training deep learning models,'' \emph{Proc. ACM Meas. Anal. Comput. Syst.}, vol.~6, no.~3, pp. 1--26, Dec. 2022, doi: 10.1145/3570604. % VERIFY
+Prashanthi~S.~K., S.~A.~Kesanapalli, and Y.~Simmhan, ``Characterizing the performance of accelerated Jetson edge devices for training deep learning models,'' \emph{Proc. ACM Meas. Anal. Comput. Syst.}, vol.~6, no.~3, pp. 1--26, Dec. 2022, doi: 10.1145/3570604.
 
 \bibitem{zhang2025lcfed}
-Y.~Zhang, H.~Chen, Z.~Lin, Z.~Chen, and J.~Zhao, ``LCFed: An efficient clustered federated learning framework for heterogeneous data,'' \emph{arXiv preprint arXiv:2501.01850}, Jan. 2025. % VERIFY
+Y.~Zhang, H.~Chen, Z.~Lin, Z.~Chen, and J.~Zhao, ``LCFed: An efficient clustered federated learning framework for heterogeneous data,'' in \emph{Proc. IEEE Int. Conf. Acoust., Speech Signal Process. (ICASSP)}, Hyderabad, India, Apr. 2025, pp. 1--5, doi: 10.1109/ICASSP49660.2025.10889428.
 
 \bibitem{seo2025iidnoniid}
-J.~Seo, F.~O.~Catak, and C.~Rong, ``Understanding federated learning from IID to non-IID dataset: An experimental study,'' in \emph{Proc. 36th Norwegian ICT Conf. Res. Educ. (NIKT)}, 2024. [Online]. Available: \url{https://arxiv.org/abs/2502.00182} % VERIFY
+J.~Seo, F.~O.~Catak, and C.~Rong, ``Understanding federated learning from IID to non-IID dataset: An experimental study,'' in \emph{Proc. 36th Norwegian ICT Conf. Res. Educ. (NIKT)}, 2024. [Online]. Available: \url{https://arxiv.org/abs/2502.00182}
 
 \bibitem{domini2025profed}
-D.~Domini, G.~Aguzzi, and M.~Viroli, ``ProFed: A benchmark for proximity-based non-IID federated learning,'' \emph{arXiv preprint arXiv:2503.20618}, Mar. 2025. % VERIFY
+D.~Domini, G.~Aguzzi, and M.~Viroli, ``ProFed: A benchmark for proximity-based non-IID federated learning,'' \emph{arXiv preprint arXiv:2503.20618}, Mar. 2025.
 
 \bibitem{borazjani2026embeddings}
-K.~Borazjani, P.~Abdisarabshali, N.~Khosravan, and S.~Hosseinalipour, ``Redefining non-IID data in federated learning for computer vision tasks: Migrating from labels to embeddings for task-specific data distributions,'' \emph{IEEE Trans. Artif. Intell.}, 2026, accepted for publication. [Online]. Available: \url{https://arxiv.org/abs/2503.14553} % VERIFY
+K.~Borazjani, P.~Abdisarabshali, N.~Khosravan, and S.~Hosseinalipour, ``Redefining non-IID data in federated learning for computer vision tasks: Migrating from labels to embeddings for task-specific data distributions,'' \emph{IEEE Trans. Artif. Intell.}, vol.~7, no.~9, pp. 5045--5060, Sep. 2026, doi: 10.1109/TAI.2026.3677838.
 
 \bibitem{mreish2025mfedbn}
-K.~Mreish, E.~Novikova, M.~Chaplygin, I.~Kholod, and T.~Alnajar, ``MFedBN: Tackling data heterogeneity with gradient-based aggregation and advanced distribution skew modeling,'' \emph{Sensors}, vol.~25, no.~23, art.~7314, 2025, doi: 10.3390/s25237314. % VERIFY
+K.~Mreish, E.~Novikova, M.~Chaplygin, I.~Kholod, and T.~Alnajar, ``MFedBN: Tackling data heterogeneity with gradient-based aggregation and advanced distribution skew modeling,'' \emph{Sensors}, vol.~25, no.~23, art.~7314, 2025, doi: 10.3390/s25237314.
 
 \bibitem{barz2020duplicates}
-B.~Barz and J.~Denzler, ``Do we train on test data? Purging CIFAR of near-duplicates,'' \emph{J. Imaging}, vol.~6, no.~6, art.~41, Jun. 2020, doi: 10.3390/jimaging6060041. % VERIFY
+B.~Barz and J.~Denzler, ``Do we train on test data? Purging CIFAR of near-duplicates,'' \emph{J. Imaging}, vol.~6, no.~6, art.~41, Jun. 2020, doi: 10.3390/jimaging6060041.
 
 \bibitem{chicco2020mcc}
-D.~Chicco and G.~Jurman, ``The advantages of the Matthews correlation coefficient (MCC) over F1 score and accuracy in binary classification evaluation,'' \emph{BMC Genomics}, vol.~21, no.~1, art.~6, Jan. 2020, doi: 10.1186/s12864-019-6413-7. % VERIFY
+D.~Chicco and G.~Jurman, ``The advantages of the Matthews correlation coefficient (MCC) over F1 score and accuracy in binary classification evaluation,'' \emph{BMC Genomics}, vol.~21, no.~1, art.~6, Jan. 2020, doi: 10.1186/s12864-019-6413-7.
 
 \bibitem{tuba2021cnnhyper}
-E.~Tuba, N.~Ba\v{c}anin, I.~Strumberger, and M.~Tuba, ``Convolutional neural networks hyperparameters tuning,'' in \emph{Artificial Intelligence: Theory and Applications} (Studies in Computational Intelligence). Cham, Switzerland: Springer, 2021, pp. 65--84, doi: 10.1007/978-3-030-72711-6\_4. % VERIFY
+E.~Tuba, N.~Ba\v{c}anin, I.~Strumberger, and M.~Tuba, ``Convolutional neural networks hyperparameters tuning,'' in \emph{Artificial Intelligence: Theory and Applications} (Studies in Computational Intelligence). Cham, Switzerland: Springer, 2021, pp. 65--84, doi: 10.1007/978-3-030-72711-6\_4.
 
 \bibitem{ibrahim2025metaheuristiccnn}
-M.~Q.~Ibrahim, N.~K.~Hussein, D.~Guinovart, and M.~Qaraad, ``Optimizing convolutional neural networks: A comprehensive review of hyperparameter tuning through metaheuristic algorithms,'' \emph{Arch. Comput. Methods Eng.}, vol.~32, no.~8, pp. 5123--5160, 2025, doi: 10.1007/s11831-025-10292-x. % VERIFY
+M.~Q.~Ibrahim, N.~K.~Hussein, D.~Guinovart, and M.~Qaraad, ``Optimizing convolutional neural networks: A comprehensive review of hyperparameter tuning through metaheuristic algorithms,'' \emph{Arch. Comput. Methods Eng.}, vol.~32, no.~8, pp. 5123--5160, 2025, doi: 10.1007/s11831-025-10292-x.
 
 \bibitem{dede2025wavelet}
-A.~Dede, H.~Nunoo-Mensah, E.~K.~Akowuah, K.~O.~Boateng, P.~E.~Adjei, F.~A.~Acheampong, I.~Acquah, and J.~J.~Kponyo, ``Wavelet-based feature extraction for efficient high-resolution image classification,'' \emph{Eng. Rep.}, vol.~7, no.~2, art.~e70027, Feb. 2025, doi: 10.1002/eng2.70027. % VERIFY
+A.~Dede, H.~Nunoo-Mensah, E.~K.~Akowuah, K.~O.~Boateng, P.~E.~Adjei, F.~A.~Acheampong, I.~Acquah, and J.~J.~Kponyo, ``Wavelet-based feature extraction for efficient high-resolution image classification,'' \emph{Eng. Rep.}, vol.~7, no.~2, art.~e70027, Feb. 2025, doi: 10.1002/eng2.70027.
 
 \bibitem{yang2025wavelitenet}
-J.~Yang, G.~Xu, M.~Yang, and Z.~Lin, ``Lightweight wavelet-CNN tea leaf disease detection,'' \emph{PLOS ONE}, vol.~20, no.~5, art.~e0323322, 2025, doi: 10.1371/journal.pone.0323322. % VERIFY
+J.~Yang, G.~Xu, M.~Yang, and Z.~Lin, ``Lightweight wavelet-CNN tea leaf disease detection,'' \emph{PLOS ONE}, vol.~20, no.~5, art.~e0323322, 2025, doi: 10.1371/journal.pone.0323322.
 
 \end{thebibliography}
 

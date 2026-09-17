@@ -1,0 +1,139 @@
+# Desktop GPU environment for the revision baselines
+
+The NCAA revision plan moves the 50 centralized / local-only **accuracy**
+baselines (`configs/experiment_matrix.yaml` -> `revision.baselines_extension`)
+off the Jetson testbed onto the desktop GPU. FL rounds, timing, energy and
+payload measurements stay on the Jetson Orin Nano nodes. This document records
+the environment that was built for that purpose, how it deviates from
+`requirements.txt`, the verification that was run, and the exact command
+sequence for the baseline block.
+
+## Machine
+
+| Item | Value |
+|------|-------|
+| Host | `DESKTOP-8HIGTC5` (Windows 11 Pro 10.0.26200) |
+| GPU | NVIDIA GeForce RTX 5090, 32607 MiB, Blackwell (compute capability 12.0 / `sm_120`) |
+| Driver | 595.79 |
+| Python | 3.12.10 (`C:\Users\CORSAIR\AppData\Local\Programs\Python\Python312\python.exe`) |
+| Venv | `C:\Users\CORSAIR\venvs\fedrgbd-gpu` (about 5 GB, outside the repo) |
+| Reproduce with | `.\setup_desktop_windows.ps1` (repo root; refuses to overwrite an existing venv without `-Force`) |
+
+The pre-existing CPU venv `C:\Users\CORSAIR\venvs\fedrgbd` (torch 2.5.1+cpu) is
+untouched and remains the environment for analysis scripts and tests that do
+not need a GPU.
+
+## Installed versions and deviations from `requirements.txt`
+
+| Package | `requirements.txt` (Jetson) | `fedrgbd-gpu` | Why it differs |
+|---------|-----------------------------|---------------|----------------|
+| torch | 2.5.x (NVIDIA JetPack wheel, installed by `setup_jetson.sh`) | **2.11.0+cu128** | Blackwell (`sm_120`) is only supported by torch >= 2.7 built against CUDA 12.8; the Jetson 2.5 wheel is aarch64 and its CUDA 12.6 build has no `sm_120` kernels. |
+| torchvision | 0.20.x | **0.26.0+cu128** | Must match torch 2.11. |
+| CUDA runtime (in wheel) | 12.6 (JetPack 6.2) | **12.8**, cuDNN 9.19.0 | Required for `sm_120`. |
+| numpy | `==1.26.4` | **2.5.2** | The cu128 torch/torchvision wheels require numpy >= 2 (pip resolves `numpy 2.5.2`); the 1.26 pin exists only because numpy 2 breaks the Jetson torch build. |
+| flwr | `flwr[simulation]==1.13.1` | **1.13.1** (no `ray`) | Same pin. The `simulation` extra (`ray==2.10.0`) is gated to Python < 3.12 in flwr 1.13.1 and is therefore skipped on Python 3.12 exactly as in the existing CPU venv; it is not needed for the baselines. |
+| everything else | unpinned lower bounds | scikit-learn 1.9.1, scipy 1.18.1, pandas 3.0.5, pingouin 0.6.1, matplotlib 3.11.2, seaborn 0.13.2, opencv-python-headless 5.0.0.93, Pillow 12.3.0, pyyaml 6.0.3, tqdm 4.70.1, pytest 9.1.1 | Satisfy `requirements.txt` as written. `pip check` reports no broken requirements. |
+
+Only torch, torchvision and numpy deviate from the pinned Jetson stack, and
+only because an RTX 5090 cannot be driven by the pinned versions. The model,
+data pipeline, optimiser and metric code are unchanged, so the accuracy
+numbers are comparable; wall-clock numbers are not (see "Paper wording").
+
+## Verification (2026-09-17)
+
+CUDA check:
+
+```
+$ python -c "import torch;print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0), torch.cuda.get_arch_list())"
+2.11.0+cu128 True NVIDIA GeForce RTX 5090 ['sm_75', 'sm_80', 'sm_86', 'sm_90', 'sm_100', 'sm_120']
+cuda build 12.8  cudnn 91900  capability (12, 0)
+matmul ok torch.Size([2048, 2048]) device cuda:0
+```
+
+Project tests in the GPU venv (same command and same count as in the CPU venv):
+
+```
+$ python -m pytest tests -q -k "not end_to_end" -p no:cacheprovider
+227 passed, 4 deselected, 4 warnings in 29.61s
+```
+
+GPU smoke of both baseline scripts on tiny synthetic data (the fixture from
+`tests/test_client_and_baselines.py`, `--no_pretrained --img_size 64`):
+
+```
+scripts/train_centralized.py ...  Device: cuda   -> results.json: "device": "cuda"
+scripts/train_local.py --batch --cross_eval ...  Device: cuda  -> node_a/results.json, node_b/results.json: "device": "cuda"
+```
+
+Device selection: both scripts already use
+`torch.device("cuda" if torch.cuda.is_available() else "cpu")`, so no change
+to the training logic was needed. The only code change made for this work is
+that both scripts now also write `"device": "cuda"|"cpu"` into `results.json`
+(next to `hostname`) so the provenance of every baseline run is recorded;
+`tests/test_client_and_baselines.py` asserts the field.
+
+Windows-specific finding: the scripts print Unicode arrows (`←`, `→`) in their
+progress lines. On a Windows console or pipe that is not UTF-8 this raises
+`UnicodeEncodeError` after the first FL-round-equivalent epoch. Set
+`PYTHONUTF8=1` before running (already in the command sequence below). This
+does not affect Linux/Jetson.
+
+## Running the baseline block
+
+Prerequisite: `data/processed/<split>/node_{a,b,c}/{train,val,test}/{Fire,No_Fire}` must
+exist for the splits the block refers to (`iid`, `non_iid_label`,
+`dirichlet_0.1`, `dirichlet_0.5`, `dirichlet_1`, and the subsampled splits
+generated by the revision's splitter). Copy them from the Jetson nodes or
+regenerate them locally with the same splitter, group file and seeds so that
+the leakage-safe splits are identical to the FL runs.
+
+From the repo root in Git Bash:
+
+```bash
+source /c/Users/CORSAIR/venvs/fedrgbd-gpu/Scripts/activate
+export PYTHONUTF8=1                 # Unicode-safe stdout on Windows (see above)
+
+# Generate the run script (runs whose results/<run>/results.json already
+# exists are skipped, so the block can be resumed across sessions).
+python scripts/print_revision_commands.py --block baselines_extension --format bash > run_baselines_desktop.sh
+
+# Run it (the venv ships a python3.exe alias, which the generated script uses).
+bash run_baselines_desktop.sh 2>&1 | tee -a results/baselines_desktop.log
+```
+
+Equivalent in PowerShell:
+
+```powershell
+& C:\Users\CORSAIR\venvs\fedrgbd-gpu\Scripts\Activate.ps1
+$env:PYTHONUTF8 = "1"
+python scripts/print_revision_commands.py --block baselines_extension --format bash | Out-File -Encoding utf8 run_baselines_desktop.sh
+bash run_baselines_desktop.sh
+```
+
+Each run writes `results/rev_<split>_<centralized|local>_seed<seed>/results.json`
+(the local-only runs write `node_{a,b,c}/results.json` plus `summary.json`).
+Afterwards `scripts/analyze_results.py` and `scripts/export_latex_tables.py`
+consume these directories exactly as they consume Jetson-produced baselines.
+
+## Paper wording
+
+Accuracy baselines were trained on a desktop GPU; timing is not comparable to
+the Jetson runs. Concretely: the centralized and local-only baselines of the
+revision block were trained on an NVIDIA RTX 5090 (torch 2.11, CUDA 12.8) with
+identical data splits, model, optimiser and epoch budget, so their accuracy
+metrics are directly comparable with the Jetson FL runs, but their
+`total_time_s` / `train_time_s` fields must not be compared with, or plotted
+alongside, the Jetson wall-clock or energy numbers. The `hostname` and
+`device` fields in each `results.json` identify these runs.
+
+## Repository hygiene
+
+Nothing large must land in the repo:
+
+- The venv lives in `C:\Users\CORSAIR\venvs\`, outside the working tree.
+- `data/processed/*` is git-ignored (only `.gitkeep` is tracked).
+- Each run also writes a `model_final.pt` (about 6 MB) next to its
+  `results.json`; `*.pt` is git-ignored, so only the JSON files are tracked.
+- `run_baselines_desktop.sh` and `results/baselines_desktop.log` are
+  convenience files (`*.log` is git-ignored); do not commit the generated
+  shell script, regenerate it with the command above.

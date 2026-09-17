@@ -202,3 +202,28 @@ Toplam ≈ 310 testbed saati (~13 gün kesintisiz). Öneriler:
    çalışma + 1-2 genel kaynak).
 9. **Cevap mektubu**: yukarıdaki tablonun (§1) hakem-madde sırasına göre düzenlenmiş hâli;
    her madde için "değişiklik nerede (bölüm/tablo/şekil)" satırı.
+
+---
+
+## 5. Jetson gerektirmeyen işler — durum (17 Eylül 2026)
+
+Bu bölüm, cihazlar gelmeden masaüstünde yapılabilecek her şeyin envanteri ve durumudur.
+Kod ortamı: `C:\Users\CORSAIR\venvs\fedrgbd` (CPU, testler) ve `C:\Users\CORSAIR\venvs\fedrgbd-gpu`
+(RTX 5090, baseline koşuları; bkz. `docs/DESKTOP_GPU_BASELINES.md`). Sistem Python'unda ve
+WSL'de torch **yok**; komutları bu venv'lerle çalıştır.
+
+| # | İş | Durum | Nerede |
+|---|----|-------|--------|
+| 1 | Kaynakça: 15 `% VERIFY` kaydı yayıncı/Crossref/arXiv kaydına karşı doğrulandı; 3'ü arXiv → yayımlanmış sürüme düzeltildi (Banerjee → Euro-Par 2025 LNCS 15900; Zhang → ICASSP 2025; Borazjani → IEEE TAI 7(9)). Hiçbiri başarısız olmadı | **bitti** | `paper/main.tex` kaynakça, `docs/RESPONSE_TO_REVIEWERS.md` R1.2 |
+| 2 | v1'den kalan boş bölümler (Modality Ablation, Resource Profiling, Network Constraint Sensitivity) kaldırıldı; enerji/latency vaatleri metinden çıkarıldı; üç ölçüm Limitations + Future Work'te "kapsam dışı" olarak yazıldı | **bitti** | `paper/main.tex` §Limitations, §Future Work; cevap mektubu R3.1 |
+| 3 | v1 (image-level) sonuçları yeni analiz boru hattından geçirildi; `tab:v1_ci`, `tab:time`, `tab:stats` hücreleri birebir doğrulandı; tek tutarsızlık (IID'de p<0.05 çift sayısı 3 değil 2) düzeltildi | **bitti** | `analysis/` (CSV/MD/grafikler), `paper/tables/*.tex` |
+| 4 | Masaüstü GPU ortamı: torch 2.11+cu128, CUDA doğrulandı, 227 test geçti, sentetik veride `Device: cuda` duman testi; `results.json`'a `device` alanı eklendi | **bitti** | `docs/DESKTOP_GPU_BASELINES.md`, `setup_desktop_windows.ps1` |
+| 5 | P0 zinciri tek komut: Kaggle indirme (kimlik varsa) → v1 sızıntı denetimi → ham veri denetimi (sweep, sekans, MD5) → karar özeti → `--clean --verify` yeniden bölme → sıfır-sızıntı denetimi + manifest md5'leri; sentetik veride uçtan uca test edildi | **betik hazır, veri bekliyor** | `scripts/run_p0_leakage_and_split.py`, `tests/test_run_p0_pipeline.py`, `analysis/leakage/P0_SUMMARY.md` (çıktı) |
+| 6 | FLAME ham verisini masaüstüne indirmek (Kaggle hesabı gerekir) ve 5'i çalıştırmak | **senin adımın** | `python scripts/run_p0_leakage_and_split.py` (Kaggle kimliği yoksa çıkış kodu 2 ve talimat basar) |
+| 7 | P2 baseline'lar (centralized + local, 50 koşu) masaüstü GPU'da | 5–6 bitince | `docs/DESKTOP_GPU_BASELINES.md` komut dizisi |
+| 8 | Fon numarası / AI-disclosure ifadesi; testbed fotoğrafı | yazar girdisi | `paper/main.tex` `\todo` |
+
+Kalan 28 `\todo` yer tutucusunun hepsi Jetson koşularına veya cihazdaki özel veriye (sahne
+etiketleri, LOSO) bağlıdır. Cihazlar gelmeden yapılacak tek büyük iş **6. satırdır**; o
+bittiğinde 7 hemen başlatılabilir ve makalenin sızıntı oranı paragrafı (`tab:leakage`)
+`analysis/leakage/P0_SUMMARY.md`'den doldurulur.

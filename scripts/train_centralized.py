@@ -238,6 +238,7 @@ def main(argv=None):
     results = {
         "experiment": "centralized",
         "hostname": hostname,
+        "device": str(device),
         "data_dirs": args.data_dirs,
         "epochs": args.epochs,
         "batch_size": args.batch_size,

@@ -217,6 +217,7 @@ def train_single_node(data_dir, node_name, epochs, batch_size, lr, seed, output_
         "experiment": "local_only",
         "node_name": node_name,
         "hostname": hostname,
+        "device": str(device),
         "data_dir": data_dir,
         "epochs": epochs,
         "batch_size": batch_size,

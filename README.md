@@ -123,6 +123,18 @@ python3 src/data/data_splitter.py --data_dir data/raw/flame_dataset --output_dir
 `--verify` re-reads the manifests afterwards and fails (exit 1) if any
 near-duplicate group ended up on two nodes or in two of train/val/test.
 
+The whole P0 chain (dataset check/Kaggle download -> v1 audit -> raw audit with
+`--sweep 4 6 8 10 12 --sequence_heuristic --examples 20` -> decision summary ->
+group-safe split with `--clean --verify` -> zero-leakage re-audit + manifest md5
+table) runs resumably with one command:
+```bash
+python3 scripts/run_p0_leakage_and_split.py        # --dry_run prints the commands, --force redoes finished steps
+```
+It writes `analysis/leakage/P0_SUMMARY.md` and exits non-zero on `VERIFY FAIL` or
+any non-zero post-split leak rate.  Downloading needs `pip install kaggle` plus a
+Kaggle API token (`~/.kaggle/kaggle.json` or `KAGGLE_USERNAME`/`KAGGLE_KEY`);
+without one the script prints the manual download steps and exits 2.
+
 The leakage script also accepts `--hash both` (cluster the union of the dHash
 edges at `--threshold` and the pHash edges at `--phash_threshold`),
 `--sweep 4 6 8 10 12` (threshold-sensitivity table in

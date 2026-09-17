@@ -26,8 +26,9 @@ PyTorch 2.5, Flower 1.13.1, `batch_size=8` defaults for the Jetson Orin Nano
 | R1, R5: title, scope statements, equation citations, 2025-26 references, metaheuristic HPO paragraph, wavelet future work | `paper/main.tex` revised draft (all new numbers are red placeholders) and `docs/RESPONSE_TO_REVIEWERS.md` |
 
 Still requiring hardware or author input: every new experiment (see the revision matrix),
-scene labels for the custom captures (`labels.csv`), and tying sensor heterogeneity
-directly into an FL run.
+scene labels for the custom captures (`labels.csv`), tying sensor heterogeneity
+directly into an FL run, and downloading the raw FLAME data to the desktop (Kaggle
+credentials) so that the P0 leakage/re-split chain can run (see the 2026-09-17 section).
 
 ## File-by-file changes
 
@@ -195,6 +196,7 @@ directly into an FL run.
 | `test_fl_end_to_end.py` | real two-client Flower 1.13.1 run on localhost (FedProx and FedBN), full v3 `results.json` |
 | `test_analyze_results.py` | old and new result formats, CI computation, pairwise tests, plots, and a read-only run on the real `results/` tree |
 | `test_revision_matrix.py` | matrix contents match the revision spec; command expansion and directory naming |
+| `test_run_p0_pipeline.py` | the one-command P0 driver end-to-end on synthetic data: leaky v1 split detected, group-safe re-split, zero leakage after, resumable skips, `--dry_run`, missing-data exit code 2, dataset flattening |
 
 ## Notes for the authors
 * The two files mentioned as "provided" (`scripts/analyze_flame_leakage.py`, updated
@@ -217,3 +219,38 @@ directly into an FL run.
   the splitter with `--group_file` before the revision experiments.
 * Old result files carry no timing/communication per round; the analysis script marks
   those curves as estimated.  New runs record them exactly.
+
+## Hardware-independent follow-up (2026-09-17)
+
+Everything below was done on the desktop without the Jetson testbed; 227 CPU tests pass
+(`python -m pytest tests -q -k "not end_to_end"`), `latexmk` builds `paper/main.tex` with no errors.
+
+* **Bibliography verified.** All 15 `% VERIFY` entries in `paper/main.tex` were checked against
+  Crossref / arXiv; three were upgraded from preprint to the published record (Banerjee et al. ->
+  Euro-Par 2025, LNCS 15900, pp. 264-278; Zhang et al. -> IEEE ICASSP 2025; Borazjani et al. ->
+  IEEE Trans. Artif. Intell. 7(9), 2026). The R1.2 list in `docs/RESPONSE_TO_REVIEWERS.md` was
+  aligned. No entry failed verification.
+* **Paper stubs removed.** The empty v1 subsections *Modality Ablation*, *Resource Profiling* and
+  *Network Constraint Sensitivity* (not requested by any reviewer, not runnable in this revision)
+  were deleted; the introduction/related-work sentences promising energy measurements were
+  reworded to wall-clock/communication; a Limitations paragraph and a Future Work sentence
+  declare the three measurements out of scope. The response letter (R3.1 and the pending-
+  experiments table) was updated accordingly.
+* **v1 numbers cross-checked.** `scripts/analyze_results.py` -> `analysis/` and
+  `scripts/export_latex_tables.py` -> `paper/tables/` were run on the existing `results/`.
+  `tab:v1_ci`, `tab:time` and `tab:stats` match the regenerated values exactly; one prose count
+  in the statistics section was wrong (two, not three, IID pairs reach p<0.05) and was fixed.
+* **New: `scripts/run_p0_leakage_and_split.py`.** One resumable command for plan sections 2.1-2.4:
+  optional Kaggle download + layout flattening, audit of the existing `data/processed`, raw-data
+  audit (`--sweep`, `--sequence_heuristic`, `--examples`, MD5), a decision summary
+  (`analysis/leakage/P0_SUMMARY.md`, RE-SPLIT REQUIRED / negligible), group-safe re-split with
+  `--clean --verify`, post-split zero-leakage assertion and manifest MD5 listing. `--dry_run`,
+  `--force`, exit code 2 when the dataset is missing. Documented in `README.md` and `data/README.md`.
+* **New: desktop GPU environment** for the `baselines_extension` block: the `fedrgbd-gpu` venv
+  under the user's `venvs` folder (torch 2.11.0+cu128, torchvision 0.26, numpy 2.5; deviates
+  from the Jetson pins because the RTX 5090 needs CUDA 12.8 / sm_120). `setup_desktop_windows.ps1`
+  reproduces it; `docs/DESKTOP_GPU_BASELINES.md` records versions, verification and the exact run
+  sequence (`PYTHONUTF8=1` is required on Windows because the training scripts print Unicode arrows).
+  `train_centralized.py` / `train_local.py` now record `"device"` in their results JSON.
+* Not done (needs the author): downloading FLAME from Kaggle and running the P0 chain; funding /
+  AI-disclosure wording; testbed photo. Everything else that remains is a Jetson run.

@@ -78,14 +78,14 @@ in the bibliography):
 
 - Reis, *Applied Sciences* 15(12):6452, 2025 — Edge-FLGuard on Raspberry Pi / Jetson Nano.
   (This also replaces the incomplete placeholder citation of the original submission.)
-- Banerjee, Chandrashekar, Eswar and Simmhan, Euro-Par 2025 — federated learning under a global
+- Banerjee, Chandrashekar, Eswar and Simmhan, Euro-Par 2025 (LNCS 15900, pp. 264–278) — federated learning under a global
   energy budget on heterogeneous edge accelerators.
-- Zhang, Chen, Lin, Chen and Zhao, arXiv:2501.01850, 2025 — clustered FL for heterogeneous data.
+- Zhang, Chen, Lin, Chen and Zhao, IEEE ICASSP 2025 (arXiv:2501.01850) — clustered FL for heterogeneous data.
 - Seo, Catak and Rong, NIKT 2024 (arXiv:2502.00182, 2025) — experimental IID-to-non-IID study;
   cited in support of our decision to report intervals rather than single-seed comparisons.
 - Domini, Aguzzi and Viroli, arXiv:2503.20618, 2025 — ProFed benchmark for non-IID partitioning.
 - Borazjani, Abdisarabshali, Khosravan and Hosseinalipour, *IEEE Trans. Artificial Intelligence*,
-  2026 (arXiv:2503.14553) — embedding-based redefinition of non-IID for vision tasks.
+  7(9):5045–5060, 2026 (arXiv:2503.14553) — embedding-based redefinition of non-IID for vision tasks.
 - Mreish et al., *Sensors* 25(23):7314, 2025 — MFedBN, a FedBN follow-up; cited where we bound
   our own FedBN conclusions.
 - Prashanthi, Kesanapalli and Simmhan, *Proc. ACM Meas. Anal. Comput. Syst.* 6(3), 2022 —
@@ -137,8 +137,10 @@ the separation explicit in four places:
    derive from Experiment I. We do not attribute federated convergence effects to the cameras."
 
 The claim that this is "the first multimodal FL study with real depth cameras" has been removed
-from the contribution list, and the modality ablation is explicitly flagged as centralised
-unless its federated variant is also executed.
+from the contribution list. The empty v1 placeholder subsections for a modality ablation,
+tegrastats resource profiling and network-constraint sensitivity have been removed; the revised
+Limitations subsection states explicitly that these three measurements are out of scope and
+they are listed as future work.
 
 ### R3.2 — "FLAME is randomly split: related frames from the same acquisition sequence may be in train and test. Use a sequence/source-level split."
 
@@ -449,7 +451,6 @@ The following runs are scripted and resumable
 | μ grid, local epochs, learning rate | R5.5 | Table XIII, Fig. (sensitivity) |
 | 10-round FedBN + matched FedAvg | R3.6, R5.8 | Table XIV |
 | Leave-one-scene-out cross-sensor | R3.3 | Table XVII |
-| Per-round profiling (tegrastats) | — | Section IV-L |
 
 *(Table numbers refer to the compiled revised manuscript and should be re-checked after the
 final compile.)*

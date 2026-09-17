@@ -51,6 +51,31 @@ unzip flame-dataset-fire-classification.zip -d data/raw/flame_dataset/
 
 ### Create Splits
 
+#### One command: revision P0 pipeline (audit -> group-safe split -> re-audit)
+`scripts/run_p0_leakage_and_split.py` chains the whole hardware-independent
+revision pipeline (plan sections 2.1-2.4) and is resumable: finished steps are
+skipped on a re-run (`--force` redoes them, `--dry_run` only prints the commands).
+```bash
+python3 scripts/run_p0_leakage_and_split.py            # defaults below; add --hash both --workers 8 as needed
+```
+Steps: (0) if `data/raw/flame_dataset/Fire` + `No_Fire` are missing, download the
+Kaggle dataset and flatten the archive (needs `pip install kaggle` and an API
+token in `~/.kaggle/kaggle.json` or `KAGGLE_USERNAME`/`KAGGLE_KEY`; otherwise the
+script prints the manual download instructions and exits 2, `--skip_download`
+never calls Kaggle); (1) audit the existing `data/processed` (paper v1) into
+`analysis/leakage/v1_audit/` and run the raw-data near-duplicate analysis into
+`analysis/leakage/` (`--sweep 4 6 8 10 12 --sequence_heuristic --examples 20`);
+(2) print the decision numbers (test leak rate, groups spanning nodes, threshold
+sweep, cross-label groups, group-size histogram, exact MD5 duplicates) and write
+`analysis/leakage/P0_SUMMARY.md`; (3) run the splitter with
+`--group_file analysis/leakage/groups.json --dirichlet_alpha 0.1 0.5 1.0
+--subsample_frac 0.05 0.01 --clean --verify` (a `VERIFY FAIL` aborts);
+(4) re-audit the new tree into `analysis/leakage/post_split_audit/`, fail unless
+every val/test leak rate is 0 and no group spans two nodes, and append the md5 of
+every `manifest.csv` / `split_stats.json` to `P0_SUMMARY.md` for the cross-node
+comparison.  Every sub-command is echoed, so the log doubles as the exact
+reproduction recipe.  The individual commands are documented below.
+
 #### Paper v1 splits (image-level, unchanged)
 ```bash
 python3 src/data/data_splitter.py \

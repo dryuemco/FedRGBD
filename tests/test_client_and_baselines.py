@@ -120,6 +120,7 @@ def test_train_local_batch_writes_full_metrics(nodes, tmp_path):
     assert len(res["final_test_metrics"]["confusion_matrix"]) == 2
     assert res["history"][0]["train_time_s"] > 0 and res["history"][0]["eval_time_s"] > 0
     assert "test_metrics" in res["cross_eval"]["node_b"]
+    assert res["device"] in ("cpu", "cuda")   # provenance: which device trained this baseline
     summary = json.loads((out / "summary.json").read_text())
     assert "final_test_metrics" in summary["nodes"]["node_a"] and "mean_test_accuracy" in summary
     assert "NaN" not in (out / "node_a" / "results.json").read_text()
@@ -139,6 +140,7 @@ def test_train_centralized_writes_full_metrics(nodes, tmp_path):
         assert k in res["final_test_metrics"] and k in res["history"][0]["val_metrics"]
     assert "test_metrics" in res["per_node_test"]["node_a"]
     assert res["history"][0]["elapsed_s"] > 0
+    assert res["device"] in ("cpu", "cuda")   # provenance: which device trained this baseline
 
 
 @pytest.mark.parametrize("script_name", ["train_local", "train_centralized"])
