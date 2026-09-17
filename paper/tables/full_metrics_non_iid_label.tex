@@ -3,16 +3,19 @@
 \centering
 \caption{Final global metrics for the Non-IID (label skew) partition (mean $\pm$ standard deviation over seeds).}
 \label{tab:full_metrics_non_iid_label}
-\begin{tabular}{lcc}
+\small
+\begin{tabular}{lccccccccccccc}
 \toprule
-Configuration & Accuracy & Loss \\
+Configuration & Accuracy & Balanced accuracy & Precision & Recall & Specificity & F1 & Macro F1 & Macro precision & Macro recall & Macro specificity & MCC & ROC AUC & Loss \\
 \midrule
-FedAvg [3N] & 0.9931 $\pm$ 0.0039 & 0.0513 $\pm$ 0.0413 \\
-FedBN [3N] & 0.7506 $\pm$ 0.0836 & 0.5774 $\pm$ 0.1201 \\
-FedProx($\mu$=0.01) [3N] & 0.9922 $\pm$ 0.0024 & 0.0248 $\pm$ 0.0036 \\
-FedProx($\mu$=0.1) [3N] & 0.9833 $\pm$ 0.0019 & 0.0465 $\pm$ 0.0032 \\
-Centralized & 0.9972 $\pm$ 0.0007 & 0.0101 $\pm$ 0.0021 \\
-Local-only & 0.9950 $\pm$ 0.0003 & 0.0158 $\pm$ 0.0046 \\
+FedAvg [3N] (image-level) & 0.9931 $\pm$ 0.0039 & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & 0.0513 $\pm$ 0.0413 \\
+FedBN [3N] (image-level) & 0.7506 $\pm$ 0.0836 & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & 0.5774 $\pm$ 0.1201 \\
+FedProx($\mu$=0.01) [3N] (image-level) & 0.9922 $\pm$ 0.0024 & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & 0.0248 $\pm$ 0.0036 \\
+FedProx($\mu$=0.1) [3N] (image-level) & 0.9833 $\pm$ 0.0019 & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & 0.0465 $\pm$ 0.0032 \\
+Centralized (group-level) & 0.9289 $\pm$ 0.0131 & 0.9325 $\pm$ 0.0140 & 0.9666 $\pm$ 0.0110 & 0.9186 $\pm$ 0.0103 & 0.9464 $\pm$ 0.0177 & 0.9420 $\pm$ 0.0107 & 0.9251 $\pm$ 0.0138 & 0.9199 $\pm$ 0.0136 & 0.9325 $\pm$ 0.0140 & 0.9325 $\pm$ 0.0140 & 0.8523 $\pm$ 0.0276 & 0.9882 $\pm$ 0.0029 & 0.1630 $\pm$ 0.0048 \\
+Centralized (image-level) & 0.9972 $\pm$ 0.0007 & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & 0.0101 $\pm$ 0.0021 \\
+Local-only (group-level) & 0.9359 $\pm$ 0.0339 & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & 0.7050 $\pm$ 0.3708 \\
+Local-only (image-level) & 0.9950 $\pm$ 0.0003 & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & -- & 0.0158 $\pm$ 0.0046 \\
 \bottomrule
 \end{tabular}
 \par\smallskip

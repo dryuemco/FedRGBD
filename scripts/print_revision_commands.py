@@ -126,7 +126,10 @@ class Run:
         return os.path.join(REPO_ROOT, self.output_dir, "results.json")
 
     def exists(self) -> bool:
-        return os.path.exists(self.results_json())
+        """``results.json`` (FL, centralized) or ``summary.json`` (``train_local.py --batch``
+        writes a per-node tree plus a summary) marks a finished run."""
+        return (os.path.exists(self.results_json())
+                or os.path.exists(os.path.join(REPO_ROOT, self.output_dir, "summary.json")))
 
     def server_command(self) -> str:
         return (
@@ -288,9 +291,14 @@ def expand_baselines_extension(cfg: dict) -> List[Run]:
     rounds, local_epochs, lr, batch_size = cfg["rounds"], cfg["local_epochs"], cfg["lr"], cfg["batch_size"]
 
     new_seeds_part = cfg["parts"]["new_seeds"]
+    # Under the leakage-safe re-split the old-seed centralized / local-only runs of the
+    # iid and non_iid_label splits are not comparable either, so ``--all_seeds`` (or
+    # ``all_seeds: true`` in the block) emits all five seeds here as well.
+    baseline_seeds = (new_seeds_part.get("all_seeds", new_seeds_part["seeds"])
+                      if cfg.get("all_seeds") else new_seeds_part["seeds"])
     for baseline_type in cfg["baseline_types"]:
         for dist in new_seeds_part["data_distributions"]:
-            for seed in new_seeds_part["seeds"]:
+            for seed in baseline_seeds:
                 runs.append(_baseline_run("baselines_extension", dist, dist, baseline_type, seed,
                                            rounds, local_epochs, lr, batch_size))
 
@@ -455,6 +463,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.all_seeds:
         revision_cfg = dict(revision_cfg)
         revision_cfg["seed_extension"] = dict(revision_cfg["seed_extension"], all_seeds=True)
+        revision_cfg["baselines_extension"] = dict(revision_cfg["baselines_extension"], all_seeds=True)
     runs_by_block = expand_all(revision_cfg, args.block)
 
     if args.format == "bash":

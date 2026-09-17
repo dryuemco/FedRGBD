@@ -238,10 +238,11 @@ def test_long_horizon_dir_has_round_suffix(revision):
 # --------------------------------------------------------------------------- #
 def test_cli_text_format_run_count():
     out = subprocess.run(
-        [PYTHON, "scripts/print_revision_commands.py", "--format", "text"],
+        [PYTHON, "scripts/print_revision_commands.py", "--format", "text", "--no_skip_existing"],
         capture_output=True, text=True, check=True,
     )
     dirs = re.findall(r"^--- (results/rev_\S+) ---$", out.stdout, flags=re.MULTILINE)
+    # --no_skip_existing: the count must not depend on which rev_* results exist on disk.
     # 151 logical cells, 9 of which share a results directory with an earlier
     # block (the default-valued cells of the mu / epoch / lr sweeps) and are
     # emitted once, as [DUP], instead of being launched again.
@@ -306,3 +307,23 @@ def test_cli_bash_never_repeats_a_server_command():
     output_dirs = re.findall(r"--output_dir (results/rev_\S+)", out.stdout)
     assert output_dirs
     assert len(output_dirs) == len(set(output_dirs))
+
+
+def test_all_seeds_extends_the_baseline_block_and_local_runs_count_as_done(tmp_path):
+    out = subprocess.run(
+        [PYTHON, "scripts/print_revision_commands.py", "--format", "bash", "--block",
+         "baselines_extension", "--all_seeds", "--no_skip_existing"],
+        capture_output=True, text=True, check=True,
+    )
+    cmds = [l for l in out.stdout.splitlines() if l.startswith("python3 ")]
+    # 8 new-seed runs become 20 (5 seeds x 2 dists x 2 baseline types); 42 others unchanged
+    assert len(cmds) == 62
+    assert sum("rev_iid_local_seed42 " in c or c.endswith("rev_iid_local_seed42") for c in cmds) == 1
+
+    import os
+    run = prc.Run(block="baselines_extension", kind="local", dist="iid", split="iid", strategy="local_only",
+                  output_dir=os.path.relpath(str(tmp_path / "rev_x_local_seed1"), prc.REPO_ROOT))
+    assert run.exists() is False
+    (tmp_path / "rev_x_local_seed1").mkdir()
+    (tmp_path / "rev_x_local_seed1" / "summary.json").write_text("{}")
+    assert run.exists() is True

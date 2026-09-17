@@ -93,13 +93,28 @@ From the repo root in Git Bash:
 source /c/Users/CORSAIR/venvs/fedrgbd-gpu/Scripts/activate
 export PYTHONUTF8=1                 # Unicode-safe stdout on Windows (see above)
 
-# Generate the run script (runs whose results/<run>/results.json already
-# exists are skipped, so the block can be resumed across sessions).
-python scripts/print_revision_commands.py --block baselines_extension --format bash > run_baselines_desktop.sh
+# Generate the run script.  --all_seeds is REQUIRED after the leakage-safe
+# re-split: the v1 centralized / local-only runs of iid and non_iid_label used
+# the image-level partition and are not comparable, so all five seeds are
+# emitted (62 runs).  Finished runs (results.json, or summary.json for the
+# local-only batch) are skipped, so the block can be resumed across sessions.
+python scripts/print_revision_commands.py --block baselines_extension --all_seeds --format bash > run_baselines_desktop.sh
 
 # Run it (the venv ships a python3.exe alias, which the generated script uses).
 bash run_baselines_desktop.sh 2>&1 | tee -a results/baselines_desktop.log
 ```
+
+**Measured on 2026-09-17.** The training scripts use `num_workers=0`, so one run
+is bound by single-threaded JPEG decoding, not by the GPU: a full-partition
+run (centralized or the three local-only nodes) takes about 46 min at
+183 s/epoch; the 5 % / 1 % low-data runs take 2-6 min.  The GPU sits at
+~15 % per process, so the block was run as **four parallel lanes** (the 50
+command lines of the generated script dealt round-robin into
+`logs/lane_<k>.sh`, each with per-run logs `logs/<run>.log` and a
+`[START]/[DONE]/[FAIL]` line in `logs/lane_<k>.out`; `logs/` is git-ignored).
+The first 50 runs finished in 5 h 48 min (12:15-18:03), the 12 old-seed
+iid / non_iid_label runs in a second batch of four lanes.  Four lanes fit in
+about 8 GB of GPU memory.
 
 Equivalent in PowerShell:
 

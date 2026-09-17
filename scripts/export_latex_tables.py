@@ -224,8 +224,12 @@ def dist_label(distribution: str) -> str:
 
 
 def config_name(label: Any, distribution: Any) -> str:
-    """``analyze_results`` labels embed the distribution -- strip it for the rows."""
+    """``analyze_results`` labels embed the distribution -- strip it for the rows.
+
+    The ``{group}`` / ``{image}`` protocol suffix is rendered as a short marker
+    so that v1 (image-level) and revision (group-level) rows stay distinct."""
     text = str(label or "")
+    text = text.replace("{group}", "(group-level)").replace("{image}", "(image-level)")
     dist = str(distribution or "")
     if dist and dist in text:
         text = text.replace(dist, " ")

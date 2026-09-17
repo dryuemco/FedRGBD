@@ -98,11 +98,12 @@ MARKER_CYCLE = ["o", "s", "^", "D", "v", "P", "X", "*", "<", ">"]
 BASELINE_COLORS = {"centralized": "#424242", "local": "#8D6E63"}
 
 CONFIG_KEY_FIELDS = (
+    "protocol",
     "kind", "strategy", "distribution", "num_rounds", "local_epochs", "lr", "n_nodes",
 )
 
 RECORD_FIELDS = [
-    "run_dir", "run_name", "kind", "strategy", "strategy_display", "mu",
+    "run_dir", "run_name", "protocol", "kind", "strategy", "strategy_display", "mu",
     "distribution", "seed", "seed_label", "num_rounds", "local_epochs", "lr",
     "n_nodes", "schema_version", "config_id", "label", "timestamp",
     "time_estimated", "comm_estimated", "n_curve_points",
@@ -344,12 +345,42 @@ def config_id_of(record: Dict[str, Any]) -> str:
     return "|".join("" if v is None else str(v) for v in make_config_key(record))
 
 
+PROTOCOL_GROUP = "group"    # leakage-safe, sequence/group-level split (revision, results/rev_*)
+PROTOCOL_IMAGE = "image"    # random image-level split (paper v1)
+
+
+def parse_protocol(data: Dict[str, Any], run_name: str) -> str:
+    """Which partitioning protocol produced a run.
+
+    The two protocols use different partitions, so their runs must never be
+    pooled into one configuration (a v1 ``centralized_iid_seed42`` and a
+    revision ``rev_iid_centralized_seed42`` even share the seed).  Explicit
+    ``protocol`` / ``split_protocol`` keys or a ``group``/``image`` tag in the
+    results file win; otherwise every ``results/rev_*`` run is group-level and
+    everything else is the image-level v1 protocol.
+    """
+    for key in ("protocol", "split_protocol", "partition_protocol"):
+        val = data.get(key)
+        if isinstance(val, str) and val.strip():
+            v = val.strip().lower()
+            return PROTOCOL_GROUP if v.startswith(("group", "seq")) else PROTOCOL_IMAGE
+    tags = [str(t).lower() for t in (data.get("tags") or [])]
+    if any(t in ("group", "group_level", "sequence_level") for t in tags):
+        return PROTOCOL_GROUP
+    if any(t in ("image", "image_level") for t in tags):
+        return PROTOCOL_IMAGE
+    return PROTOCOL_GROUP if str(run_name).startswith("rev_") else PROTOCOL_IMAGE
+
+
 def make_label(record: Dict[str, Any]) -> str:
     parts = [record.get("strategy_display") or "", record.get("distribution") or ""]
     label = " ".join(p for p in parts if p).strip()
     n_nodes = record.get("n_nodes")
     if record.get("kind") == "fl" and n_nodes:
         label = "{} [{}N]".format(label, n_nodes)
+    protocol = record.get("protocol")
+    if protocol:
+        label = "{} {{{}}}".format(label, protocol)
     return label or "run"
 
 
@@ -482,6 +513,7 @@ def _new_record(
     record: Dict[str, Any] = {
         "run_dir": os.path.abspath(run_dir),
         "run_name": run_name,
+        "protocol": parse_protocol(data, run_name),
         "kind": kind,
         "strategy": strategy,
         "mu": mu,

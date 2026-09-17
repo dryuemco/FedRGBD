@@ -376,10 +376,14 @@ revision:
     batch_size: 8
     parts:
       new_seeds:
-        description: "Seeds 789, 1011 on the original iid / non_iid_label splits."
+        description: >
+          Seeds 789, 1011 on the iid / non_iid_label splits.  After the leakage-safe
+          re-split (--group_file) the old-seed baselines are not comparable either:
+          --all_seeds emits all five seeds (all_seeds list below), 20 runs.
         data_distributions: [iid, non_iid_label]
         seeds: [789, 1011]
-        total_runs: 8    # 2 baseline types x 2 dists x 2 seeds
+        all_seeds: [42, 123, 456, 789, 1011]
+        total_runs: 8    # 2 baseline types x 2 dists x 2 seeds (20 with --all_seeds)
       dirichlet:
         description: "3 seeds on each dirichlet_<alpha> split."
         alphas: [0.1, 0.5, 1.0]
