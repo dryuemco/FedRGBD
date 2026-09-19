@@ -414,7 +414,8 @@ echo ""
 log_info "Step 9: Network configuration check..."
 
 # Check Ethernet interface
-ETH_IF=$(ip -o link show | awk -F': ' '{print $2}' | grep -E '^eth|^enp|^eno' | head -1)
+# en* covers enP8p1s0 (Jetson Orin Nano onboard NIC, capital P), enp*, eno*, ens*; FEDRGBD_IFACE overrides
+ETH_IF=${FEDRGBD_IFACE:-$(ip -o link show | awk -F': ' '{print $2}' | cut -d@ -f1 | grep -E '^(eth|en)' | head -1)}
 if [ -n "$ETH_IF" ]; then
     ETH_IP=$(ip -4 addr show "$ETH_IF" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
     if [ -n "$ETH_IP" ]; then
