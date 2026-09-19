@@ -58,9 +58,22 @@ The paper reports the two server-to-client links (Node A -> B, Node A -> C). The
 figure is reference only and is not used in the paper. (An earlier 0.68 ms gateway RTT,
 measured from Node C, is superseded and no longer cited.)
 
-> **TODO (author):** the `ethtool` output above is from Node A only. The paper states
-> 1000 Mb/s full duplex on all three nodes; paste the same `ethtool` lines from Node B and
-> Node C here so that claim is traceable too.
+Link speed on the two client nodes (the paper's "1000 Mb/s full duplex on all three
+nodes" rests on the Node A output above and these two), both 2026-09-19:
+
+```text
+Node B (fedrgbd-b, 192.168.1.7):
+$ sudo ethtool enP8p1s0 | grep -E "Speed|Duplex|Link detected"
+        Speed: 1000Mb/s
+        Duplex: Full
+        Link detected: yes
+
+Node C (fedrgbd-c, 192.168.1.6):
+$ sudo ethtool enP8p1s0 | grep -E "Speed|Duplex|Link detected"
+        Speed: 1000Mb/s
+        Duplex: Full
+        Link detected: yes
+```
 
 ## Node Details
 
