@@ -1,0 +1,34 @@
+# FedRGBD — testbed description for scripts/run_matrix.py (example)
+#
+# Copy this file to configs/testbed.local.yaml (gitignored) and replace every
+# <...> placeholder with the values of your own nodes:
+#
+#   cp configs/testbed.example.yaml configs/testbed.local.yaml
+#
+# run_matrix.py runs on node_a (FL server + one client) and reaches node_b and
+# node_c over passwordless SSH as `user@host`.  `repo` is the FedRGBD checkout
+# and `venv` the virtual environment on that node (setup_jetson.sh creates it
+# at ~/fedrgbd_venv).  Use absolute paths.  The IP addresses are the testbed's
+# static wired addresses (see docs/HARDWARE_SETUP.md).
+
+server_port: 8080
+
+nodes:
+  node_a:
+    host: 192.168.1.10
+    user: <user-on-node-a>
+    repo: /home/<user-on-node-a>/FedRGBD
+    venv: /home/<user-on-node-a>/fedrgbd_venv
+    local: true            # the node run_matrix.py runs on
+  node_b:
+    host: 192.168.1.7
+    user: <user-on-node-b>
+    repo: /home/<user-on-node-b>/FedRGBD
+    venv: /home/<user-on-node-b>/fedrgbd_venv
+    local: false
+  node_c:
+    host: 192.168.1.6
+    user: <user-on-node-c>
+    repo: /home/<user-on-node-c>/FedRGBD
+    venv: /home/<user-on-node-c>/fedrgbd_venv
+    local: false

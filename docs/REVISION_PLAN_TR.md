@@ -317,9 +317,10 @@ yerden devam etmek için gereken her şeyi içerir.
    garantisi bozulur. **Zorunlu doğrulama:** `analysis/leakage/P0_SUMMARY.md` "Split digests"
    tablosundaki `manifest.csv` md5'leri üç node'da birebir aynı olmalı.
 2. **Kod ve test** (plan §2.5): `git fetch && git checkout revision-ncaa`,
-   `python -m pytest tests -q -k "not end_to_end"` → 242 test geçmeli.
+   `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests -q -k "not end_to_end" -p no:cacheprovider`
+   → 310 test geçmeli (19 Eylül 2026 itibarıyla).
 3. **Duman testi** (plan §2.6): `iid_sub0.01` ile 1 tur FedAvg; `results/smoke` sonra silinir.
-4. **Matris** (§6.2 sırası). Her blok sonrası:
+4. **Matris** (§6.2 sırası), `scripts/run_matrix.py` ile gözetimsiz (§6.6). Her blok sonrası:
    `python scripts/analyze_results.py --results_dir results --output_dir analysis` ve
    `python scripts/export_latex_tables.py --analysis_dir analysis --output_dir paper/tables`.
    Hiçbir sayı tabloya elle yazılmaz.
@@ -346,7 +347,11 @@ belirliyor (bkz. `tab:group_counts`). Süre bütçesi yaparken bunu kullan.
 Gerçekçi takvim: kurulum + duman testi yarım gün, %10–15 yeniden koşu payıyla **10–12 gün
 kesintisiz**. Yalnızca gece koşulursa 3 haftayı aşar. Teslime (13 Kasım) 57 gün var.
 
-Komutlar kaldığı yerden üretilir; biten koşular atlanır:
+Bloklar `scripts/run_matrix.py --block <ad>` ile koşulur (§6.6). Duyarlılık blokları
+(`mu_grid`, `local_epochs`, `learning_rate`) varsayılan değerli hücreleri önceki bloklarla
+paylaşır: bloklar tek tek üretildiğinde 113 koşu listelenir ama benzersiz dizin 98'dir.
+Tabloda sıra izlenirse paylaşılan hücreler zaten bitmiş olur ve atlanır.
+Elle koşmak gerekirse komutlar kaldığı yerden üretilir; biten koşular atlanır:
 `python scripts/print_revision_commands.py --all_seeds --block seed_extension --format bash`.
 **`--all_seeds` zorunludur**: yeniden bölme sonrası eski 3 seed'lik koşular karşılaştırılamaz.
 
@@ -374,3 +379,55 @@ Komutlar kaldığı yerden üretilir; biten koşular atlanır:
 * Fon/hibe numarası ve AI-assistance beyanının dergi politikasına göre teyidi.
 * Testbed fotoğrafı (Şekil 1).
 * Sahne sayısı `S` teyidi (§6.4).
+
+### 6.6 Gözetimsiz blok koşucusu: `scripts/run_matrix.py`
+
+`print_revision_commands.py --format bash` sunucuyu başlatır ve üç istemcinin 10 sn içinde
+elle başlatılmasını ister; 20 koşuluk, 46 saatlik bir blok için kullanışsızdır.
+`run_matrix.py` aynı üretilmiş betiği (her zaman `--all_seeds` ile) ayrıştırır ve bloğu
+Node A'dan yürütür: node_b / node_c istemcilerini SSH ile, node_a istemcisini yerelde,
+sonra sunucuyu başlatır; sunucu bitince `results/<koşu>/results.json` dosyasının
+okunabildiğini ve `model_selection.selected_round` içerdiğini denetler.
+
+**Uyarlamalı değildir.** Batch boyutunu, seed'i ya da komutu asla değiştirmez. Başarısız
+koşu **bir kez, aynı parametrelerle** yeniden denenir; yine olmazsa blok durur ve insan
+bekler. Yeniden başlatınca biten koşular atlanır.
+
+**Ön kontrol (her koşudan önce):** üç node erişilebilir ve aynı commit'te; RAM ≥ 4000 MB ve
+disk ≥ 2000 MB boş; 8080 portu boş; eski `src/fl` süreci yok. Ayrıca:
+* **GUI kapalı**: her node'da `systemctl get-default` = `multi-user.target`;
+* **bölme aynı**: koşunun okuduğu her split için `data/processed/<split>/manifest.csv` md5'i
+  üç node'da `analysis/leakage/P0_SUMMARY.md` tablosuyla birebir aynı.
+
+**Önkoşullar:**
+* Node A'dan Node B ve C'ye parolasız SSH (`ssh-copy-id`).
+* **Node A'da `configs/testbed.local.yaml`.** Repo herkese açık olduğu için kullanıcı adları
+  ve yollar repoda tutulmaz. `configs/testbed.example.yaml` dosyasını kopyala ve her node'un
+  `user`, `repo` ve `venv` değerlerini doldur. Kopya gitignore'dadır. Dosya eksikse ya da
+  `<...>` yer tutucu kalmışsa koşucu ne yapılacağını söyleyerek durur. `setup_jetson.sh`
+  venv'i `~/fedrgbd_venv` altına kurar.
+
+```bash
+# Node A, repo kökünde, venv etkin, tmux içinde
+cp configs/testbed.example.yaml configs/testbed.local.yaml   # sonra user/repo/venv doldur
+tmux new -s fedrgbd
+python3 scripts/run_matrix.py --check_only                  # ön kontrol, 15 split'in hepsi
+python3 scripts/run_matrix.py --block seed_extension --dry_run   # yapılacak koşuları listele
+python3 scripts/run_matrix.py --block seed_extension
+# ayrıl: Ctrl-b d   geri dön: tmux attach -t fedrgbd
+```
+
+**Zaman aşımı:** koşu başına `tur sayısı × --round_timeout` (varsayılan 4 sa/tur → 3 turlu
+koşu 12 sa, 10 turlu koşu 40 sa). En yavaş planlı turlar (Dirichlet α = 0,5'te FedProx)
+≈ 2,5 sa tahmin edildiği için sabit 6 saatlik sınır meşru koşuları öldürürdü. Sabit sınır
+gerekirse `--run_timeout` ile verilebilir.
+
+**Kayıtlar:** `logs/run_matrix.log` (özet) ve koşu başına istemci ve sunucu logları
+(`logs/<koşu>_try<n>_<node|server>_<zaman>.log`). `logs/` git-ignored.
+
+`baselines_extension` bu koşucuyla koşulmaz: o blok masaüstü GPU'da çalışır
+(`scripts/make_desktop_lanes.py`, `docs/DESKTOP_GPU_BASELINES.md`). Koşucu bu bloğu reddeder.
+
+Test: `tests/test_run_matrix.py`. `parse_block`, her testbed bloğunun gerçek üretilmiş
+çıktısıyla hücre hücre karşılaştırılır; ayrıca her bloğun okuduğu split'lerin P0 tablosunda
+md5'i olduğu da doğrulanır.
