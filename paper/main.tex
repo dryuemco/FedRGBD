@@ -143,7 +143,7 @@ Hybrid designs that combine a fixed analytical transform with a learned CNN are 
 
 \subsection{Hardware Testbed}
 
-Our testbed consists of three NVIDIA Jetson Orin Nano Super edge nodes, each equipped with a different depth camera, as summarized in Table~\ref{tab:hardware}. For the revision experiments the three nodes are connected by wired Gigabit Ethernet through a single switch, and Node~A hosts the Flower server in addition to its own client. The links negotiated 1000\,Mb/s, and the mean round-trip time to the gateway was 0.68\,ms over five pings with no packet loss. The experiments of the original submission (v1, Section~\ref{sec:res_v1}) were run on the same three nodes connected over WiFi (IEEE 802.11ac); the testbed was reassembled on the wired network between submission and revision.
+Our testbed consists of three NVIDIA Jetson Orin Nano Super edge nodes, each equipped with a different depth camera, as summarized in Table~\ref{tab:hardware}. For the revision experiments the three nodes are connected by wired Gigabit Ethernet through a single switch, and Node~A hosts the Flower server in addition to its own client. All three nodes negotiate 1000\,Mb/s full duplex. The round-trip time from the server node (Node~A) to each client, measured with 20 ICMP echo requests per link (default 56-byte payload), had a mean of 1.09\,ms (range 0.55--2.27\,ms) to Node~B and 0.84\,ms (range 0.52--1.58\,ms) to Node~C, with no packet loss. The experiments of the original submission (v1, Section~\ref{sec:res_v1}) were run on the same three nodes connected over WiFi (IEEE 802.11ac); the testbed was reassembled on the wired network between submission and revision.
 
 \begin{table}[t]
 \centering

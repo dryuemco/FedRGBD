@@ -20,33 +20,47 @@ Node A (FL Server + Client)       Node B (FL Client)            Node C (FL Clien
                           └─────────────────────────────────┘
 ```
 
-The revision experiments run on wired Gigabit Ethernet with static addresses (link 1000 Mb/s;
-mean RTT to the gateway 0.68 ms over 5 pings, 0% loss). The testbed was reassembled between
-submission and revision: **the v1 experiments (`results/3node_*` etc.) ran over WiFi
-(IEEE 802.11ac)**, so v1 and revision wall-clock times are not comparable.
+The revision experiments run on wired Gigabit Ethernet with static addresses (1000 Mb/s full
+duplex; server-to-client RTT 0.84-1.09 ms mean, 2.27 ms max, 0% loss, see below). The testbed
+was reassembled between submission and revision: **the v1 experiments (`results/3node_*` etc.)
+ran over WiFi (IEEE 802.11ac)**, so v1 and revision wall-clock times are not comparable.
 
 The FL link is the onboard Ethernet interface `enP8p1s0`; WiFi is down on all three nodes.
 
 ### Raw link measurements (source of the numbers in the paper, Section III-A)
 
-The paper states "links negotiated 1000 Mb/s" and "mean round-trip time to the gateway
-0.68 ms over five pings, no packet loss". These come from the commands below.
-
-> **TODO (author):** paste the verbatim output here, and say which node it was run on and
-> when. Do not retype or summarise the numbers.
-
-```bash
-sudo ethtool enP8p1s0 | grep -E 'Speed|Duplex|Link detected'
-ping -c 5 <gateway-ip>
-```
+All issued from Node A (fedrgbd-a, 192.168.1.10), 2026-09-19, 20 pings each,
+default 56-byte payload, wired Gigabit link, GUI disabled on all three nodes.
 
 ```text
-<paste ethtool output here>
+$ sudo ethtool enP8p1s0 | grep -E "Speed|Duplex|Link detected"
+        Speed: 1000Mb/s
+        Duplex: Full
+        Link detected: yes
+
+$ ping -c 20 192.168.1.7          # Node A -> Node B
+--- 192.168.1.7 ping statistics ---
+20 packets transmitted, 20 received, 0% packet loss, time 19064ms
+rtt min/avg/max/mdev = 0.549/1.088/2.271/0.413 ms
+
+$ ping -c 20 192.168.1.6          # Node A -> Node C
+--- 192.168.1.6 ping statistics ---
+20 packets transmitted, 20 received, 0% packet loss, time 19083ms
+rtt min/avg/max/mdev = 0.521/0.837/1.582/0.210 ms
+
+$ ping -c 5 192.168.1.1           # Node A -> gateway, for reference only
+--- 192.168.1.1 ping statistics ---
+5 packets transmitted, 5 received, 0% packet loss, time 4033ms
+rtt min/avg/max/mdev = 0.635/0.998/1.166/0.189 ms
 ```
 
-```text
-<paste the ping summary here (the "packet loss" and "rtt min/avg/max/mdev" lines)>
-```
+The paper reports the two server-to-client links (Node A -> B, Node A -> C). The gateway
+figure is reference only and is not used in the paper. (An earlier 0.68 ms gateway RTT,
+measured from Node C, is superseded and no longer cited.)
+
+> **TODO (author):** the `ethtool` output above is from Node A only. The paper states
+> 1000 Mb/s full duplex on all three nodes; paste the same `ethtool` lines from Node B and
+> Node C here so that claim is traceable too.
 
 ## Node Details
 
