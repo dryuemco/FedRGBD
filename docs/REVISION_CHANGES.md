@@ -379,3 +379,22 @@ Everything below was done on the desktop without the Jetson testbed; 227 CPU tes
   `--all_seeds`, never hand-type a number into the paper) and the run recipe in front of it.
 * Not done (needs the author): funding / AI-disclosure wording; testbed photo; scene labels for
   the cross-sensor experiment.  Everything else that remains is a Jetson run.
+
+### RNG streams and the evaluation passes (verified 2026-09-19)
+
+Iterating a `DataLoader` that has no generator of its own draws one number from the
+global torch generator per pass, even with `shuffle=False` (checked in torch 2.5.1 and
+2.11); the training loaders use their own seeded generator and draw nothing from it.
+MobileNetV3-Small's classifier has a `Dropout` layer, which does draw from the global
+generator, so every such pass shifts the dropout masks of later training.
+
+* **Validation pass: deliberately not guarded.** The v1 client (`main:src/fl/client.py`)
+  and the schema-2 baselines already iterated the validation loader every round/epoch,
+  so validation shifted the dropout stream in v1 exactly as it does now: one draw per
+  pass, independent of the data and of the split size. Keeping it unguarded keeps the
+  revision's RNG consumption identical to v1's; it is **not** an additional difference
+  between v1 and revision runs.
+* **Test pass: guarded** (`report_only()`, commit 94e0349). Without the guard, the new
+  per-round/per-epoch test pass would have added one draw per pass and made training
+  differ from a run without it. The unguarded version (c98e34b) never produced
+  experiment results: no FL run and no baseline was run with it.
