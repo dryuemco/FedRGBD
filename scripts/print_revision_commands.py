@@ -32,11 +32,11 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_CONFIG = os.path.join(REPO_ROOT, "configs", "experiment_matrix.yaml")
 
 NODE_IPS = {
-    "node_a": "192.168.1.4",
-    "node_b": "192.168.1.5",
-    "node_c": "192.168.1.3",
+    "node_a": "192.168.1.10",
+    "node_b": "192.168.1.7",
+    "node_c": "192.168.1.6",
 }
-SERVER_ADDRESS = "192.168.1.4:8080"
+SERVER_ADDRESS = "192.168.1.10:8080"
 
 DIST_TAGS = {
     "iid": "iid",

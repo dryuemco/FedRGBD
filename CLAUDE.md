@@ -19,7 +19,19 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
   syntax, `numpy==1.26.4`, `batch_size=8` — these are hardware constraints, do not "modernise" them.
 - **Desktop (Windows, RTX 5090)**: venv `~/venvs/fedrgbd` (CPU, tests) and `~/venvs/fedrgbd-gpu`
   (CUDA 12.8, baselines). System Python and WSL have no torch.
+- **Testbed network** (wired Gigabit Ethernet, static): node_a = `192.168.1.10` (also the Flower
+  server, `:8080`), node_b = `192.168.1.7`, node_c = `192.168.1.6`.
+- **FLAME layout**: the Kaggle archive unpacks as `Training/Training/{Fire,No_Fire}` and
+  `Test/Test/{Fire,No_Fire}`, but the `data/splits` manifests expect a flat `{Fire,No_Fire}`
+  layout. On a (re)built node, move all files into `data/raw/flame_dataset/Fire` and
+  `data/raw/flame_dataset/No_Fire` (30155 + 17837) before running `--from_manifest`, otherwise the
+  replay aborts with missing sources.
+- **GUI off on all three nodes** (`sudo systemctl set-default multi-user.target`): the desktop
+  session costs ~2.5 GB of the 8 GB, and the nodes must be comparable because per-round wall-clock
+  is a reported result.
 - Tests: `python -m pytest tests -q -k "not end_to_end"` (~250 CPU tests, seconds).
+  On the Jetson nodes the ROS 2 pytest plugins break collection; use
+  `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests -q -k "not end_to_end" -p no:cacheprovider`.
 
 ## Hard rules
 

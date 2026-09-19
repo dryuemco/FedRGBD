@@ -194,7 +194,7 @@ experiment_5:
 #   records which distribution/config a run belongs to independent of the
 #   output directory name.)
 # Client CLI (run once per node, same --seed on every node):
-#   python3 src/fl/client.py --server 192.168.1.4:8080 \
+#   python3 src/fl/client.py --server 192.168.1.10:8080 \
 #       --data_dir data/processed/<split>/<node> --batch_size 8 --seed <S> \
 #       --local_epochs <E> --lr <LR>
 #
@@ -220,9 +220,9 @@ revision:
     dist_tags: [iid, noniid, dirichlet0.1, dirichlet0.5, dirichlet1,
                 iid_sub0.05, iid_sub0.01, noniid_sub0.05, noniid_sub0.01]
     node_ips:
-      node_a: {ip: "192.168.1.4", role: "server + client"}
-      node_b: {ip: "192.168.1.5", role: "client"}
-      node_c: {ip: "192.168.1.3", role: "client"}
+      node_a: {ip: "192.168.1.10", role: "server + client"}
+      node_b: {ip: "192.168.1.7", role: "client"}
+      node_c: {ip: "192.168.1.6", role: "client"}
     time_budget_note: >
       ~90-170 minutes per FL run on the 3-Jetson testbed (see block comment
       above); no precise per-run timing beyond that range is available.

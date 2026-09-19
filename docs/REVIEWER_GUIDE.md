@@ -38,7 +38,7 @@ the study's contribution — real hardware produces results that simulations can
 # Flash JetPack 6.2 on all 3 Jetsons using NVIDIA SDK Manager
 # Connect cameras: D435if → Node A, D435i → Node B, ZED 2i → Node C (all USB3)
 # Connect all nodes to same WiFi network
-# Assign static IPs: Node A=192.168.1.4, Node B=192.168.1.5, Node C=192.168.1.3
+# Assign static IPs: Node A=192.168.1.10, Node B=192.168.1.7, Node C=192.168.1.6
 ```
 
 ### Step 2: Software Setup (~1 hour per node)

@@ -6,7 +6,7 @@
 Node A (FL Server + Client)       Node B (FL Client)            Node C (FL Client)
 ┌──────────────────────┐        ┌──────────────────────┐      ┌──────────────────────┐
 │ Jetson Orin Nano Super│        │ Jetson Orin Nano Super│      │ Jetson Orin Nano Super│
-│ IP: 192.168.1.4      │        │ IP: 192.168.1.5      │      │ IP: 192.168.1.3      │
+│ IP: 192.168.1.10     │        │ IP: 192.168.1.7      │      │ IP: 192.168.1.6      │
 │ Hostname: fedrgbd-a  │        │ Hostname: fedrgbd-b  │      │ Hostname: fedrgbd-c  │
 │                       │        │                       │      │                       │
 │ USB3: D435if camera  │        │ USB3: D435i camera   │      │ USB3: ZED 2i camera  │
@@ -20,7 +20,7 @@ Node A (FL Server + Client)       Node B (FL Client)            Node C (FL Clien
 | Property | Node A | Node B | Node C |
 |----------|--------|--------|--------|
 | Hostname | fedrgbd-a | fedrgbd-b | fedrgbd-c |
-| IP | 192.168.1.4 | 192.168.1.5 | 192.168.1.3 |
+| IP | 192.168.1.10 | 192.168.1.7 | 192.168.1.6 |
 | Camera | Intel RealSense D435if | Intel RealSense D435i | Stereolabs ZED 2i |
 | Camera S/N | 239722070442 | 405622076256 | 32608934 |
 | Camera FW | 5.13.0.55 | 5.17.0.10 | 1523 |
@@ -33,14 +33,14 @@ Node A (FL Server + Client)       Node B (FL Client)            Node C (FL Clien
 
 ```bash
 # From Node A
-ping -c 3 192.168.1.5   # Node B
-ping -c 3 192.168.1.3   # Node C
+ping -c 3 192.168.1.7   # Node B
+ping -c 3 192.168.1.6   # Node C
 
 # From Node B
-ping -c 3 192.168.1.4   # Node A
+ping -c 3 192.168.1.10   # Node A
 
 # From Node C
-ping -c 3 192.168.1.4   # Node A
+ping -c 3 192.168.1.10   # Node A
 ```
 
 ## Power Mode

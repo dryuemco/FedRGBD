@@ -136,7 +136,7 @@ metriklerin, `payload_bytes_up` ≈ 6.13 MB ve `elapsed_s` değerlerinin geldiğ
 # Node A
 python3 src/fl/server.py --strategy fedavg --rounds 1 --seed 42 --min_clients 3 --output_dir results/smoke --tag smoke
 # her node
-python3 src/fl/client.py --server 192.168.1.4:8080 --data_dir data/processed/iid_sub0.01/node_X --batch_size 8 --seed 42
+python3 src/fl/client.py --server 192.168.1.10:8080 --data_dir data/processed/iid_sub0.01/node_X --batch_size 8 --seed 42
 python3 scripts/analyze_results.py --results_dir results --output_dir analysis --include_test_runs
 ```
 Sonra `results/smoke` silinir (matris dizin adlarıyla çakışmaz ama temiz kalsın).

@@ -214,7 +214,7 @@ def test_fl_run_has_server_and_three_client_commands(revision):
     assert len(client_cmds) == 3
     for cmd in client_cmds:
         assert "src/fl/client.py" in cmd
-        assert "--server 192.168.1.4:8080" in cmd
+        assert "--server 192.168.1.10:8080" in cmd
 
 
 def test_baseline_run_epochs_and_command(revision):

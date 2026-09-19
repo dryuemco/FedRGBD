@@ -78,17 +78,17 @@ into val/test.
 
 ### 4. Run FL Experiment
 ```bash
-# Server (Node A — 192.168.1.4)
+# Server (Node A — 192.168.1.10)
 python3 src/fl/server.py --strategy fedavg --rounds 3 --seed 42 --output_dir results/3node_iid_fedavg_seed42
 
 # Client (Node A)
-python3 src/fl/client.py --server 192.168.1.4:8080 --data_dir data/processed/iid/node_a --batch_size 8 --seed 42
+python3 src/fl/client.py --server 192.168.1.10:8080 --data_dir data/processed/iid/node_a --batch_size 8 --seed 42
 
-# Client (Node B — 192.168.1.5)
-python3 src/fl/client.py --server 192.168.1.4:8080 --data_dir data/processed/iid/node_b --batch_size 8 --seed 42
+# Client (Node B — 192.168.1.7)
+python3 src/fl/client.py --server 192.168.1.10:8080 --data_dir data/processed/iid/node_b --batch_size 8 --seed 42
 
-# Client (Node C — 192.168.1.3)
-python3 src/fl/client.py --server 192.168.1.4:8080 --data_dir data/processed/iid/node_c --batch_size 8 --seed 42
+# Client (Node C — 192.168.1.6)
+python3 src/fl/client.py --server 192.168.1.10:8080 --data_dir data/processed/iid/node_c --batch_size 8 --seed 42
 ```
 
 ### 5. Generate Figures

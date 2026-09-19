@@ -273,7 +273,7 @@ class FedRGBDClient(fl.client.NumPyClient):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--server", default="192.168.1.4:8080")
+    parser.add_argument("--server", default="192.168.1.10:8080")
     parser.add_argument("--data_dir", default="data/processed/iid/node_a")
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=0.001)
