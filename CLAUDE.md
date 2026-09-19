@@ -57,6 +57,14 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
    v1 (image-level split) results kept as the published reference. New runs go to `results/rev_*`.
 6. The default (no-flag) code path of `data_splitter.py` is pinned bit-identical to the original
    submission by a regression test. Changes must stay behind a flag.
+7. **The clean-subset rule is pre-registered and frozen.** Fixed 2026-09-19, before any
+   clean-subset metric was computed (full-set baseline results and one FL run existed then):
+   a val/test image is excluded iff a training image of the same partition (all nodes) is within
+   dHash ≤ 12 or pHash ≤ 10 (`scripts/clean_subset.py`, lists in
+   `analysis/leakage/clean_subset/`, `RULE.json`). Headline metrics are reported on all held-out
+   images and on the clean subset. Never change the thresholds, hashes or lists after seeing
+   results; `python scripts/clean_subset.py --check` must report "identical". If the rule ever
+   has to change, disclose it in the paper and the response letter.
 
 ## Model selection (declared rule — use this wording, do not paraphrase it)
 
