@@ -8,6 +8,12 @@
 # Usage:
 #   sudo ./tc_network_throttle.sh <condition> [interface]
 #
+# Interface: the wired FL link. Default enP8p1s0 (Jetson Orin Nano onboard
+# Ethernet); override with the second argument or FEDRGBD_IFACE. The script
+# never auto-detects: it aborts if the interface does not exist or is a WiFi
+# interface, so it cannot silently throttle the wrong link. (v1 of the paper
+# ran over WiFi; the revision testbed is wired Gigabit Ethernet.)
+#
 # Conditions:
 #   baseline    — Remove all limits
 #   10mbps      — Limit to 10 Mbps
@@ -21,23 +27,19 @@ set -e
 CONDITION="${1:-status}"
 IFACE="${2:-}"
 
-# Auto-detect network interface (WiFi first, then Ethernet)
-if [ -z "$IFACE" ]; then
-    # Try WiFi interfaces first (current setup uses WiFi)
-    IFACE=$(ip -o link show | awk -F': ' '{print $2}' | grep -E '^wl|^wifi' | head -1)
+IFACE="${IFACE:-${FEDRGBD_IFACE:-enP8p1s0}}"
 
-    # Fallback to Ethernet
-    if [ -z "$IFACE" ]; then
-        IFACE=$(ip -o link show | awk -F': ' '{print $2}' | grep -E '^eth|^enp|^eno' | head -1)
-    fi
-
-    if [ -z "$IFACE" ]; then
-        echo "ERROR: No network interface found."
-        echo "Specify manually: sudo $0 <condition> <interface>"
-        exit 1
-    fi
-    echo "Auto-detected interface: $IFACE"
+if [ ! -e "/sys/class/net/$IFACE" ]; then
+    echo "ERROR: network interface '$IFACE' not found on $(hostname)." >&2
+    echo "Available interfaces: $(ls /sys/class/net | tr '\n' ' ')" >&2
+    echo "Pass the wired FL interface explicitly: sudo $0 $CONDITION <interface>" >&2
+    exit 1
 fi
+if [ -d "/sys/class/net/$IFACE/wireless" ] || [ -e "/sys/class/net/$IFACE/phy80211" ]; then
+    echo "ERROR: '$IFACE' is a wireless interface; the FL link is wired Gigabit Ethernet." >&2
+    exit 1
+fi
+echo "Interface: $IFACE"
 
 case "$CONDITION" in
     baseline)

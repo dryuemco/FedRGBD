@@ -27,7 +27,7 @@ FedRGBD is the first empirical study of **multimodal federated learning** using 
 | Camera A | Intel RealSense D435if (active IR stereo) | Sensor Node A |
 | Camera B | Intel RealSense D435i (active IR stereo) | Sensor Node B |
 | Camera C | Stereolabs ZED 2i (passive stereo + neural depth) | Sensor Node C |
-| Network | WiFi (IEEE 802.11ac) | FL communication |
+| Network | Wired Gigabit Ethernet, one switch (v1 used WiFi 802.11ac) | FL communication |
 
 ## Software Stack
 
@@ -243,7 +243,7 @@ FedRGBD/
 | 2 | Modality Ablation | RGB / Depth / IR / RGB+D / RGB+D+IR | 15 |
 | 3 | Cross-Sensor Generalization | D435if ↔ D435i ↔ ZED 2i | 27 |
 | 4 | Resource Profiling | Per-round energy, latency, communication | — |
-| 5 | Network Constraint | WiFi baseline, 10 Mbps, 1 Mbps, 1 Mbps + 5% loss | 12 |
+| 5 | Network Constraint | Unthrottled wired baseline, 10 Mbps, 1 Mbps, 1 Mbps + 5% loss | 12 |
 
 ## Known Issues
 

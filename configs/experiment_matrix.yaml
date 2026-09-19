@@ -2,7 +2,8 @@
 # FedRGBD — Complete Experiment Matrix
 # =============================================================================
 # Total runs: ~90 (excluding profiling which runs in parallel)
-# Hardware: 3× Jetson Orin Nano Super, WiFi, D435if + D435i + ZED 2i
+# Hardware: 3× Jetson Orin Nano Super, wired Gigabit Ethernet, D435if + D435i + ZED 2i
+#           (the v1 experiments of the original submission ran over WiFi 802.11ac)
 # =============================================================================
 
 experiment_1:
@@ -140,7 +141,7 @@ experiment_5:
   strategy: "fedprox_0.01"  # Best from Exp 1
 
   network_conditions:
-    - name: "wifi_baseline"
+    - name: "wired_baseline"   # unthrottled wired GbE (was "wifi_baseline" in v1)
       bandwidth: "unrestricted"
       packet_loss: 0.0
 

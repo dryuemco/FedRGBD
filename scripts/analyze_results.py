@@ -1000,12 +1000,15 @@ def summary_table(runs: Sequence[Dict[str, Any]]) -> pd.DataFrame:
             rows.append({
                 "config_id": config_id,
                 "label": first["label"],
+                "protocol": first.get("protocol"),
                 "kind": first["kind"],
                 "strategy": first["strategy"],
                 "mu": first.get("mu"),
                 "distribution": first["distribution"],
                 "n_nodes": first.get("n_nodes"),
                 "num_rounds": first.get("num_rounds"),
+                "local_epochs": first.get("local_epochs"),
+                "lr": first.get("lr"),
                 "metric": name,
                 "n_seeds": stats_dict["n"],
                 "seeds": ",".join(seeds),
@@ -1018,8 +1021,8 @@ def summary_table(runs: Sequence[Dict[str, Any]]) -> pd.DataFrame:
                 "max": stats_dict["max"],
             })
     df = pd.DataFrame(rows, columns=[
-        "config_id", "label", "kind", "strategy", "mu", "distribution", "n_nodes",
-        "num_rounds", "metric", "n_seeds", "seeds", "mean", "std", "ci95",
+        "config_id", "label", "protocol", "kind", "strategy", "mu", "distribution", "n_nodes",
+        "num_rounds", "local_epochs", "lr", "metric", "n_seeds", "seeds", "mean", "std", "ci95",
         "ci_low", "ci_high", "min", "max",
     ])
     if not df.empty:
@@ -1444,6 +1447,16 @@ def _figure_note(fig, notes: Sequence[str]) -> None:
     fig.text(0.01, 0.005, "; ".join(notes), fontsize=6.5, style="italic", color="#555555")
 
 
+def cost_axis_items(prepared: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Curves that may be drawn on the wall-clock time / communication axes.
+
+    v1 (image-level-split) runs are excluded: they were timed over WiFi and under a
+    different partition, so their time axis is not comparable with the revision
+    runs (wired Gigabit Ethernet).  They remain on the per-round axis.
+    """
+    return [item for item in prepared if item.get("protocol") != PROTOCOL_IMAGE]
+
+
 def make_plots(
     runs: Sequence[Dict[str, Any]],
     output_dir: str,
@@ -1490,6 +1503,7 @@ def make_plots(
                 label = "{} ({})".format(group[0]["strategy_display"], group[0]["distribution"])
             prepared.append({
                 "label": "{} [n={}]".format(label, len(group)),
+                "protocol": group[0].get("protocol"),
                 "color": PALETTE[idx % len(PALETTE)],
                 "marker": MARKER_CYCLE[idx % len(MARKER_CYCLE)],
                 "time_estimated": any(r.get("time_estimated") for r in group),
@@ -1500,8 +1514,9 @@ def make_plots(
         ylabel = metric.replace("_", " ").title()
         # accuracy-like metrics live in [0, 1]; clip the CI band there (loss is unbounded)
         lo_clip, hi_clip = (-np.inf, np.inf) if "loss" in metric else (0.0, 1.0)
-        est_time = any(p["time_estimated"] for p in prepared)
-        est_comm = any(p["comm_estimated"] for p in prepared)
+        cost_items = cost_axis_items(prepared)
+        est_time = any(p["time_estimated"] for p in cost_items)
+        est_comm = any(p["comm_estimated"] for p in cost_items)
 
         # --- metric vs round ---------------------------------------------- #
         if prepared:
@@ -1528,9 +1543,10 @@ def make_plots(
                   written)
             plt.close(fig)
 
-            # --- metric vs wall-clock time -------------------------------- #
+        # --- metric vs wall-clock time (revision runs only) --------------- #
+        if cost_items:
             fig, ax = plt.subplots(figsize=(4.8, 3.3))
-            for item in prepared:
+            for item in cost_items:
                 s = item["stats"]
                 ax.plot(s["time"], s["mean"], color=item["color"], marker=item["marker"],
                         linestyle="--" if item["time_estimated"] else "-",
@@ -1553,9 +1569,9 @@ def make_plots(
                   written)
             plt.close(fig)
 
-            # --- metric vs communication ---------------------------------- #
+            # --- metric vs communication (revision runs only) ------------- #
             fig, ax = plt.subplots(figsize=(4.8, 3.3))
-            for item in prepared:
+            for item in cost_items:
                 s = item["stats"]
                 if not np.any(np.isfinite(s["comm"])):
                     continue

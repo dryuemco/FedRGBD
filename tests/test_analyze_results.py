@@ -554,8 +554,6 @@ def test_make_plots_writes_non_empty_figures(synthetic_runs, tmp_path):
     expected = [
         "accuracy_vs_round_non_iid_label.png",
         "accuracy_vs_round_non_iid_label.pdf",
-        "accuracy_vs_time_non_iid_label.png",
-        "accuracy_vs_communication_non_iid_label.png",
         "accuracy_vs_round_dirichlet_0.1.png",
         "accuracy_vs_round_all.png",
         "final_metrics_dirichlet_0.1.png",
@@ -567,7 +565,31 @@ def test_make_plots_writes_non_empty_figures(synthetic_runs, tmp_path):
 
     # accuracy-only (old-format) distributions get no all-metrics bar chart
     assert not os.path.isfile(os.path.join(out, "final_metrics_non_iid_label.png"))
+    # every synthetic run here is v1 (image-level, not rev_*): no time / communication axes
+    assert not os.path.isfile(os.path.join(out, "accuracy_vs_time_non_iid_label.png"))
+    assert not os.path.isfile(os.path.join(out, "accuracy_vs_communication_non_iid_label.png"))
     assert IEEE_STYLE["font.family"] == "serif"
+
+
+def test_time_and_communication_plots_exclude_v1_runs(tmp_path):
+    """v1 runs were timed over WiFi under another partition: never on the time axis."""
+    from scripts.analyze_results import cost_axis_items
+
+    root = str(tmp_path / "results")
+    write_old_fl_run(root, "3node_noniid_fedavg_seed42", "fedavg", [0.5, 0.9, 0.95],
+                     [0.8, 0.2, 0.1], seed=42)
+    write_new_fl_run(root, "rev_non_iid_label_fedavg_seed42", "fedavg", [0.6, 0.8, 0.9],
+                     [0.7, 0.4, 0.3], 42, ["non_iid_label"])
+    runs = collect_runs(root, warn=False)
+    assert {r["protocol"] for r in runs} == {"image", "group"}
+
+    items = [{"label": r["run_name"], "protocol": r["protocol"]} for r in runs]
+    assert [i["label"] for i in cost_axis_items(items)] == ["rev_non_iid_label_fedavg_seed42"]
+
+    out = str(tmp_path / "figs")
+    make_plots(runs, out, metric="accuracy")
+    assert os.path.isfile(os.path.join(out, "accuracy_vs_time_non_iid_label.png"))
+    assert os.path.isfile(os.path.join(out, "accuracy_vs_round_non_iid_label.png"))
 
 
 # --------------------------------------------------------------------------- #

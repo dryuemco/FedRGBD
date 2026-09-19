@@ -11,6 +11,7 @@ tables, so no number in the manuscript is ever re-typed by hand:
     pairwise_tests.tex        paired strategy comparisons (d, Wilcoxon p, t p)
     friedman.tex              Friedman omnibus test per distribution
     full_metrics_<dist>.tex   every final metric per config (schema-2 runs)
+    time.tex                  tab:time -- revision FL runs only (v1 timings omitted)
 
 Every table uses ``booktabs`` (``\toprule`` / ``\midrule`` / ``\bottomrule``)
 and carries a ``\caption`` and a ``\label``; ``\multicolumn`` groups the
@@ -520,6 +521,94 @@ def full_metrics_tex(df: pd.DataFrame, distribution: str, metrics: Sequence[str]
 
 
 # --------------------------------------------------------------------------- #
+# time.tex  (tab:time -- revision runs only)
+# --------------------------------------------------------------------------- #
+#: the default operating point of the main comparison (Section III-J)
+TIME_TABLE_POINT = {"num_rounds": 3, "local_epochs": 5, "lr": 0.001}
+TIME_TABLE_DISTS = ("iid", "non_iid_label")
+
+
+def _protocol_of(row: Any) -> str:
+    """``protocol`` column, else the ``{group}`` / ``{image}`` marker of the label."""
+    value = row.get("protocol") if hasattr(row, "get") else None
+    if isinstance(value, str) and value:
+        return value
+    label = str(row.get("label") or "")
+    if "{group}" in label:
+        return "group"
+    if "{image}" in label:
+        return "image"
+    return ""
+
+
+def _at_point(row: Any, field: str, target: float) -> bool:
+    """True when ``field`` equals ``target`` or is missing (older summary CSVs)."""
+    value = _as_float(row.get(field))
+    return value is None or math.isclose(value, target, rel_tol=1e-9, abs_tol=1e-12)
+
+
+def time_tex(df: pd.DataFrame, siunitx: bool = False) -> Optional[str]:
+    """``tab:time``: wall-clock time and communication of the revision FL runs.
+
+    Only group-level-split (revision) federated runs at the default operating
+    point are included.  v1 runs are excluded on purpose: they were timed over
+    WiFi and under the image-level split, so their wall-clock times are not
+    comparable with the revision runs (wired Gigabit Ethernet).
+    """
+    if df.empty or "metric" not in df.columns:
+        return None
+    rows: Dict[Tuple[int, str, str], Dict[str, Any]] = {}
+    for _, row in df.iterrows():
+        if str(row.get("kind")) != "fl" or _protocol_of(row) != "group":
+            continue
+        dist = str(row.get("distribution"))
+        if dist not in TIME_TABLE_DISTS:
+            continue
+        if not all(_at_point(row, f, v) for f, v in TIME_TABLE_POINT.items()):
+            continue
+        n_nodes = _as_float(row.get("n_nodes"))
+        name = config_name(row.get("label"), dist).replace(" (group-level)", "")
+        name = re.sub(r"\s*\[\d+N\]", "", name).strip()
+        key = (int(n_nodes) if n_nodes else 0, dist, name)
+        rows.setdefault(key, {})[str(row["metric"])] = row
+    rows = {k: v for k, v in rows.items() if "total_time_s" in v}
+    if not rows:
+        return None
+
+    header = [_row(["Configuration", "Time (min)", "Comm.\\ (MB)"])]
+    body: List[str] = []
+    for (n_nodes, dist, name) in sorted(rows, key=lambda k: (k[0], TIME_TABLE_DISTS.index(k[1]),
+                                                              k[2])):
+        metrics = rows[(n_nodes, dist, name)]
+        t = metrics["total_time_s"]
+        minutes = {k: (_as_float(t.get(k)) / 60.0 if _as_float(t.get(k)) is not None else None)
+                   for k in ("mean", "std", "ci_low", "ci_high")}
+        n_seeds = _as_float(t.get("n_seeds"))
+        time_cell = "{} {} ({})".format(
+            fmt_mean_std(minutes["mean"], minutes["std"], 1, siunitx),
+            fmt_ci(minutes["ci_low"], minutes["ci_high"], 1, siunitx),
+            int(n_seeds) if n_seeds else 0).replace(" -- (", " (")
+        comm = metrics.get("final_cumulative_mb")
+        comm_cell = fmt_number(comm.get("mean"), 1, siunitx) if comm is not None else MISSING
+        body.append(_row(["{}N {} {}".format(n_nodes, dist_label(dist), name),
+                          time_cell, comm_cell]))
+
+    return latex_table(
+        column_spec="lcc",
+        header_lines=header,
+        body_lines=body,
+        caption="Measured Total Training Time, Group-Level Split, Wired Gigabit Ethernet "
+                "(3 Rounds)",
+        label="tab:time",
+        note="Time: mean $\\pm$ std [95\\% CI] ($n$ seeds) of the server wall-clock time. "
+             "Communication: measured cumulative payload over the run. Only revision runs "
+             "(group-level split, wired Gigabit Ethernet) are included; v1 timings (WiFi, "
+             "image-level split) are not comparable and are omitted. Produced from "
+             "\\texttt{summary\\_table.csv}.",
+    )
+
+
+# --------------------------------------------------------------------------- #
 # driver
 # --------------------------------------------------------------------------- #
 def _safe_label(text: Any) -> str:
@@ -579,6 +668,7 @@ def export(analysis_dir: str, output_dir: str, metrics: Optional[Sequence[str]] 
            "per_round_{}.tex".format(_safe_label(per_round_metric)))
     _write(pairwise_tex(tables["pairwise"], digits, siunitx), "pairwise_tests.tex")
     _write(friedman_tex(tables["friedman"], digits, siunitx), "friedman.tex")
+    _write(time_tex(summary, siunitx), "time.tex")
 
     full_metrics = available_full_metrics(summary)
     if len(full_metrics) > 1:

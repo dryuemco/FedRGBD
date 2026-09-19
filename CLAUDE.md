@@ -28,7 +28,10 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
   replay aborts with missing sources.
 - **GUI off on all three nodes** (`sudo systemctl set-default multi-user.target`): the desktop
   session costs ~2.5 GB of the 8 GB, and the nodes must be comparable because per-round wall-clock
-  is a reported result.
+  is a reported result. As of 2026-09-19 all three nodes run with GUI off and have ~6.8 GB of the
+  8 GB available, so they are comparable for timing.
+- **v1 ran over WiFi (802.11ac), the revision over wired GbE.** v1 and revision wall-clock numbers
+  are not comparable; revision timings supersede the v1 ones.
 - Tests: `python -m pytest tests -q -k "not end_to_end"` (~250 CPU tests, seconds).
   On the Jetson nodes the ROS 2 pytest plugins break collection; use
   `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests -q -k "not end_to_end" -p no:cacheprovider`.

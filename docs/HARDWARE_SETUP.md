@@ -10,9 +10,42 @@ Node A (FL Server + Client)       Node B (FL Client)            Node C (FL Clien
 │ Hostname: fedrgbd-a  │        │ Hostname: fedrgbd-b  │      │ Hostname: fedrgbd-c  │
 │                       │        │                       │      │                       │
 │ USB3: D435if camera  │        │ USB3: D435i camera   │      │ USB3: ZED 2i camera  │
-│ WiFi: 802.11ac       │───WiFi──│ WiFi: 802.11ac       │──────│ WiFi: 802.11ac       │
+│ Eth: 1 GbE (wired)   │        │ Eth: 1 GbE (wired)   │      │ Eth: 1 GbE (wired)   │
 │ Power: 15W mode      │        │ Power: 15W mode      │      │ Power: 15W mode      │
-└──────────────────────┘        └──────────────────────┘      └──────────────────────┘
+└──────────┬───────────┘        └──────────┬───────────┘      └──────────┬───────────┘
+           │                               │                             │
+           └───────────────────┐           │           ┌─────────────────┘
+                          ┌────┴───────────┴───────────┴────┐
+                          │     Gigabit Ethernet switch     │
+                          └─────────────────────────────────┘
+```
+
+The revision experiments run on wired Gigabit Ethernet with static addresses (link 1000 Mb/s;
+mean RTT to the gateway 0.68 ms over 5 pings, 0% loss). The testbed was reassembled between
+submission and revision: **the v1 experiments (`results/3node_*` etc.) ran over WiFi
+(IEEE 802.11ac)**, so v1 and revision wall-clock times are not comparable.
+
+The FL link is the onboard Ethernet interface `enP8p1s0`; WiFi is down on all three nodes.
+
+### Raw link measurements (source of the numbers in the paper, Section III-A)
+
+The paper states "links negotiated 1000 Mb/s" and "mean round-trip time to the gateway
+0.68 ms over five pings, no packet loss". These come from the commands below.
+
+> **TODO (author):** paste the verbatim output here, and say which node it was run on and
+> when. Do not retype or summarise the numbers.
+
+```bash
+sudo ethtool enP8p1s0 | grep -E 'Speed|Duplex|Link detected'
+ping -c 5 <gateway-ip>
+```
+
+```text
+<paste ethtool output here>
+```
+
+```text
+<paste the ping summary here (the "packet loss" and "rtt min/avg/max/mdev" lines)>
 ```
 
 ## Node Details
@@ -21,6 +54,7 @@ Node A (FL Server + Client)       Node B (FL Client)            Node C (FL Clien
 |----------|--------|--------|--------|
 | Hostname | fedrgbd-a | fedrgbd-b | fedrgbd-c |
 | IP | 192.168.1.10 | 192.168.1.7 | 192.168.1.6 |
+| Network | Wired GbE (v1: WiFi) | Wired GbE (v1: WiFi) | Wired GbE (v1: WiFi) |
 | Camera | Intel RealSense D435if | Intel RealSense D435i | Stereolabs ZED 2i |
 | Camera S/N | 239722070442 | 405622076256 | 32608934 |
 | Camera FW | 5.13.0.55 | 5.17.0.10 | 1523 |

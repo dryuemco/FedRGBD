@@ -51,7 +51,7 @@
 % ABSTRACT
 % ============================================================
 \begin{abstract}
-Federated learning (FL) enables privacy-preserving distributed model training across edge devices, yet the large majority of published FL results are obtained from virtual clients simulated on a single server-class GPU. This paper reports an \emph{empirical, deliberately narrow-scope} evaluation of FL on a physical edge GPU cluster: three NVIDIA Jetson Orin Nano Super nodes connected over a wireless local network, each instrumented with a different depth camera (two Intel RealSense variants and one Stereolabs ZED~2i). We state the scope explicitly. The federated experiments train a single MobileNetV3-Small backbone on RGB partitions of the FLAME aerial fire-detection dataset under a three-round communication budget; the heterogeneous RGB-D sensors are characterised separately, in a dedicated cross-sensor generalisation study, and the depth modality is \emph{not} an input of the federated classifier. Within this scope we compare \fedavg{}, \fedprox{} ($\mu$ grid) and \fedbn{} against centralised and local-only references under IID partitions, a manually constructed label skew, Dirichlet label skew, and a low-data regime, and we report balanced accuracy, sensitivity, specificity, precision, macro-F1, MCC and ROC-AUC globally and per client, together with per-round wall-clock time and communication volume. Conclusions are supported by 95\% confidence intervals over repeated seeds rather than by point estimates, and all statements about \fedbn{} are restricted to the communication budgets actually tested. \todo{Rewrite the quantitative sentences of the abstract once the pending Jetson runs (sequence-level split, 5 seeds, Dirichlet, low-data, $\mu$/epoch/lr sweeps, 10-round \fedbn{}, leave-one-scene-out cross-sensor) are complete; do not reuse v1 numbers, they were obtained under the image-level split.} All code, configurations and analysis scripts are publicly available at \url{https://github.com/dryuemco/FedRGBD}.
+Federated learning (FL) enables privacy-preserving distributed model training across edge devices, yet the large majority of published FL results are obtained from virtual clients simulated on a single server-class GPU. This paper reports an \emph{empirical, deliberately narrow-scope} evaluation of FL on a physical edge GPU cluster: three NVIDIA Jetson Orin Nano Super nodes connected over a wired Gigabit Ethernet local network, each instrumented with a different depth camera (two Intel RealSense variants and one Stereolabs ZED~2i). We state the scope explicitly. The federated experiments train a single MobileNetV3-Small backbone on RGB partitions of the FLAME aerial fire-detection dataset under a three-round communication budget; the heterogeneous RGB-D sensors are characterised separately, in a dedicated cross-sensor generalisation study, and the depth modality is \emph{not} an input of the federated classifier. Within this scope we compare \fedavg{}, \fedprox{} ($\mu$ grid) and \fedbn{} against centralised and local-only references under IID partitions, a manually constructed label skew, Dirichlet label skew, and a low-data regime, and we report balanced accuracy, sensitivity, specificity, precision, macro-F1, MCC and ROC-AUC globally and per client, together with per-round wall-clock time and communication volume. Conclusions are supported by 95\% confidence intervals over repeated seeds rather than by point estimates, and all statements about \fedbn{} are restricted to the communication budgets actually tested. \todo{Rewrite the quantitative sentences of the abstract once the pending Jetson runs (sequence-level split, 5 seeds, Dirichlet, low-data, $\mu$/epoch/lr sweeps, 10-round \fedbn{}, leave-one-scene-out cross-sensor) are complete; do not reuse v1 numbers, they were obtained under the image-level split.} All code, configurations and analysis scripts are publicly available at \url{https://github.com/dryuemco/FedRGBD}.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -143,7 +143,7 @@ Hybrid designs that combine a fixed analytical transform with a learned CNN are 
 
 \subsection{Hardware Testbed}
 
-Our testbed consists of three NVIDIA Jetson Orin Nano Super edge nodes, each equipped with a different depth camera, as summarized in Table~\ref{tab:hardware}.
+Our testbed consists of three NVIDIA Jetson Orin Nano Super edge nodes, each equipped with a different depth camera, as summarized in Table~\ref{tab:hardware}. For the revision experiments the three nodes are connected by wired Gigabit Ethernet through a single switch, and Node~A hosts the Flower server in addition to its own client. The links negotiated 1000\,Mb/s, and the mean round-trip time to the gateway was 0.68\,ms over five pings with no packet loss. The experiments of the original submission (v1, Section~\ref{sec:res_v1}) were run on the same three nodes connected over WiFi (IEEE 802.11ac); the testbed was reassembled on the wired network between submission and revision.
 
 \begin{table}[t]
 \centering
@@ -167,8 +167,8 @@ Depth Range & 0.3--3\,m & 0.3--3\,m & 0.3--20\,m \\
 RGB Res. & 1920$\times$1080 & 1920$\times$1080 & 2208$\times$1242 \\
 IMU & BMI055 & BMI055 & BMI088 \\
 \midrule
-Network & \multicolumn{3}{c}{WiFi (IEEE 802.11ac)} \\
-IP Address & 192.168.1.4 & 192.168.1.5 & 192.168.1.3 \\
+Network & \multicolumn{3}{c}{Wired Gigabit Ethernet (v1: WiFi 802.11ac)} \\
+Topology & \multicolumn{3}{c}{Three nodes on one switch} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -408,7 +408,7 @@ Comparing strategies at equal round counts hides the fact that a round costs dif
 B(R) \;=\; 2\,R\,K\,|w| ,
 \label{eq:comm}
 \end{equation}
-which for \fedbn{} is reduced by the fraction of parameters held out of aggregation by~\eqref{eq:fedbn_b}. Results are therefore presented in three panels: accuracy versus round, accuracy versus elapsed wall-clock time, and accuracy versus cumulative megabytes transmitted. The time and volume axes are exact for all runs of the revised protocol; for the v1 runs, which predate the per-round instrumentation, both axes are reconstructed from the recorded total time and the model payload size and are marked as estimates.
+which for \fedbn{} is reduced by the fraction of parameters held out of aggregation by~\eqref{eq:fedbn_b}. Results are therefore presented in three panels: accuracy versus round, accuracy versus elapsed wall-clock time, and accuracy versus cumulative megabytes transmitted. The time and volume axes are measured for every run of the revised protocol. The v1 runs are not placed on these axes: they predate the per-round instrumentation and were executed over a different network (WiFi) and under a different partition, so their wall-clock times are not comparable with those of the revision runs (Section~\ref{sec:res_time}).
 
 \subsection{Leave-One-Scene-Out Cross-Sensor Protocol}
 \label{sec:loso}
@@ -852,36 +852,36 @@ Under the v1 three-round budget, \fedbn{} was the weakest method in both distrib
 \subsection{Time- and Communication-Normalised Comparison}
 \label{sec:res_time}
 
-Table~\ref{tab:time} reports the measured wall-clock cost of the v1 runs. Aggregated over seeds, a three-round 3-node run takes $6147 \pm 410$\,s with \fedavg{} under label skew and $10{,}500 \pm 494$\,s with \fedprox{} ($\mu=0.01$), i.e.\ a $1.71\times$ wall-clock overhead for \fedprox{}, attributable to the proximal-term computation and to the per-layer CPU-to-GPU transfer of $w^t$ required by the memory budget. Communication volume, in contrast, is identical for both ($110.3$\,MB cumulative over three rounds with $K=3$ and $|w| \approx 6.13$\,MB, in agreement with~\eqref{eq:comm}), because \fedprox{} changes the local objective and not the payload.
+Table~\ref{tab:time} reports the measured wall-clock cost and communication volume of the revision runs (group-level split, wired Gigabit Ethernet). \todo{From the \texttt{rev\_*} runs, state the three-round 3-node time of \fedavg{} and of \fedprox{} ($\mu=0.01$) under label skew and their ratio, with 95\% CIs. Do not reuse the v1 ratio.} Communication volume is identical for \fedavg{} and \fedprox{} ($110.3$\,MB cumulative over three rounds with $K=3$ and $|w| \approx 6.13$\,MB, in agreement with~\eqref{eq:comm}), because \fedprox{} changes the local objective and not the payload. The v1 runs of the original submission were timed over WiFi and under the image-level split; because both the network and the data partition have changed, v1 and revision wall-clock numbers are not comparable, and the v1 timings are superseded by, not extended with, the revision timings. They are therefore not reported here.
 
-This asymmetry matters for the interpretation of the first-round advantage of \fedprox{}: an improvement that is obtained per \emph{round} is not necessarily an improvement per \emph{second}. At the measured rates, the time \fedprox{} needs for its first round is of the same order as the time \fedavg{} needs to complete more than one round, so a fair claim requires the time-normalised curve of Fig.~\ref{fig:timecomm} rather than Table~\ref{tab:main_results}.
+The distinction between cost per round and cost per second matters for the interpretation of the first-round advantage of \fedprox{}: an improvement that is obtained per \emph{round} is not necessarily an improvement per \emph{second}, so a fair claim requires the time-normalised curve of Fig.~\ref{fig:timecomm} rather than Table~\ref{tab:main_results}. \todo{From the \texttt{rev\_*} runs, state how the time \fedprox{} needs for its first round compares with the time \fedavg{} needs per round.}
 
+\IfFileExists{tables/time.tex}{\input{tables/time.tex}}{%
 \begin{table}[t]
 \centering
-\caption{Measured Total Training Time, Image-Level Split (3 Rounds)}
+\caption{Measured Total Training Time, Group-Level Split, Wired Gigabit Ethernet (3 Rounds)}
 \label{tab:time}
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{@{}lccc@{}}
+\begin{tabular}{@{}lcc@{}}
 \toprule
-\textbf{Configuration} & \textbf{Time (min)} & \textbf{Comm.\ (MB)} & \textbf{R3 Acc.\ (\%)} \\
+\textbf{Configuration} & \textbf{Time (min)} & \textbf{Comm.\ (MB)} \\
 \midrule
-2N IID \fedavg{} & 61 & 73.5 & 99.68 \\
-2N Non-IID \fedavg{} & 81 & 73.5 & 99.85 \\
-3N IID \fedavg{} & 102 & 110.3 & 99.32 \\
-3N Non-IID \fedavg{} & 102 & 110.3 & 99.31 \\
-3N Non-IID \fedprox{} $\mu$=0.01 & 175 & 110.3 & 99.22 \\
-3N Non-IID \fedprox{} $\mu$=0.1 & 164 & 110.3 & 98.33 \\
-3N Non-IID \fedbn{} & 103 & $<$110.3 & 75.06 \\
+2N IID \fedavg{} & \PH & \PH \\
+2N Non-IID \fedavg{} & \PH & \PH \\
+3N IID \fedavg{} & \PH & \PH \\
+3N Non-IID \fedavg{} & \PH & \PH \\
+3N Non-IID \fedprox{} $\mu$=0.01 & \PH & \PH \\
+3N Non-IID \fedbn{} & \PH & \PH \\
 \bottomrule
 \end{tabular}
 \vspace{2pt}
-\footnotesize{Times are seed means of the recorded server elapsed time; accuracies are the seed means of Table~\ref{tab:v1_ci}. Communication volume follows~\eqref{eq:comm} with $|w| \approx 6.13$\,MB; the \fedbn{} entry is smaller because normalisation parameters are not transmitted. \todo{Replace the \fedbn{} communication entry with the exact measured value from \texttt{total\_\allowbreak communication\_\allowbreak bytes}, and add the 2-node rows for the revised protocol.}}
-\end{table}
+\footnotesize{\todo{Placeholder. This table is generated by \texttt{scripts/export\_latex\_tables.py} as \texttt{paper/tables/time.tex} from the \texttt{rev\_*} runs and replaces this placeholder automatically once that file exists. v1 (WiFi, image-level split) timings are not included.}}
+\end{table}}
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{figures/fig5_time_vs_accuracy}
-\caption{Wall-clock time versus final accuracy under the v1 protocol. \todo{Replace with the three-panel figure of Section~\ref{sec:timecomm}: accuracy vs.\ round, vs.\ elapsed seconds, vs.\ cumulative MB, with the v1 curves drawn dashed and footnoted as time/volume estimates.}}
+\IfFileExists{figures/fig_timecomm.pdf}{\includegraphics[width=\columnwidth]{figures/fig_timecomm}}{\fbox{\parbox[c][3cm][c]{0.9\columnwidth}{\centering\todo{three-panel figure}}}}
+\caption{Accuracy versus communication round, elapsed wall-clock time and cumulative transmitted megabytes for the revision runs (group-level split, wired Gigabit Ethernet). v1 runs are not drawn: they were timed over WiFi and under a different partition, so their time axis is not comparable. \todo{Generate from the \texttt{rev\_*} runs with \texttt{scripts/analyze\_results.py}, which excludes image-level-split runs from the time and communication panels.}}
 \label{fig:timecomm}
 \end{figure}
 
@@ -947,9 +947,9 @@ ZED 2i & \PHs & \PHs & \PHs \\
 
 Within the scope defined in Section~\ref{sec:scope}, the results support the following practical guidance.
 
-\textbf{Strategy selection depends on the deployment phase, and on the cost axis used.} When a system must be usable after a single aggregation round under label skew, the proximal term of~\eqref{eq:fedprox} substantially improves first-round quality relative to plain averaging. That advantage is measured per round; on this hardware the same wall-clock budget buys \fedavg{} additional rounds (Section~\ref{sec:res_time}), so the recommendation holds when rounds are expensive (scheduled, bandwidth-limited or manually supervised aggregation) and weakens when the constraint is total training time on the device.
+\textbf{Strategy selection depends on the deployment phase, and on the cost axis used.} When a system must be usable after a single aggregation round under label skew, the proximal term of~\eqref{eq:fedprox} substantially improves first-round quality relative to plain averaging. That advantage is measured per round; \todo{confirm from the revision timings (Section~\ref{sec:res_time}) whether, on this hardware, the same wall-clock budget buys \fedavg{} additional rounds}, in which case the recommendation holds when rounds are expensive (scheduled, bandwidth-limited or manually supervised aggregation) and weakens when the constraint is total training time on the device.
 
-\textbf{The memory-accuracy trade-off is real on edge hardware.} The proximal term requires a copy of the global parameters. On the 8\,GB shared-memory Jetson Orin Nano this forced a CPU-resident copy with per-layer transfers, which is the main contributor to the measured $1.71\times$ wall-clock overhead. This cost does not appear in GPU-rich simulation, and it is invisible in any comparison indexed by communication rounds.
+\textbf{The memory-accuracy trade-off is real on edge hardware.} The proximal term requires a copy of the global parameters. On the 8\,GB shared-memory Jetson Orin Nano this forced a CPU-resident copy with per-layer transfers, which is the main contributor to the wall-clock overhead of \fedprox{} \todo{overhead factor and 95\% CI from the \texttt{rev\_*} runs; the v1 factor is not reused}. This cost does not appear in GPU-rich simulation, and it is invisible in any comparison indexed by communication rounds.
 
 \textbf{Per-round and per-client reporting changes what one sees.} The global accuracy of the final round is nearly identical for all aggregating strategies on this task, while the per-client first-round confusion matrices differ sharply. Aggregate accuracy is therefore the least informative of the metrics we report for this task, and balanced accuracy, minority-class sensitivity and MCC should be preferred when client priors differ.
 
@@ -962,7 +962,7 @@ We separate the findings by how far they can be carried.
 
 \emph{Expected to generalise beyond this testbed:} (i)~that a proximal constraint reduces the first-round damage caused by strong client label skew, which is the mechanism established analytically and empirically by Li et al.~\cite{li2020fedprox}; (ii)~that on accelerated edge devices the per-round and per-second orderings of strategies can differ, so both must be reported~\cite{banerjee2025fedjoule, prashanthi2022jetson}; and (iii)~that frame-extracted video datasets require group-level splitting, which is a property of the data, not of the method~\cite{barz2020duplicates}.
 
-\emph{Specific to this configuration and not to be extrapolated:} (i)~the numerical size of the first-round penalty, which depends on client count, on the particular skew and on the backbone; (ii)~the ranking of \fedbn{}, which is tied to the number of normalisation layers in MobileNetV3-Small and to the executed round budget; (iii)~the $1.71\times$ \fedprox{} time overhead, which is a consequence of the 8\,GB memory constraint and of our CPU-resident implementation of $w^t$; and (iv)~all absolute accuracies, which reflect a near-saturated binary task.
+\emph{Specific to this configuration and not to be extrapolated:} (i)~the numerical size of the first-round penalty, which depends on client count, on the particular skew and on the backbone; (ii)~the ranking of \fedbn{}, which is tied to the number of normalisation layers in MobileNetV3-Small and to the executed round budget; (iii)~the size of the \fedprox{} time overhead \todo{factor from the \texttt{rev\_*} runs}, which is a consequence of the 8\,GB memory constraint and of our CPU-resident implementation of $w^t$; and (iv)~all absolute accuracies, which reflect a near-saturated binary task.
 
 \emph{Not addressed at all:} cross-device federations with partial participation, client dropout, secure aggregation or differential privacy overheads, non-vision modalities, and multi-class or dense prediction tasks.
 

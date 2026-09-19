@@ -400,3 +400,51 @@ def test_end_to_end_on_the_real_results(tmp_path):
             if not line.endswith("\\\\") or "\\multicolumn" in line:
                 continue
             assert line.count("&") + 1 == n_columns, "{}: {}".format(path, line)
+
+
+# --------------------------------------------------------------------------- #
+# 5. tab:time -- revision runs only
+# --------------------------------------------------------------------------- #
+def _time_rows(label, protocol, dist, time_s, mb, n_nodes=3, **point):
+    rows = []
+    for metric, mean, std in (("total_time_s", time_s, 60.0), ("final_cumulative_mb", mb, 0.0)):
+        row = _summary_row(label, "fl", "fedavg", dist, metric, mean, std, n_seeds=5)
+        row.update({"protocol": protocol, "n_nodes": n_nodes, "local_epochs": 5, "lr": 0.001})
+        row.update(point)
+        rows.append(row)
+    return rows
+
+
+def test_time_table_uses_revision_runs_only(tmp_path):
+    from scripts.export_latex_tables import time_tex
+
+    rows = []
+    rows += _time_rows("FedAvg non_iid_label [3N] {group}", "group", "non_iid_label", 3000.0, 110.3)
+    rows += _time_rows("FedAvg non_iid_label [2N] {group}", "group", "non_iid_label", 2400.0, 73.5,
+                       n_nodes=2)
+    # v1 (WiFi, image-level) run: must be excluded
+    rows += _time_rows("FedAvg non_iid_label [3N] {image}", "image", "non_iid_label", 6146.9, 110.3)
+    # revision run off the default operating point: excluded
+    rows += _time_rows("FedAvg non_iid_label [3N] {group}", "group", "non_iid_label", 9999.0, 367.7,
+                       num_rounds=10)
+    # revision run on a distribution outside the table: excluded
+    rows += _time_rows("FedAvg dirichlet_0.1 [3N] {group}", "group", "dirichlet_0.1", 8888.0, 110.3)
+    df = pd.DataFrame(rows)
+
+    text = time_tex(df)
+    assert text is not None
+    assert "\label{tab:time}" in text
+    assert "3N Non-IID (label skew) FedAvg" in text and "2N Non-IID (label skew) FedAvg" in text
+    assert "50.0 $\pm$ 1.0" in text          # 3000 s -> 50.0 min, std 60 s -> 1.0 min
+    assert "110.3" in text and "73.5" in text
+    assert "102.4" not in text                # 6146.9 s (v1) -> 102.4 min must not appear
+    assert "166.6" not in text and "148.1" not in text
+    assert text.index("2N") < text.index("3N")
+    assert_valid_latex(text)
+
+
+def test_time_table_absent_without_revision_runs(analysis_dir, tmp_path):
+    """The fixture holds only unlabelled/v1-style rows: no tab:time is written."""
+    out = str(tmp_path / "tables")
+    written = [os.path.basename(p) for p in export(analysis_dir, out, warn=False)]
+    assert "time.tex" not in written

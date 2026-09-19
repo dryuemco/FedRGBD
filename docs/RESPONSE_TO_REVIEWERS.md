@@ -43,6 +43,13 @@ new numbers are not comparable. We therefore retain the v1 results in a clearly 
 subsection ("Results Under the Image-Level-Split Protocol") and present the audited protocol
 separately, so that the effect of the protocol change is itself visible to the reader.
 
+**Note on the testbed network.** The testbed was disassembled and reassembled between the
+original submission and the revision. The v1 experiments ran over WiFi (IEEE 802.11ac); all
+revision experiments run on the same three Jetson nodes connected by wired Gigabit Ethernet
+through a single switch, as now stated in Section III-A and Table I. Because both the network
+and the data partition changed, the revision wall-clock timings supersede, rather than extend,
+the v1 timings, and the two are not compared with each other.
+
 ---
 
 ## Reviewer 1
@@ -286,7 +293,7 @@ revision handles FedBN as follows:
 
 ### R3.7 — "FedProx has better first-round accuracy but much more wall-clock time: compare by elapsed time and communication cost too."
 
-**Response — DONE (code), DONE (manuscript), partly answered already.** A new methodology
+**Response — DONE (code), DONE (manuscript text), PENDING EXPERIMENT (timings).** A new methodology
 subsection III-M, **"Time- and Communication-Normalised Comparison"**, states that comparing at
 equal round counts hides the fact that a round costs different amounts under different
 strategies, describes the per-round instrumentation (client fit/evaluation wall-clock time,
@@ -294,19 +301,22 @@ payload bytes up and down; server elapsed time and cumulative volume), and gives
 communication model B(R) = 2·R·K·|w| (Eq. 21), reduced for FedBN by the parameters withheld from
 aggregation.
 
-Results Section IV-H now reports, from the existing measurements: 6147 ± 410 s for three-round
-3-node FedAvg under label skew versus 10 500 ± 494 s for FedProx (μ = 0.01), i.e. a **1.71×
-wall-clock overhead**, against an *identical* communication volume of 110.3 MB — because
-FedProx changes the local objective, not the payload. The text then draws the consequence the
-reviewer points to: "an improvement that is obtained per *round* is not necessarily an
-improvement per *second*", and notes that within FedProx's first-round time budget FedAvg
-completes more than one round. The practical-implications paragraph was rewritten accordingly:
-the FedProx recommendation now holds "when rounds are expensive (scheduled, bandwidth-limited
-or manually supervised aggregation) and weakens when the constraint is total training time on
-the device." Table XV gains a communication column, and the time/accuracy figure is scheduled
-for replacement by a three-panel figure (accuracy vs. round, vs. elapsed seconds, vs. cumulative
-MB), with v1 curves drawn dashed and footnoted as reconstructed estimates because they predate
-the per-round instrumentation.
+**PENDING EXPERIMENT** for the numbers. The original submission timed the v1 runs over WiFi and
+under the image-level split. The testbed has since been reassembled on wired Gigabit Ethernet
+and the partition is now group-level, so the v1 timings (including the v1 FedProx/FedAvg ratio)
+are superseded rather than extended, and are no longer reported (see the note on the testbed
+network above). Results Section IV-H keeps the argument the reviewer asks for — "an improvement
+that is obtained per *round* is not necessarily an improvement per *second*" — and the identical
+communication volume of FedAvg and FedProx (110.3 MB over three rounds with K = 3, from Eq. 21,
+because FedProx changes the local objective, not the payload). The measured time ratio, and
+whether FedAvg completes more than one round within FedProx's first-round time, are marked
+placeholders to be filled from the revision runs. The practical-implications paragraph states
+the FedProx recommendation conditionally on those timings ("when rounds are expensive
+(scheduled, bandwidth-limited or manually supervised aggregation)"). Table XV is now generated
+by `scripts/export_latex_tables.py` from the revision runs only, with a measured communication
+column, and the time/accuracy figure becomes a three-panel figure (accuracy vs. round, vs.
+elapsed seconds, vs. cumulative MB) drawn from the revision runs only; v1 runs are not placed on
+the time or communication axes.
 
 ### R3.8 — "With three seeds, 'statistically indistinguishable' is unsupported; interpret very large effect sizes with care; add seeds for the central FedAvg–FedProx comparison."
 
@@ -357,7 +367,7 @@ before any result is presented and separate the findings by how far they travel.
   skew; per-round and per-second orderings can differ on accelerated edge devices; frame-extracted
   video datasets require group-level splitting — a property of the data, not of the method);
   *specific to this configuration* (the numerical size of the first-round penalty; the FedBN
-  ranking; the 1.71× FedProx overhead, which follows from the 8 GB memory constraint and our
+  ranking; the size of the FedProx time overhead, which follows from the 8 GB memory constraint and our
   CPU-resident implementation of w^t; and all absolute accuracies); and *not addressed at all*
   (cross-device federations, partial participation, dropout, secure aggregation and DP overheads,
   non-vision modalities, multi-class and dense prediction).

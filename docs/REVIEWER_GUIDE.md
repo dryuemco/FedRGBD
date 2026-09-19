@@ -14,7 +14,7 @@ instructions are provided for full reproducibility.
 | Camera A | Intel RealSense D435if | 1 | Active IR stereo, IR cut filter |
 | Camera B | Intel RealSense D435i | 1 | Active IR stereo |
 | Camera C | Stereolabs ZED 2i | 1 | Passive stereo + neural depth |
-| Network | WiFi router (802.11ac) | 1 | FL communication |
+| Network | Gigabit Ethernet switch | 1 | FL communication (v1 used a WiFi 802.11ac router) |
 
 **Note:** Results on different hardware will differ due to different power profiles,
 memory constraints, and sensor characteristics. This is expected and is part of
@@ -37,7 +37,7 @@ the study's contribution — real hardware produces results that simulations can
 ```bash
 # Flash JetPack 6.2 on all 3 Jetsons using NVIDIA SDK Manager
 # Connect cameras: D435if → Node A, D435i → Node B, ZED 2i → Node C (all USB3)
-# Connect all nodes to same WiFi network
+# Connect all nodes to one Gigabit Ethernet switch (wired; v1 used WiFi)
 # Assign static IPs: Node A=192.168.1.10, Node B=192.168.1.7, Node C=192.168.1.6
 ```
 
@@ -147,7 +147,8 @@ Due to stochastic training and hardware-level measurements:
 
 - **Accuracy metrics**: ±0.5-1.5% across seeds (3 seeds per config)
 - **Energy measurements**: ±5-10% due to tegrastats sampling and thermal conditions
-- **Latency**: ±10-15% due to WiFi jitter and OS scheduling
+- **Latency**: run-to-run variation from OS scheduling and thermal state; the wired link removes
+  the WiFi jitter of the v1 setup, so v1 and revision timings are not comparable
 - **Communication**: Deterministic (model size is fixed at 6.1 MB)
 
 All results include 95% confidence intervals computed from 3 independent runs.
