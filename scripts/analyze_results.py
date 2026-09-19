@@ -143,7 +143,7 @@ RECORD_FIELDS = [
     "distribution", "seed", "seed_label", "num_rounds", "local_epochs", "lr",
     "n_nodes", "schema_version", "config_id", "label", "timestamp",
     "time_estimated", "comm_estimated", "n_curve_points",
-    "headline_source", "selected_round", "selected_val_loss",
+    "headline_source", "selected_round", "selected_epoch", "selected_val_loss",
 ]
 
 _PAYLOAD_CACHE: Dict[str, float] = {}
@@ -384,6 +384,10 @@ def config_id_of(record: Dict[str, Any]) -> str:
 
 PROTOCOL_GROUP = "group"    # leakage-safe, sequence/group-level split (revision, results/rev_*)
 PROTOCOL_IMAGE = "image"    # random image-level split (paper v1)
+#: group-level baselines trained before the selection rule (schema 2): final-epoch
+#: test metrics only.  A protocol of their own so they are never pooled, paired or
+#: tabulated together with the rule-following group-level runs.
+PROTOCOL_GROUP_FINAL_EPOCH = "group_final_epoch"
 
 
 def parse_protocol(data: Dict[str, Any], run_name: str) -> str:
@@ -705,6 +709,45 @@ def select_fl_round(data: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def select_epoch(data: Dict[str, Any]) -> Tuple[Optional[int], Dict[int, Optional[float]]]:
+    """The declared rule on a baseline ``results.json`` (schema 3): lowest validation loss,
+    earliest epoch on ties.  Recomputed from the full-precision
+    ``model_selection.val_loss_by_epoch`` (fallback: the rounded ``history`` values)."""
+    block = data.get("model_selection") if isinstance(data.get("model_selection"), dict) else {}
+    raw = block.get("val_loss_by_epoch")
+    losses: Dict[int, Optional[float]] = {}
+    if isinstance(raw, dict) and raw:
+        losses = {int(k): _as_float(v) for k, v in raw.items()}
+    else:
+        for i, entry in enumerate(data.get("history") or []):
+            if isinstance(entry, dict):
+                losses[int(entry.get("epoch", i + 1))] = _as_float(entry.get("val_loss"))
+    return select_round(losses), losses
+
+
+def _history_entry(data: Dict[str, Any], epoch: Optional[int]) -> Dict[str, Any]:
+    for i, entry in enumerate(data.get("history") or []):
+        if isinstance(entry, dict) and int(entry.get("epoch", i + 1)) == epoch:
+            return entry
+    return {}
+
+
+def _metric_dict(metrics: Any) -> Dict[str, float]:
+    """Scalar test metrics (METRIC_ORDER + confusion counts + n_examples) of a metrics dict."""
+    out: Dict[str, float] = {}
+    if not isinstance(metrics, dict):
+        return out
+    for name in list(METRIC_ORDER) + list(COUNT_KEYS) + ["n_examples"]:
+        fval = _as_float(metrics.get(name))
+        if fval is not None:
+            out[name] = fval
+    return out
+
+
+def _is_rule_baseline(data: Dict[str, Any]) -> bool:
+    return isinstance(data.get("model_selection"), dict) and isinstance(data.get("history"), list)
+
+
 def load_fl_run(
     run_dir: str, data: Dict[str, Any], payload_bytes: Optional[float] = None,
     missing_seed: Optional[int] = None, warn: bool = True,
@@ -859,7 +902,56 @@ def load_centralized_run(
     if record["final_loss"] is not None:
         record["metrics_final"].setdefault("loss", record["final_loss"])
     record["epochs"] = data.get("epochs")
+    _apply_baseline_selection(record, {"pooled": data})
     return _finalize(record)
+
+
+def _apply_baseline_selection(record: Dict[str, Any], node_data: Dict[str, Dict[str, Any]]) -> None:
+    """Headline of a centralized (one pooled model) or local-only (one model per node) run.
+
+    Schema-3 baselines follow the declared rule per model: the epoch with the lowest
+    validation loss (earliest on ties); their headline is that epoch's logged test
+    metrics (``selected_test_<m>``, same column family as the FL runs).  Local-only
+    headline = mean over nodes (counts summed).  Earlier group-level baselines
+    (final epoch, no selection) move to their own protocol, ``group_final_epoch``.
+    """
+    if not node_data or not all(_is_rule_baseline(d) for d in node_data.values()):
+        if record.get("protocol") == PROTOCOL_GROUP:
+            record["protocol"] = PROTOCOL_GROUP_FINAL_EPOCH
+        return
+    record["selection_rule"] = SELECTION_RULE
+    per_model: Dict[str, Dict[str, float]] = {}
+    for name, data in node_data.items():
+        selected, losses = select_epoch(data)
+        if selected is None:
+            record["headline_source"] = HEADLINE_NONE
+            return
+        entry = _history_entry(data, selected)
+        per_model[name] = dict(_metric_dict(entry.get("test_metrics")),
+                               selected_epoch=float(selected),
+                               selected_val_loss=losses[selected])
+        if name == "pooled":                        # centralized: per-node test of that epoch
+            record["selected_epoch"] = selected
+            record["selected_val_loss"] = losses[selected]
+            record["selected_test_clients"] = {
+                str(node): _metric_dict((v or {}).get("test_metrics"))
+                for node, v in (entry.get("test_per_node") or {}).items()
+            }
+    record["headline_source"] = HEADLINE_SELECTED
+    if "pooled" in per_model:
+        record["selected_test_metrics"] = {
+            k: v for k, v in per_model["pooled"].items()
+            if k not in ("selected_epoch", "selected_val_loss")}
+        return
+    record["selected_test_clients"] = per_model     # local-only: one model per node
+    names = set.intersection(*(set(m) for m in per_model.values()))
+    names -= {"selected_epoch", "selected_val_loss"}
+    count_like = set(COUNT_KEYS) | {"n_examples"}
+    record["selected_test_metrics"] = {
+        k: (float(np.sum([m[k] for m in per_model.values()])) if k in count_like
+            else float(np.mean([m[k] for m in per_model.values()])))
+        for k in names
+    }
 
 
 def load_local_run(
@@ -989,6 +1081,7 @@ def load_local_run(
         for name, cfg in nodes.items() if isinstance(cfg, dict)
     }
     record["epochs"] = data.get("epochs")
+    _apply_baseline_selection(record, node_data)
     return _finalize(record)
 
 
@@ -1118,22 +1211,22 @@ def _run_metric_values(record: Dict[str, Any]) -> Dict[str, float]:
     """
     values: Dict[str, float] = {}
     source = record.get("headline_source")
-    if record.get("kind") == "fl":
-        if source == HEADLINE_V1:
-            for key in ("v1_final_round_accuracy", "v1_final_round_loss"):
-                fval = _as_float(record.get(key))
-                if fval is not None:
-                    values[key] = fval
-        elif source == HEADLINE_SELECTED:
-            for name, val in (record.get("selected_test_metrics") or {}).items():
-                fval = _as_float(val)
-                if fval is not None:
-                    values["selected_test_" + str(name)] = fval
-            for key in ("selected_round", "selected_val_loss"):
-                fval = _as_float(record.get(key))
-                if fval is not None:
-                    values[key] = fval
-    else:
+    if source == HEADLINE_V1:
+        for key in ("v1_final_round_accuracy", "v1_final_round_loss"):
+            fval = _as_float(record.get(key))
+            if fval is not None:
+                values[key] = fval
+    elif source == HEADLINE_SELECTED:
+        # FL runs and schema-3 baselines: same rule, same column family
+        for name, val in (record.get("selected_test_metrics") or {}).items():
+            fval = _as_float(val)
+            if fval is not None:
+                values["selected_test_" + str(name)] = fval
+        for key in ("selected_round", "selected_epoch", "selected_val_loss"):
+            fval = _as_float(record.get(key))
+            if fval is not None:
+                values[key] = fval
+    elif source == HEADLINE_FINAL_EPOCH:
         for name, val in (record.get("metrics_final") or {}).items():
             fval = _as_float(val)
             if fval is not None:

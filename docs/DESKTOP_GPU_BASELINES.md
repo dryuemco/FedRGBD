@@ -154,3 +154,37 @@ Nothing large must land in the repo:
 - `run_baselines_desktop.sh` and `results/baselines_desktop.log` are
   convenience files (`*.log` is git-ignored); do not commit the generated
   shell script, regenerate it with the command above.
+
+## Re-run under the declared selection rule (schema 3, `results/rev_baselines_sel/`)
+
+The 62 runs above (schema 2) report the **final-epoch** test metrics. The revision's
+selection rule (paper §III, `src/evaluation/model_selection.py`) is applied to the
+baselines as well: every epoch the model is evaluated on validation and then on test
+(test is logged, never used for selection); the reported model is the epoch with the
+lowest validation loss (earlier on ties); reported times exclude the test pass. The
+test pass is RNG-neutral (`report_only()`), so the training trajectory is the same as
+without it: the new runs' `final_test_*` should match the schema-2 runs up to GPU
+nondeterminism, which is a free consistency check.
+
+The re-run writes to a new tree, `results/rev_baselines_sel/<same run names>`, so the
+schema-2 runs in `results/rev_*` are not touched. `analyze_results.py` gives the old
+group-level baselines their own protocol, `group_final_epoch` (label
+`{group_final_epoch}`, metric family `final_*`); the new ones are protocol `group`
+with `selected_test_*`, the same column family as the FL runs. They are never pooled,
+paired or tabulated together. Delete the old runs only after the new block is complete
+and checked.
+
+```bash
+source /c/Users/CORSAIR/venvs/fedrgbd-gpu/Scripts/activate
+export PYTHONUTF8=1
+python scripts/make_desktop_lanes.py --baseline_root results/rev_baselines_sel --lanes 6 --prefix lane_sel
+for k in 0 1 2 3 4 5; do bash logs/lane_sel_$k.sh > logs/lane_sel_$k.out 2>&1 & done
+wait
+# progress: grep -h "DONE\|FAIL" logs/lane_sel_*.out | wc -l   (62 when complete)
+```
+
+Estimated cost (from the schema-2 timings: 2450 s train + ~265 s validation per
+full-partition run, 65 s + ~223 s per low-data run; the test split is the same size
+as validation): about 50 min per full-partition run (38 runs) and 8-9 min per
+low-data run (24 runs), ~35 h of serial work. Six lanes: about 6-6.5 h; four lanes
+(the setting used before): about 9-9.5 h.

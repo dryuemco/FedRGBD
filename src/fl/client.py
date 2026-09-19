@@ -30,6 +30,7 @@ import sys
 sys.path.insert(0, ".")
 from src.data.dataset import FlameDataset
 from src.evaluation.metrics import MetricAccumulator, format_metrics, to_flower_metrics
+from src.evaluation.model_selection import report_only
 from src.models.mobilenetv3_multimodal import create_model
 
 
@@ -262,7 +263,8 @@ class FedRGBDClient(fl.client.NumPyClient):
         eval_time = time.perf_counter() - eval_start  # reported: excludes the test pass
 
         test_start = time.perf_counter()
-        test_metrics = self.evaluate_loader(self.test_loader)
+        with report_only(self.device):     # logged only; RNG streams left untouched
+            test_metrics = self.evaluate_loader(self.test_loader)
         test_eval_time = time.perf_counter() - test_start
         eval_wall = time.perf_counter() - eval_start
 

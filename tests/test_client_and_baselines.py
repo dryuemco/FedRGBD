@@ -185,6 +185,33 @@ def test_client_test_pass_is_report_only(uneven_node, monkeypatch):
     assert n_train == len(client.train_ds)
 
 
+def test_client_test_pass_leaves_training_unchanged(uneven_node):
+    """The logged test pass must not shift the RNG streams used by the next fit()
+    (dropout draws from the global torch generator, and so does every DataLoader
+    iteration): evaluate-with-test then fit == evaluate-without-test then fit."""
+    from src.fl.client import FedRGBDClient
+
+    client = FedRGBDClient(uneven_node, batch_size=4, local_epochs=1, device="cpu", seed=3,
+                           pretrained=False, img_size=IMG)
+    params = client.get_parameters({})
+    cpu_state = torch.get_rng_state()
+    shuffle_state = client.train_loader.generator.get_state()
+
+    def evaluate_then_fit():
+        torch.set_rng_state(cpu_state)
+        client.train_loader.generator.set_state(shuffle_state)
+        client.evaluate(params, {"server_round": 1})
+        new_params, _, _ = client.fit(params, {"server_round": 2})
+        return new_params
+
+    with_test = evaluate_then_fit()
+    real_test_loader = client.test_loader
+    client.test_loader = []                    # no test pass at all
+    without_test = evaluate_then_fit()
+    client.test_loader = real_test_loader
+    assert all(np.array_equal(a, b) for a, b in zip(with_test, without_test))
+
+
 def test_client_eval_timers_separate_val_and_test(uneven_node):
     from src.fl.client import FedRGBDClient
 
@@ -213,7 +240,7 @@ def test_train_local_batch_writes_full_metrics(nodes, tmp_path):
         assert k in res
     assert res["history"][0]["val_accuracy"] == pytest.approx(res["history"][0]["val_metrics"]["accuracy"])
     # v3 keys
-    assert res["results_schema_version"] == 2
+    assert res["results_schema_version"] == 3
     for k in METRIC_KEYS:
         assert k in res["final_test_metrics"]
         assert k in res["history"][0]["val_metrics"]
@@ -236,7 +263,7 @@ def test_train_centralized_writes_full_metrics(nodes, tmp_path):
     res = json.loads((out / "results.json").read_text())
     for k in ("experiment", "final_test_accuracy", "final_test_loss", "per_node_test", "history", "fl_round_equivalents"):
         assert k in res
-    assert res["results_schema_version"] == 2
+    assert res["results_schema_version"] == 3
     for k in METRIC_KEYS:
         assert k in res["final_test_metrics"] and k in res["history"][0]["val_metrics"]
     assert "test_metrics" in res["per_node_test"]["node_a"]

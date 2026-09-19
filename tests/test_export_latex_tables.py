@@ -219,8 +219,7 @@ def test_export_writes_every_table(analysis_dir, tmp_path):
     assert names == sorted([
         "summary_final_accuracy.tex", "summary_final_loss.tex", "summary_total_time_s.tex",
         "per_round_accuracy.tex", "pairwise_tests.tex", "friedman.tex",
-        "full_metrics_iid.tex", "full_metrics_non_iid_label.tex",
-    ])
+    ])   # no full_metrics_*: the fixture has no rule-following (selected_test_*) rows
     for path in written:
         assert_valid_latex(read(path))
 
@@ -329,11 +328,25 @@ def test_friedman_table_content(analysis_dir, tmp_path):
 
 
 def test_full_metrics_table_content(analysis_dir, tmp_path):
+    """Only rule-following rows (selected_test_*) appear; final-epoch rows never do."""
+    path = os.path.join(analysis_dir, "summary_table.csv")
+    df = pd.read_csv(path)
+    extra = [_summary_row("FedAvg iid [3N] {group}", "fl", "fedavg", "iid", m, v, 0.01, 5)
+             for m, v in (("selected_test_accuracy", 0.912), ("selected_test_loss", 0.25))]
+    extra += [_summary_row("Centralized iid {group}", "centralized", "centralized", "iid", m, v,
+                           0.01, 5)
+              for m, v in (("selected_test_accuracy", 0.934), ("selected_test_loss", 0.2))]
+    pd.concat([df, pd.DataFrame(extra)]).to_csv(path, index=False)
+
     out = str(tmp_path / "tables")
-    export(analysis_dir, out, warn=False)
+    written = [os.path.basename(p) for p in export(analysis_dir, out, warn=False)]
+    assert "full_metrics_iid.tex" in written
+    assert "full_metrics_non_iid_label.tex" not in written   # no rule-following rows there
     text = read(os.path.join(out, "full_metrics_iid.tex"))
     assert "Configuration & Accuracy & Loss \\\\" in text
     assert "\\label{tab:full_metrics_iid}" in text
+    assert "0.9120" in text and "0.9340" in text
+    assert "0.9900" not in text          # the fixture's final_accuracy rows are left out
     assert_valid_latex(text)
 
 

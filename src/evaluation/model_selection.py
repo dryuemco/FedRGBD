@@ -17,6 +17,7 @@ are validation quantities only; no function here accepts test metrics.
 
 from __future__ import annotations
 
+import contextlib
 import math
 from typing import Iterable, Mapping, Optional, Tuple
 
@@ -78,9 +79,31 @@ def select_round(val_loss_by_round: Mapping[int, float]) -> Optional[int]:
     return None if best is None else best[1]
 
 
+@contextlib.contextmanager
+def report_only(device=None):
+    """Run the logged (test) evaluation without touching the global RNG streams.
+
+    Iterating any ``DataLoader`` draws from the global torch generator, even with
+    ``shuffle=False``, and dropout during training uses that same generator.
+    Without this guard the extra test pass would shift every later dropout mask,
+    so training would differ from a run without the test pass.  CPU and (for a
+    CUDA ``device``) GPU RNG states are restored on exit.
+    """
+    import torch
+
+    devices = []
+    if device is not None and torch.cuda.is_available():
+        dev = torch.device(device)
+        if dev.type == "cuda":
+            devices = [torch.cuda.current_device() if dev.index is None else dev.index]
+    with torch.random.fork_rng(devices=devices):
+        yield
+
+
 __all__ = [
     "SELECTION_RULE",
     "SELECTION_RULE_TEXT",
+    "report_only",
     "select_round",
     "weighted_val_loss",
 ]

@@ -10,7 +10,7 @@ tables, so no number in the manuscript is ever re-typed by hand:
     per_round_accuracy.tex    accuracy per communication round, grouped by dist.
     pairwise_tests.tex        paired strategy comparisons (d, Wilcoxon p, t p)
     friedman.tex              Friedman omnibus test per distribution
-    full_metrics_<dist>.tex   every final metric per config (schema-2 runs)
+    full_metrics_<dist>.tex   selected-round / selected-epoch test metrics (rule-following runs)
     time.tex                  tab:time -- revision FL runs only (v1 timings omitted)
 
 Every table uses ``booktabs`` (``\toprule`` / ``\midrule`` / ``\bottomrule``)
@@ -235,6 +235,7 @@ def config_name(label: Any, distribution: Any) -> str:
     The ``{group}`` / ``{image}`` protocol suffix is rendered as a short marker
     so that v1 (image-level) and revision (group-level) rows stay distinct."""
     text = str(label or "")
+    text = text.replace("{group_final_epoch}", "(group-level, final epoch)")
     text = text.replace("{group}", "(group-level)").replace("{image}", "(image-level)")
     dist = str(distribution or "")
     if dist and dist in text:
@@ -406,7 +407,8 @@ def per_round_tex(df: pd.DataFrame, metric: str = "accuracy", digits: int = 4,
 # --------------------------------------------------------------------------- #
 # pairwise_tests.tex
 # --------------------------------------------------------------------------- #
-_PROTOCOL_TEXT = {"group": "group-level", "image": "image-level, v1"}
+_PROTOCOL_TEXT = {"group": "group-level", "image": "image-level, v1",
+                  "group_final_epoch": "group-level, final epoch"}
 
 
 def _protocol_column(df: pd.DataFrame) -> pd.Series:
@@ -510,19 +512,20 @@ def selected_counterpart(metric: str) -> str:
 
 def available_full_metrics(df: pd.DataFrame) -> List[str]:
     present = set(df["metric"].astype(str).unique()) if not df.empty else set()
-    return [m for m in FULL_METRIC_ORDER if m in present or selected_counterpart(m) in present]
+    return [m for m in FULL_METRIC_ORDER if selected_counterpart(m) in present]
 
 
 def full_metrics_tex(df: pd.DataFrame, distribution: str, metrics: Sequence[str],
                      digits: int = 4, siunitx: bool = False) -> Optional[str]:
     """Rows = configuration, columns = every headline test metric of one distribution.
 
-    Federated rows show the test metrics of the round picked by the declared
-    selection rule (``selected_test_<m>``); centralized / local-only rows show
-    their final-epoch test metrics (``final_<m>``).  v1 FL rows have no test
-    metrics and do not appear.
+    Only runs that follow the declared selection rule appear: federated rows show
+    the test metrics of the selected round, centralized / local-only rows (schema
+    3) those of the selected epoch -- all ``selected_test_<m>``.  Final-epoch
+    baselines (``final_<m>``) and v1 FL rows follow other rules and are left out,
+    so no column mixes selection rules.
     """
-    wanted = set(metrics) | {selected_counterpart(m) for m in metrics}
+    wanted = {selected_counterpart(m) for m in metrics}
     sub = df[(df["distribution"].astype(str) == str(distribution))
              & (df["metric"].astype(str).isin(list(wanted)))]
     if sub.empty:
@@ -540,9 +543,7 @@ def full_metrics_tex(df: pd.DataFrame, distribution: str, metrics: Sequence[str]
     for name in sorted(order, key=lambda n: order[n]):
         cells = [name]
         for metric in metrics:
-            row = entries[name].get(metric)
-            if row is None:
-                row = entries[name].get(selected_counterpart(metric))
+            row = entries[name].get(selected_counterpart(metric))
             cells.append(MISSING if row is None
                          else fmt_mean_std(row.get("mean"), row.get("std"), digits, siunitx))
         body.append(_row(cells))
@@ -554,10 +555,9 @@ def full_metrics_tex(df: pd.DataFrame, distribution: str, metrics: Sequence[str]
         caption="Test-set metrics for the {} partition (mean $\\pm$ standard deviation "
                 "over seeds).".format(dist_label(distribution)),
         label="tab:full_metrics_{}".format(_safe_label(distribution)),
-        note="Federated rows: test metrics of the round with the lowest validation loss "
-             "(weighted by client validation-set size, earliest round on ties); "
-             "centralized and local-only rows: final-epoch test metrics. "
-             "Produced from \\texttt{summary\\_table.csv}.",
+        note="Test metrics of the round (federated) or epoch (centralized, local-only) with "
+             "the lowest validation loss (weighted by client validation-set size, earlier "
+             "on ties). Produced from \\texttt{summary\\_table.csv}.",
         small=len(metrics) > 3,
     )
 
@@ -576,6 +576,8 @@ def _protocol_of(row: Any) -> str:
     if isinstance(value, str) and value:
         return value
     label = str(row.get("label") or "")
+    if "{group_final_epoch}" in label:
+        return "group_final_epoch"
     if "{group}" in label:
         return "group"
     if "{image}" in label:

@@ -357,6 +357,15 @@ def expand_all(revision_cfg: dict, block: Optional[str] = None) -> Dict[str, Lis
     return out
 
 
+def rebase_baselines(runs_by_block: Dict[str, List[Run]], root: str) -> None:
+    """Move every baseline run's output dir from ``results/<run>`` to ``<root>/<run>``."""
+    root = root.replace("\\", "/").rstrip("/")
+    for runs in runs_by_block.values():
+        for run in runs:
+            if run.kind == "baseline" and run.output_dir.startswith("results/"):
+                run.output_dir = root + "/" + run.output_dir[len("results/"):]
+
+
 # --------------------------------------------------------------------------- #
 # printing
 # --------------------------------------------------------------------------- #
@@ -456,6 +465,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     p.add_argument("--all_seeds", action="store_true",
                    help="seed_extension: emit all 5 seeds instead of only the new ones "
                         "(use after re-splitting the data, e.g. with --group_file)")
+    p.add_argument("--baseline_root", default=None, metavar="DIR",
+                   help="write centralized / local-only runs under DIR instead of results/ "
+                        "(e.g. results/rev_baselines_sel for the re-run under the selection "
+                        "rule, so the earlier rev_* baselines are not overwritten)")
     args = p.parse_args(argv)
 
     cfg = load_config(args.config)
@@ -465,6 +478,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         revision_cfg["seed_extension"] = dict(revision_cfg["seed_extension"], all_seeds=True)
         revision_cfg["baselines_extension"] = dict(revision_cfg["baselines_extension"], all_seeds=True)
     runs_by_block = expand_all(revision_cfg, args.block)
+    if args.baseline_root:
+        rebase_baselines(runs_by_block, args.baseline_root)
 
     if args.format == "bash":
         n = print_bash(runs_by_block, args.skip_existing)

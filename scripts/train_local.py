@@ -16,9 +16,20 @@ Or use the batch runner to train all nodes sequentially on one device:
   python3 scripts/train_local.py --batch \
     --data_dirs data/processed/iid/node_a data/processed/iid/node_b data/processed/iid/node_c \
     --seed 42 --output_dir results/local_iid_seed42
+
+Model selection (results schema 3, same rule as the FL runs,
+``src/evaluation/model_selection.py``): every epoch each node's model is
+evaluated on its validation split and then on its test split.  The reported
+model of a node is the one from the epoch with the lowest validation loss;
+ties go to the earlier epoch.  Test metrics are computed every epoch for
+logging but never influence selection; the reported test metrics
+(``selected_test_*``) and the cross-node evaluation are those of the selected
+epoch's model.  Reported times exclude the test pass.  ``final_test_*`` keeps
+its old meaning (last epoch).
 """
 
 import argparse
+import copy
 import json
 import os
 import random
@@ -35,6 +46,8 @@ import sys
 sys.path.insert(0, ".")
 from src.data.dataset import FlameDataset
 from src.evaluation.metrics import MetricAccumulator, format_metrics
+from src.evaluation.model_selection import (SELECTION_RULE, SELECTION_RULE_TEXT, report_only,
+                                            select_round)
 from src.models.mobilenetv3_multimodal import create_model
 
 
@@ -149,6 +162,10 @@ def train_single_node(data_dir, node_name, epochs, batch_size, lr, seed, output_
     # Training loop
     history = []
     start_total = time.perf_counter()
+    elapsed_excl_test = 0.0
+    total_test_eval = 0.0
+    val_loss_by_epoch = {}
+    best_state, best_key = None, None     # snapshot of the epoch the rule selects
 
     for epoch in range(1, epochs + 1):
         if torch.cuda.is_available():
@@ -160,7 +177,20 @@ def train_single_node(data_dir, node_name, epochs, batch_size, lr, seed, output_
         eval_start = time.perf_counter()
         val_loss, val_acc, val_metrics = evaluate(model, val_loader, criterion, device)
         eval_time = time.perf_counter() - eval_start
-        epoch_time = time.perf_counter() - epoch_start
+        epoch_time = time.perf_counter() - epoch_start      # reported: excludes the test pass
+
+        # model selection input: validation loss only, fixed before the test pass
+        val_loss_by_epoch[epoch] = val_loss
+        if val_loss == val_loss and (best_key is None or val_loss < best_key):  # finite, strict
+            best_key = val_loss
+            best_state = copy.deepcopy(model.state_dict())
+
+        test_start = time.perf_counter()
+        with report_only(device):          # logged only; RNG streams left untouched
+            test_loss, test_acc, test_metrics = evaluate(model, test_loader, criterion, device)
+        test_time = time.perf_counter() - test_start
+        elapsed_excl_test += epoch_time
+        total_test_eval += test_time
 
         record = {
             "epoch": epoch,
@@ -173,24 +203,44 @@ def train_single_node(data_dir, node_name, epochs, batch_size, lr, seed, output_
             "eval_time_s": round(eval_time, 3),
             "elapsed_s": round(time.perf_counter() - start_total, 3),
             "val_metrics": json_metrics(val_metrics),
+            # schema 3: test every epoch for logging (never used for selection)
+            "val_eval_time_s": round(eval_time, 3),
+            "test_eval_time_s": round(test_time, 3),
+            "epoch_wall_s": round(time.perf_counter() - epoch_start, 3),
+            "elapsed_excl_test_s": round(elapsed_excl_test, 3),
+            "test_loss": round(test_loss, 6),
+            "test_accuracy": round(test_acc, 6),
+            "test_metrics": json_metrics(test_metrics),
         }
         history.append(record)
 
         marker = " ← FL Round equivalent" if epoch % 5 == 0 else ""
         print(f"  Epoch {epoch:2d}/{epochs}: "
               f"train_loss={train_loss:.4f}, val_loss={val_loss:.4f}, "
-              f"val_acc={val_acc:.4f}, time={epoch_time:.1f}s{marker}")
+              f"val_acc={val_acc:.4f}, time={epoch_time:.1f}s "
+              f"(test, logged: acc={test_acc:.4f}, {test_time:.1f}s){marker}")
 
     total_time = time.perf_counter() - start_total
 
-    # Final test evaluation (on own test set)
-    test_loss, test_acc, test_metrics = evaluate(model, test_loader, criterion, device)
-    print(f"\n  {node_name} Test (own data): loss={test_loss:.4f}, {format_metrics(test_metrics)}")
+    selected = select_round(val_loss_by_epoch)
+    sel = history[selected - 1] if selected is not None else None
 
-    # Cross-evaluation: test this node's model on other nodes' test sets
+    # Final-epoch test metrics (kept under their old keys), from the last epoch's pass
+    last = history[-1]
+    test_loss, test_acc, test_metrics = last["test_loss"], last["test_accuracy"], last["test_metrics"]
+    print(f"\n  {node_name} final-epoch test (own data): loss={test_loss:.4f}, "
+          f"{format_metrics(test_metrics)}")
+    if sel is not None:
+        print(f"  {node_name} selected epoch {selected} (lowest val_loss={sel['val_loss']:.4f}): "
+              f"test {format_metrics(sel['test_metrics'])}")
+
+    # Cross-evaluation uses the selected epoch's model
+    final_state = copy.deepcopy(model.state_dict())
+    if best_state is not None:
+        model.load_state_dict(best_state)
     cross_eval_results = {}
     if cross_eval_dirs:
-        print(f"\n  Cross-node evaluation:")
+        print(f"\n  Cross-node evaluation (selected-epoch model):")
         for other_dir in cross_eval_dirs:
             other_name = os.path.basename(other_dir)
             if other_name == node_name:
@@ -226,8 +276,24 @@ def train_single_node(data_dir, node_name, epochs, batch_size, lr, seed, output_
         "total_time_s": round(total_time, 2),
         "final_test_loss": round(test_loss, 6),
         "final_test_accuracy": round(test_acc, 6),
-        "final_test_metrics": json_metrics(test_metrics),
-        "results_schema_version": 2,
+        "final_test_metrics": test_metrics,
+        "results_schema_version": 3,
+        # schema 3: the declared selection rule (same as the FL runs)
+        "model_selection": {
+            "rule": SELECTION_RULE,
+            "description": SELECTION_RULE_TEXT,
+            "unit": "epoch",
+            "val_loss_by_epoch": {str(e): v for e, v in val_loss_by_epoch.items()},  # full precision
+            "selected_epoch": selected,
+            "selected_val_loss": sel["val_loss"] if sel else None,
+        },
+        "selected_epoch": selected,
+        "selected_test_loss": sel["test_loss"] if sel else None,
+        "selected_test_accuracy": sel["test_accuracy"] if sel else None,
+        "selected_test_metrics": sel["test_metrics"] if sel else None,
+        "total_test_eval_s": round(total_test_eval, 2),
+        "total_time_excl_test_s": round(total_time - total_test_eval, 2),
+        "cross_eval_model": "selected_epoch",
         "cross_eval": cross_eval_results,
         "history": history,
         # one entry per completed FL-equivalent round (5 local epochs = 1 round),
@@ -245,7 +311,9 @@ def train_single_node(data_dir, node_name, epochs, batch_size, lr, seed, output_
         json.dump(results, f, indent=2)
 
     model_path = os.path.join(node_output_dir, "model_final.pt")
-    torch.save(model.state_dict(), model_path)
+    torch.save(final_state, model_path)
+    if best_state is not None:
+        torch.save(best_state, os.path.join(node_output_dir, "model_selected.pt"))
 
     print(f"\n  {node_name} completed in {total_time:.1f}s")
     print(f"  Results: {results_path}")
@@ -336,6 +404,10 @@ def main(argv=None):
                     "final_test_accuracy": r["final_test_accuracy"],
                     "final_test_loss": r["final_test_loss"],
                     "final_test_metrics": r.get("final_test_metrics", {}),
+                    "selected_epoch": r.get("selected_epoch"),
+                    "selected_test_accuracy": r.get("selected_test_accuracy"),
+                    "selected_test_loss": r.get("selected_test_loss"),
+                    "selected_test_metrics": r.get("selected_test_metrics"),
                     "cross_eval": r.get("cross_eval", {}),
                 }
                 for name, r in all_results.items()
@@ -343,6 +415,11 @@ def main(argv=None):
             "mean_test_accuracy": round(
                 np.mean([r["final_test_accuracy"] for r in all_results.values()]), 6
             ),
+            "results_schema_version": 3,
+            "mean_selected_test_accuracy": (round(float(np.mean(
+                [r["selected_test_accuracy"] for r in all_results.values()])), 6)
+                if all(r.get("selected_test_accuracy") is not None
+                       for r in all_results.values()) else None),
             "timestamp": datetime.now().isoformat(),
         }
 
@@ -353,8 +430,10 @@ def main(argv=None):
         print(f"\n{'=' * 60}")
         print(f"  ALL NODES COMPLETE — Total time: {total_time:.1f}s")
         for name, r in all_results.items():
-            print(f"    {name}: accuracy={r['final_test_accuracy']:.4f}")
-        print(f"    Mean accuracy: {summary['mean_test_accuracy']:.4f}")
+            print(f"    {name}: selected epoch {r.get('selected_epoch')}, "
+                  f"test accuracy={r.get('selected_test_accuracy')} "
+                  f"(final epoch {r['final_test_accuracy']:.4f})")
+        print(f"    Mean selected-epoch test accuracy: {summary['mean_selected_test_accuracy']}")
         print(f"  Summary: {summary_path}")
         print(f"{'=' * 60}")
 

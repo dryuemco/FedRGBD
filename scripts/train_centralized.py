@@ -3,6 +3,18 @@
 Pools all node data and trains a single model on one device.
 This represents the best achievable performance without FL constraints.
 
+Model selection (results schema 3, same rule as the FL runs,
+``src/evaluation/model_selection.py``): every epoch the model is evaluated on
+the pooled validation split and then on the test split (pooled and per node).
+The reported model is the one from the epoch with the lowest validation loss
+(pooled over the nodes' validation splits, i.e. weighted by their sizes);
+ties go to the earlier epoch.  Test metrics are computed every epoch for
+logging but never influence selection; the reported test metrics
+(``selected_test_*``) are those of the selected epoch.  Reported times exclude
+the test pass (``epoch_time_s``, ``elapsed_excl_test_s``,
+``total_time_excl_test_s``).  ``final_test_*`` / ``per_node_test`` keep their
+old meaning (last epoch).
+
 Usage:
   python3 scripts/train_centralized.py \
     --data_dirs data/processed/iid/node_a data/processed/iid/node_b data/processed/iid/node_c \
@@ -14,6 +26,7 @@ Usage:
 """
 
 import argparse
+import copy
 import json
 import os
 import random
@@ -30,6 +43,8 @@ import sys
 sys.path.insert(0, ".")
 from src.data.dataset import FlameDataset
 from src.evaluation.metrics import MetricAccumulator, format_metrics
+from src.evaluation.model_selection import (SELECTION_RULE, SELECTION_RULE_TEXT, report_only,
+                                            select_round)
 from src.models.mobilenetv3_multimodal import create_model
 
 
@@ -67,6 +82,36 @@ def evaluate(model, data_loader, criterion, device):
     accuracy = float(metrics["accuracy"]) if metrics["accuracy"] is not None else 0.0
     metrics["loss"] = avg_loss
     return avg_loss, accuracy, metrics
+
+
+def evaluate_by_node(model, loaders, device):
+    """One pass over every node's test loader: per-node metrics and pooled metrics.
+
+    The pooled accumulator sees exactly the batches of the pooled test split, so
+    the pooled numbers equal ``evaluate()`` on the concatenated split without a
+    second pass.  Returns ``(pooled_loss, pooled_accuracy, pooled_metrics, per_node)``.
+    """
+    sum_criterion = nn.CrossEntropyLoss(reduction="sum")
+    pooled = MetricAccumulator(num_classes=2, positive_class=1)
+    per_node = {}
+    model.eval()
+    with torch.no_grad():
+        for node_name, loader in loaders.items():
+            acc = MetricAccumulator(num_classes=2, positive_class=1)
+            for images, labels in loader:
+                images, labels = images.to(device), labels.to(device)
+                outputs = model(images)
+                loss_sum = sum_criterion(outputs, labels).item()
+                acc.update(outputs, labels, loss_sum)
+                pooled.update(outputs, labels, loss_sum)
+            m = acc.compute()
+            m["loss"] = float(m["loss"]) if m["loss"] is not None else 0.0
+            per_node[node_name] = m
+    metrics = pooled.compute()
+    avg_loss = float(metrics["loss"]) if metrics["loss"] is not None else 0.0
+    accuracy = float(metrics["accuracy"]) if metrics["accuracy"] is not None else 0.0
+    metrics["loss"] = avg_loss
+    return avg_loss, accuracy, metrics, per_node
 
 
 def json_metrics(metrics, digits=6):
@@ -166,8 +211,12 @@ def main(argv=None):
                               generator=g)
     val_loader = DataLoader(pooled_val, batch_size=args.batch_size,
                             shuffle=False, num_workers=0, pin_memory=False)
-    test_loader = DataLoader(pooled_test, batch_size=args.batch_size,
-                             shuffle=False, num_workers=0, pin_memory=False)
+    # the pooled test split is evaluated node by node (one pass, see evaluate_by_node)
+    node_test_loaders = {
+        os.path.basename(data_dir): DataLoader(test_datasets[i], batch_size=args.batch_size,
+                                               shuffle=False, num_workers=0, pin_memory=False)
+        for i, data_dir in enumerate(args.data_dirs)
+    }
 
     # Create model
     pretrained = not args.no_pretrained
@@ -181,6 +230,10 @@ def main(argv=None):
     print("\nTraining...")
     history = []
     start_total = time.perf_counter()
+    elapsed_excl_test = 0.0
+    total_test_eval = 0.0
+    val_loss_by_epoch = {}
+    best_state, best_key = None, None     # snapshot of the epoch the rule selects
 
     for epoch in range(1, args.epochs + 1):
         if torch.cuda.is_available():
@@ -192,7 +245,21 @@ def main(argv=None):
         eval_start = time.perf_counter()
         val_loss, val_acc, val_metrics = evaluate(model, val_loader, criterion, device)
         eval_time = time.perf_counter() - eval_start
-        epoch_time = time.perf_counter() - epoch_start
+        epoch_time = time.perf_counter() - epoch_start      # reported: excludes the test pass
+
+        # model selection input: validation loss only, fixed before the test pass
+        val_loss_by_epoch[epoch] = val_loss
+        if val_loss == val_loss and (best_key is None or val_loss < best_key):  # finite, strict
+            best_key = val_loss
+            best_state = copy.deepcopy(model.state_dict())
+
+        test_start = time.perf_counter()
+        with report_only(device):          # logged only; RNG streams left untouched
+            test_loss, test_acc, test_metrics, test_per_node = evaluate_by_node(
+                model, node_test_loaders, device)
+        test_time = time.perf_counter() - test_start
+        elapsed_excl_test += epoch_time
+        total_test_eval += test_time
 
         record = {
             "epoch": epoch,
@@ -205,6 +272,20 @@ def main(argv=None):
             "eval_time_s": round(eval_time, 3),
             "elapsed_s": round(time.perf_counter() - start_total, 3),
             "val_metrics": json_metrics(val_metrics),
+            # schema 3: test every epoch for logging (never used for selection)
+            "val_eval_time_s": round(eval_time, 3),
+            "test_eval_time_s": round(test_time, 3),
+            "epoch_wall_s": round(time.perf_counter() - epoch_start, 3),
+            "elapsed_excl_test_s": round(elapsed_excl_test, 3),
+            "test_loss": round(test_loss, 6),
+            "test_accuracy": round(test_acc, 6),
+            "test_metrics": json_metrics(test_metrics),
+            "test_per_node": {
+                name: {"test_loss": round(m["loss"], 6),
+                       "test_accuracy": round(float(m["accuracy"] or 0.0), 6),
+                       "test_metrics": json_metrics(m)}
+                for name, m in test_per_node.items()
+            },
         }
         history.append(record)
 
@@ -212,27 +293,26 @@ def main(argv=None):
         marker = " ← FL Round equivalent" if epoch % 5 == 0 else ""
         print(f"  Epoch {epoch:2d}/{args.epochs}: "
               f"train_loss={train_loss:.4f}, val_loss={val_loss:.4f}, "
-              f"val_acc={val_acc:.4f}, time={epoch_time:.1f}s{marker}")
+              f"val_acc={val_acc:.4f}, time={epoch_time:.1f}s "
+              f"(test, logged: acc={test_acc:.4f}, {test_time:.1f}s){marker}")
 
     total_time = time.perf_counter() - start_total
 
-    # Final test evaluation
-    test_loss, test_acc, test_metrics = evaluate(model, test_loader, criterion, device)
-    print(f"\n  Final Test: loss={test_loss:.4f}, {format_metrics(test_metrics)}")
+    selected = select_round(val_loss_by_epoch)
+    sel = history[selected - 1] if selected is not None else None
 
-    # Also evaluate on each node's test set individually
-    per_node_results = {}
-    for i, data_dir in enumerate(args.data_dirs):
-        node_name = os.path.basename(data_dir)
-        node_test_loader = DataLoader(test_datasets[i], batch_size=args.batch_size,
-                                      shuffle=False, num_workers=0, pin_memory=False)
-        node_loss, node_acc, node_metrics = evaluate(model, node_test_loader, criterion, device)
-        per_node_results[node_name] = {
-            "test_loss": round(node_loss, 6),
-            "test_accuracy": round(node_acc, 6),
-            "test_metrics": json_metrics(node_metrics),
-        }
-        print(f"  {node_name} Test: loss={node_loss:.4f}, accuracy={node_acc:.4f}")
+    # Final-epoch test metrics (kept under their old keys), from the last epoch's pass
+    last = history[-1]
+    test_loss, test_acc = last["test_loss"], last["test_accuracy"]
+    test_metrics = last["test_metrics"]
+    per_node_results = last["test_per_node"]
+    print(f"\n  Final-epoch test: loss={test_loss:.4f}, {format_metrics(test_metrics)}")
+    if sel is not None:
+        print(f"  Selected epoch {selected} (lowest val_loss={sel['val_loss']:.4f}): "
+              f"test {format_metrics(sel['test_metrics'])}")
+        for name, r in sel["test_per_node"].items():
+            print(f"  {name} test at selected epoch: loss={r['test_loss']:.4f}, "
+                  f"accuracy={r['test_accuracy']:.4f}")
 
     # Save results
     results = {
@@ -247,9 +327,25 @@ def main(argv=None):
         "total_time_s": round(total_time, 2),
         "final_test_loss": round(test_loss, 6),
         "final_test_accuracy": round(test_acc, 6),
-        "final_test_metrics": json_metrics(test_metrics),
-        "results_schema_version": 2,
+        "final_test_metrics": test_metrics,
+        "results_schema_version": 3,
         "per_node_test": per_node_results,
+        # schema 3: the declared selection rule (same as the FL runs)
+        "model_selection": {
+            "rule": SELECTION_RULE,
+            "description": SELECTION_RULE_TEXT,
+            "unit": "epoch",
+            "val_loss_by_epoch": {str(e): v for e, v in val_loss_by_epoch.items()},  # full precision
+            "selected_epoch": selected,
+            "selected_val_loss": sel["val_loss"] if sel else None,
+        },
+        "selected_epoch": selected,
+        "selected_test_loss": sel["test_loss"] if sel else None,
+        "selected_test_accuracy": sel["test_accuracy"] if sel else None,
+        "selected_test_metrics": sel["test_metrics"] if sel else None,
+        "selected_per_node_test": sel["test_per_node"] if sel else None,
+        "total_test_eval_s": round(total_test_eval, 2),
+        "total_time_excl_test_s": round(total_time - total_test_eval, 2),
         "history": history,
         # one entry per completed FL-equivalent round (5 local epochs = 1 round),
         # so a 10-round horizon (--epochs 50) is covered as well as the 3-round default
@@ -264,9 +360,11 @@ def main(argv=None):
     with open(results_path, "w") as f:
         json.dump(results, f, indent=2)
 
-    # Save model checkpoint
+    # Save model checkpoints: final epoch and the selected epoch
     model_path = os.path.join(args.output_dir, "model_final.pt")
     torch.save(model.state_dict(), model_path)
+    if best_state is not None:
+        torch.save(best_state, os.path.join(args.output_dir, "model_selected.pt"))
 
     print(f"\nCentralized training completed in {total_time:.1f}s")
     print(f"Results saved to {results_path}")
