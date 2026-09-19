@@ -6,7 +6,6 @@
 
 | config | metric | n_seeds | mean ± std [95% CI] | min | max |
 |---|---|---|---|---|---|
-| Centralized dirichlet_0.1 {group} | best_accuracy | 3 | 0.9315 ± 0.0079 [0.9119, 0.9511] | 0.9226 | 0.9377 |
 | Centralized dirichlet_0.1 {group} | final_accuracy | 3 | 0.8936 ± 0.0578 [0.7500, 1.0373] | 0.8288 | 0.9400 |
 | Centralized dirichlet_0.1 {group} | final_balanced_accuracy | 3 | 0.9046 ± 0.0381 [0.8099, 0.9993] | 0.8631 | 0.9381 |
 | Centralized dirichlet_0.1 {group} | final_cumulative_mb | 3 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
@@ -29,7 +28,6 @@
 | Centralized dirichlet_0.1 {group} | final_tp | 3 | 3968.3 ± 508.8323 [2704.3, 5232.3] | 3388.0 | 4338.0 |
 | Centralized dirichlet_0.1 {group} | round1_accuracy | 3 | 0.8410 ± 0.1373 [0.4999, 1.1821] | 0.6833 | 0.9342 |
 | Centralized dirichlet_0.1 {group} | total_time_s | 3 | 2686.4 ± 7.6900 [2667.3, 2705.5] | 2678.7 | 2694.1 |
-| Local-only dirichlet_0.1 {group} | best_accuracy | 3 | 0.9548 ± 0.0036 [0.9460, 0.9636] | 0.9508 | 0.9576 |
 | Local-only dirichlet_0.1 {group} | final_accuracy | 3 | 0.9070 ± 0.0315 [0.8288, 0.9853] | 0.8746 | 0.9375 |
 | Local-only dirichlet_0.1 {group} | final_balanced_accuracy | 3 | 0.5870 ± 0.0352 [0.4995, 0.6744] | 0.5481 | 0.6166 |
 | Local-only dirichlet_0.1 {group} | final_cumulative_mb | 3 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
@@ -57,7 +55,6 @@
 
 | config | metric | n_seeds | mean ± std [95% CI] | min | max |
 |---|---|---|---|---|---|
-| Centralized dirichlet_0.5 {group} | best_accuracy | 3 | 0.9793 ± 0.0009 [0.9771, 0.9816] | 0.9787 | 0.9804 |
 | Centralized dirichlet_0.5 {group} | final_accuracy | 3 | 0.8704 ± 0.0875 [0.6531, 1.0877] | 0.7699 | 0.9295 |
 | Centralized dirichlet_0.5 {group} | final_balanced_accuracy | 3 | 0.8879 ± 0.0662 [0.7235, 1.0522] | 0.8116 | 0.9293 |
 | Centralized dirichlet_0.5 {group} | final_cumulative_mb | 3 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
@@ -80,7 +77,6 @@
 | Centralized dirichlet_0.5 {group} | final_tp | 3 | 3709.7 ± 697.1401 [1977.9, 5441.5] | 2938.0 | 4294.0 |
 | Centralized dirichlet_0.5 {group} | round1_accuracy | 3 | 0.9710 ± 0.0149 [0.9339, 1.0081] | 0.9537 | 0.9804 |
 | Centralized dirichlet_0.5 {group} | total_time_s | 3 | 2689.3 ± 8.1056 [2669.1, 2709.4] | 2681.9 | 2697.9 |
-| Local-only dirichlet_0.5 {group} | best_accuracy | 3 | 0.8971 ± 0.0495 [0.7742, 1.0200] | 0.8422 | 0.9382 |
 | Local-only dirichlet_0.5 {group} | final_accuracy | 3 | 0.7304 ± 0.2077 [0.2144, 1.2464] | 0.4982 | 0.8986 |
 | Local-only dirichlet_0.5 {group} | final_balanced_accuracy | 3 | 0.8013 ± 0.0798 [0.6031, 0.9996] | 0.7130 | 0.8682 |
 | Local-only dirichlet_0.5 {group} | final_cumulative_mb | 3 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
@@ -108,7 +104,6 @@
 
 | config | metric | n_seeds | mean ± std [95% CI] | min | max |
 |---|---|---|---|---|---|
-| Centralized dirichlet_1 {group} | best_accuracy | 3 | 0.9657 ± 0.0133 [0.9327, 0.9987] | 0.9519 | 0.9785 |
 | Centralized dirichlet_1 {group} | final_accuracy | 3 | 0.7024 ± 0.0289 [0.6307, 0.7742] | 0.6810 | 0.7353 |
 | Centralized dirichlet_1 {group} | final_balanced_accuracy | 3 | 0.7598 ± 0.0197 [0.7108, 0.8087] | 0.7446 | 0.7820 |
 | Centralized dirichlet_1 {group} | final_cumulative_mb | 3 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
@@ -131,7 +126,6 @@
 | Centralized dirichlet_1 {group} | final_tp | 3 | 2426.3 ± 251.6433 [1801.2, 3051.4] | 2247.0 | 2714.0 |
 | Centralized dirichlet_1 {group} | round1_accuracy | 3 | 0.9154 ± 0.0297 [0.8417, 0.9892] | 0.8982 | 0.9497 |
 | Centralized dirichlet_1 {group} | total_time_s | 3 | 2688.3 ± 14.7473 [2651.6, 2724.9] | 2673.9 | 2703.4 |
-| Local-only dirichlet_1 {group} | best_accuracy | 3 | 0.9433 ± 0.0017 [0.9390, 0.9477] | 0.9423 | 0.9454 |
 | Local-only dirichlet_1 {group} | final_accuracy | 3 | 0.8378 ± 0.0824 [0.6331, 1.0426] | 0.7464 | 0.9066 |
 | Local-only dirichlet_1 {group} | final_balanced_accuracy | 3 | 0.8767 ± 0.0455 [0.7635, 0.9898] | 0.8312 | 0.9223 |
 | Local-only dirichlet_1 {group} | final_cumulative_mb | 3 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
@@ -159,7 +153,6 @@
 
 | config | metric | n_seeds | mean ± std [95% CI] | min | max |
 |---|---|---|---|---|---|
-| Centralized iid {group} | best_accuracy | 5 | 0.9406 ± 0.0141 [0.9231, 0.9581] | 0.9270 | 0.9605 |
 | Centralized iid {group} | final_accuracy | 5 | 0.9092 ± 0.0240 [0.8794, 0.9389] | 0.8860 | 0.9451 |
 | Centralized iid {group} | final_balanced_accuracy | 5 | 0.9199 ± 0.0198 [0.8953, 0.9444] | 0.8960 | 0.9453 |
 | Centralized iid {group} | final_cumulative_mb | 5 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
@@ -182,42 +175,32 @@
 | Centralized iid {group} | final_tp | 5 | 3966.8 ± 203.4716 [3714.2, 4219.4] | 3737.0 | 4272.0 |
 | Centralized iid {group} | round1_accuracy | 5 | 0.9202 ± 0.0244 [0.8900, 0.9505] | 0.8862 | 0.9499 |
 | Centralized iid {group} | total_time_s | 5 | 2782.4 ± 30.0874 [2745.0, 2819.7] | 2743.7 | 2805.0 |
-| Centralized iid {image} | best_accuracy | 3 | 0.9977 ± 0.0002 [0.9971, 0.9983] | 0.9975 | 0.9979 |
 | Centralized iid {image} | final_accuracy | 3 | 0.9965 ± 0.0013 [0.9931, 0.9998] | 0.9952 | 0.9979 |
 | Centralized iid {image} | final_cumulative_mb | 3 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
 | Centralized iid {image} | final_elapsed_s | 3 | 15276.2 ± 601.3857 [13782.3, 16770.2] | 14662.8 | 15864.8 |
 | Centralized iid {image} | final_loss | 3 | 0.0123 ± 0.0037 [0.0031, 0.0214] | 0.0088 | 0.0161 |
 | Centralized iid {image} | round1_accuracy | 3 | 0.9916 ± 0.0029 [0.9845, 0.9986] | 0.9883 | 0.9933 |
 | Centralized iid {image} | total_time_s | 3 | 15276.4 ± 601.4020 [13782.4, 16770.3] | 14662.9 | 15864.9 |
-| FedAvg iid [3N] {image} | best_accuracy | 2 | 0.9938 ± 0.0005 [0.9891, 0.9985] | 0.9934 | 0.9942 |
-| FedAvg iid [3N] {image} | final_accuracy | 2 | 0.9932 ± 0.0003 [0.9904, 0.9960] | 0.9930 | 0.9934 |
 | FedAvg iid [3N] {image} | final_cumulative_mb | 2 | 110.3102 ± 0.0000 [110.3102, 110.3102] | 110.3102 | 110.3102 |
-| FedAvg iid [3N] {image} | final_elapsed_s | 2 | 6107.2 ± 203.5619 [4278.3, 7936.2] | 5963.3 | 6251.2 |
-| FedAvg iid [3N] {image} | final_loss | 2 | 0.0520 ± 0.0086 [-0.0257, 0.1297] | 0.0459 | 0.0581 |
 | FedAvg iid [3N] {image} | round1_accuracy | 2 | 0.6823 ± 0.1693 [-0.8388, 2.2034] | 0.5626 | 0.8020 |
 | FedAvg iid [3N] {image} | total_time_s | 2 | 6107.2 ± 203.5619 [4278.3, 7936.2] | 5963.3 | 6251.2 |
-| FedBN iid [3N] {image} | best_accuracy | 3 | 0.9569 ± 0.0312 [0.8793, 1.0344] | 0.9295 | 0.9909 |
-| FedBN iid [3N] {image} | final_accuracy | 3 | 0.9569 ± 0.0312 [0.8793, 1.0344] | 0.9295 | 0.9909 |
+| FedAvg iid [3N] {image} | v1_final_round_accuracy | 2 | 0.9932 ± 0.0003 [0.9904, 0.9960] | 0.9930 | 0.9934 |
+| FedAvg iid [3N] {image} | v1_final_round_loss | 2 | 0.0520 ± 0.0086 [-0.0257, 0.1297] | 0.0459 | 0.0581 |
 | FedBN iid [3N] {image} | final_cumulative_mb | 3 | 110.3102 ± 0.0000 [110.3102, 110.3102] | 110.3102 | 110.3102 |
-| FedBN iid [3N] {image} | final_elapsed_s | 3 | 6322.6 ± 91.0997 [6096.3, 6548.9] | 6237.6 | 6418.8 |
-| FedBN iid [3N] {image} | final_loss | 3 | 0.1707 ± 0.1033 [-0.0859, 0.4273] | 0.0597 | 0.2640 |
 | FedBN iid [3N] {image} | round1_accuracy | 3 | 0.5708 ± 0.0712 [0.3939, 0.7478] | 0.5203 | 0.6523 |
 | FedBN iid [3N] {image} | total_time_s | 3 | 6322.6 ± 91.0997 [6096.3, 6548.9] | 6237.6 | 6418.8 |
-| FedProx(mu=0.01) iid [3N] {image} | best_accuracy | 3 | 0.9918 ± 0.0012 [0.9890, 0.9947] | 0.9905 | 0.9927 |
-| FedProx(mu=0.01) iid [3N] {image} | final_accuracy | 3 | 0.9918 ± 0.0012 [0.9890, 0.9947] | 0.9905 | 0.9927 |
+| FedBN iid [3N] {image} | v1_final_round_accuracy | 3 | 0.9569 ± 0.0312 [0.8793, 1.0344] | 0.9295 | 0.9909 |
+| FedBN iid [3N] {image} | v1_final_round_loss | 3 | 0.1707 ± 0.1033 [-0.0859, 0.4273] | 0.0597 | 0.2640 |
 | FedProx(mu=0.01) iid [3N] {image} | final_cumulative_mb | 3 | 110.3102 ± 0.0000 [110.3102, 110.3102] | 110.3102 | 110.3102 |
-| FedProx(mu=0.01) iid [3N] {image} | final_elapsed_s | 3 | 10355.3 ± 126.0639 [10042.1, 10668.4] | 10277.6 | 10500.7 |
-| FedProx(mu=0.01) iid [3N] {image} | final_loss | 3 | 0.0262 ± 0.0022 [0.0206, 0.0317] | 0.0236 | 0.0274 |
 | FedProx(mu=0.01) iid [3N] {image} | round1_accuracy | 3 | 0.9824 ± 0.0024 [0.9764, 0.9885] | 0.9803 | 0.9851 |
 | FedProx(mu=0.01) iid [3N] {image} | total_time_s | 3 | 10355.3 ± 126.0639 [10042.1, 10668.4] | 10277.6 | 10500.7 |
-| FedProx(mu=0.1) iid [3N] {image} | best_accuracy | 3 | 0.9848 ± 0.0016 [0.9808, 0.9888] | 0.9831 | 0.9863 |
-| FedProx(mu=0.1) iid [3N] {image} | final_accuracy | 3 | 0.9829 ± 0.0048 [0.9711, 0.9947] | 0.9775 | 0.9863 |
+| FedProx(mu=0.01) iid [3N] {image} | v1_final_round_accuracy | 3 | 0.9918 ± 0.0012 [0.9890, 0.9947] | 0.9905 | 0.9927 |
+| FedProx(mu=0.01) iid [3N] {image} | v1_final_round_loss | 3 | 0.0262 ± 0.0022 [0.0206, 0.0317] | 0.0236 | 0.0274 |
 | FedProx(mu=0.1) iid [3N] {image} | final_cumulative_mb | 3 | 110.3102 ± 0.0000 [110.3102, 110.3102] | 110.3102 | 110.3102 |
-| FedProx(mu=0.1) iid [3N] {image} | final_elapsed_s | 3 | 10547.0 ± 396.9983 [9560.8, 11533.2] | 10285.0 | 11003.8 |
-| FedProx(mu=0.1) iid [3N] {image} | final_loss | 3 | 0.0454 ± 0.0112 [0.0177, 0.0731] | 0.0366 | 0.0580 |
 | FedProx(mu=0.1) iid [3N] {image} | round1_accuracy | 3 | 0.9706 ± 0.0183 [0.9251, 1.0160] | 0.9496 | 0.9831 |
 | FedProx(mu=0.1) iid [3N] {image} | total_time_s | 3 | 10547.0 ± 396.9983 [9560.8, 11533.2] | 10285.0 | 11003.8 |
-| Local-only iid {group} | best_accuracy | 5 | 0.8511 ± 0.0233 [0.8221, 0.8800] | 0.8209 | 0.8720 |
+| FedProx(mu=0.1) iid [3N] {image} | v1_final_round_accuracy | 3 | 0.9829 ± 0.0048 [0.9711, 0.9947] | 0.9775 | 0.9863 |
+| FedProx(mu=0.1) iid [3N] {image} | v1_final_round_loss | 3 | 0.0454 ± 0.0112 [0.0177, 0.0731] | 0.0366 | 0.0580 |
 | Local-only iid {group} | final_accuracy | 5 | 0.7830 ± 0.0497 [0.7212, 0.8447] | 0.7026 | 0.8356 |
 | Local-only iid {group} | final_balanced_accuracy | 5 | 0.7655 ± 0.0397 [0.7163, 0.8148] | 0.6990 | 0.8050 |
 | Local-only iid {group} | final_cumulative_mb | 5 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
@@ -240,7 +223,6 @@
 | Local-only iid {group} | final_tp | 5 | 3679.6 ± 391.5256 [3193.5, 4165.7] | 3128.0 | 4089.0 |
 | Local-only iid {group} | round1_accuracy | 5 | 0.8145 ± 0.0390 [0.7661, 0.8629] | 0.7699 | 0.8712 |
 | Local-only iid {group} | total_time_s | 5 | 2702.7 ± 16.6261 [2682.1, 2723.3] | 2682.2 | 2722.9 |
-| Local-only iid {image} | best_accuracy | 3 | 0.9950 ± 0.0008 [0.9931, 0.9969] | 0.9942 | 0.9958 |
 | Local-only iid {image} | final_accuracy | 3 | 0.9949 ± 0.0008 [0.9928, 0.9970] | 0.9939 | 0.9955 |
 | Local-only iid {image} | final_cumulative_mb | 3 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
 | Local-only iid {image} | final_elapsed_s | 3 | 5163.9 ± 45.8762 [5050.0, 5277.9] | 5122.4 | 5213.2 |
@@ -252,7 +234,6 @@
 
 | config | metric | n_seeds | mean ± std [95% CI] | min | max |
 |---|---|---|---|---|---|
-| Centralized iid_sub0.01 {group} | best_accuracy | 3 | 0.8574 ± 0.0402 [0.7576, 0.9572] | 0.8111 | 0.8825 |
 | Centralized iid_sub0.01 {group} | final_accuracy | 3 | 0.8831 ± 0.0374 [0.7901, 0.9761] | 0.8399 | 0.9060 |
 | Centralized iid_sub0.01 {group} | final_balanced_accuracy | 3 | 0.8912 ± 0.0260 [0.8267, 0.9557] | 0.8637 | 0.9152 |
 | Centralized iid_sub0.01 {group} | final_cumulative_mb | 3 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
@@ -275,7 +256,6 @@
 | Centralized iid_sub0.01 {group} | final_tp | 3 | 3884.7 ± 391.0631 [2913.2, 4856.1] | 3475.0 | 4254.0 |
 | Centralized iid_sub0.01 {group} | round1_accuracy | 3 | 0.7492 ± 0.0326 [0.6683, 0.8301] | 0.7127 | 0.7753 |
 | Centralized iid_sub0.01 {group} | total_time_s | 3 | 256.4500 ± 39.3788 [158.6277, 354.2723] | 210.9800 | 279.4000 |
-| Local-only iid_sub0.01 {group} | best_accuracy | 3 | 0.7413 ± 0.0200 [0.6915, 0.7911] | 0.7273 | 0.7642 |
 | Local-only iid_sub0.01 {group} | final_accuracy | 3 | 0.8398 ± 0.0027 [0.8329, 0.8466] | 0.8380 | 0.8429 |
 | Local-only iid_sub0.01 {group} | final_balanced_accuracy | 3 | 0.8036 ± 0.0049 [0.7914, 0.8158] | 0.8005 | 0.8093 |
 | Local-only iid_sub0.01 {group} | final_cumulative_mb | 3 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
@@ -303,7 +283,6 @@
 
 | config | metric | n_seeds | mean ± std [95% CI] | min | max |
 |---|---|---|---|---|---|
-| Centralized iid_sub0.05 {group} | best_accuracy | 3 | 0.8780 ± 0.0330 [0.7960, 0.9600] | 0.8466 | 0.9124 |
 | Centralized iid_sub0.05 {group} | final_accuracy | 3 | 0.8798 ± 0.0544 [0.7446, 1.0150] | 0.8173 | 0.9165 |
 | Centralized iid_sub0.05 {group} | final_balanced_accuracy | 3 | 0.8973 ± 0.0434 [0.7895, 1.0051] | 0.8475 | 0.9270 |
 | Centralized iid_sub0.05 {group} | final_cumulative_mb | 3 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
@@ -326,7 +305,6 @@
 | Centralized iid_sub0.05 {group} | final_tp | 3 | 3740.7 ± 396.9437 [2754.6, 4726.7] | 3284.0 | 4003.0 |
 | Centralized iid_sub0.05 {group} | round1_accuracy | 3 | 0.8000 ± 0.0545 [0.6645, 0.9354] | 0.7400 | 0.8466 |
 | Centralized iid_sub0.05 {group} | total_time_s | 3 | 346.9733 ± 53.6597 [213.6752, 480.2715] | 285.0200 | 378.7900 |
-| Local-only iid_sub0.05 {group} | best_accuracy | 3 | 0.8430 ± 0.0163 [0.8026, 0.8834] | 0.8275 | 0.8599 |
 | Local-only iid_sub0.05 {group} | final_accuracy | 3 | 0.8406 ± 0.0033 [0.8324, 0.8489] | 0.8378 | 0.8443 |
 | Local-only iid_sub0.05 {group} | final_balanced_accuracy | 3 | 0.8096 ± 0.0120 [0.7797, 0.8395] | 0.8014 | 0.8235 |
 | Local-only iid_sub0.05 {group} | final_cumulative_mb | 3 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
@@ -354,7 +332,6 @@
 
 | config | metric | n_seeds | mean ± std [95% CI] | min | max |
 |---|---|---|---|---|---|
-| Centralized non_iid_label {group} | best_accuracy | 5 | 0.9366 ± 0.0183 [0.9139, 0.9594] | 0.9153 | 0.9557 |
 | Centralized non_iid_label {group} | final_accuracy | 5 | 0.9422 ± 0.0216 [0.9154, 0.9690] | 0.9197 | 0.9660 |
 | Centralized non_iid_label {group} | final_balanced_accuracy | 5 | 0.9447 ± 0.0170 [0.9237, 0.9658] | 0.9226 | 0.9650 |
 | Centralized non_iid_label {group} | final_cumulative_mb | 5 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
@@ -377,42 +354,32 @@
 | Centralized non_iid_label {group} | final_tp | 5 | 4228.2 ± 179.4455 [4005.4, 4451.0] | 4022.0 | 4477.0 |
 | Centralized non_iid_label {group} | round1_accuracy | 5 | 0.8913 ± 0.0799 [0.7921, 0.9905] | 0.7622 | 0.9557 |
 | Centralized non_iid_label {group} | total_time_s | 5 | 2719.2 ± 81.6413 [2617.8, 2820.5] | 2629.8 | 2805.2 |
-| Centralized non_iid_label {image} | best_accuracy | 3 | 0.9982 ± 0.0003 [0.9975, 0.9990] | 0.9980 | 0.9986 |
 | Centralized non_iid_label {image} | final_accuracy | 3 | 0.9972 ± 0.0007 [0.9954, 0.9990] | 0.9964 | 0.9978 |
 | Centralized non_iid_label {image} | final_cumulative_mb | 3 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
 | Centralized non_iid_label {image} | final_elapsed_s | 3 | 15572.2 ± 325.2254 [14764.3, 16380.1] | 15343.0 | 15944.4 |
 | Centralized non_iid_label {image} | final_loss | 3 | 0.0101 ± 0.0021 [0.0048, 0.0153] | 0.0076 | 0.0113 |
 | Centralized non_iid_label {image} | round1_accuracy | 3 | 0.9967 ± 0.0013 [0.9934, 0.9999] | 0.9954 | 0.9980 |
 | Centralized non_iid_label {image} | total_time_s | 3 | 15572.2 ± 325.2557 [14764.2, 16380.2] | 15343.0 | 15944.5 |
-| FedAvg non_iid_label [3N] {image} | best_accuracy | 3 | 0.9934 ± 0.0039 [0.9836, 1.0032] | 0.9908 | 0.9979 |
-| FedAvg non_iid_label [3N] {image} | final_accuracy | 3 | 0.9931 ± 0.0039 [0.9834, 1.0029] | 0.9908 | 0.9977 |
 | FedAvg non_iid_label [3N] {image} | final_cumulative_mb | 3 | 110.3102 ± 0.0000 [110.3102, 110.3102] | 110.3102 | 110.3102 |
-| FedAvg non_iid_label [3N] {image} | final_elapsed_s | 3 | 6146.9 ± 409.6401 [5129.3, 7164.5] | 5720.9 | 6538.0 |
-| FedAvg non_iid_label [3N] {image} | final_loss | 3 | 0.0513 ± 0.0413 [-0.0513, 0.1540] | 0.0155 | 0.0965 |
 | FedAvg non_iid_label [3N] {image} | round1_accuracy | 3 | 0.4979 ± 0.0980 [0.2546, 0.7413] | 0.3865 | 0.5707 |
 | FedAvg non_iid_label [3N] {image} | total_time_s | 3 | 6146.9 ± 409.6401 [5129.3, 7164.5] | 5720.9 | 6538.0 |
-| FedBN non_iid_label [3N] {image} | best_accuracy | 3 | 0.7684 ± 0.0573 [0.6261, 0.9106] | 0.7164 | 0.8297 |
-| FedBN non_iid_label [3N] {image} | final_accuracy | 3 | 0.7506 ± 0.0836 [0.5430, 0.9583] | 0.6632 | 0.8297 |
+| FedAvg non_iid_label [3N] {image} | v1_final_round_accuracy | 3 | 0.9931 ± 0.0039 [0.9834, 1.0029] | 0.9908 | 0.9977 |
+| FedAvg non_iid_label [3N] {image} | v1_final_round_loss | 3 | 0.0513 ± 0.0413 [-0.0513, 0.1540] | 0.0155 | 0.0965 |
 | FedBN non_iid_label [3N] {image} | final_cumulative_mb | 3 | 110.3102 ± 0.0000 [110.3102, 110.3102] | 110.3102 | 110.3102 |
-| FedBN non_iid_label [3N] {image} | final_elapsed_s | 3 | 6162.8 ± 170.0314 [5740.4, 6585.1] | 6020.9 | 6351.2 |
-| FedBN non_iid_label [3N] {image} | final_loss | 3 | 0.5774 ± 0.1201 [0.2790, 0.8759] | 0.4623 | 0.7020 |
 | FedBN non_iid_label [3N] {image} | round1_accuracy | 3 | 0.3759 ± 0.0136 [0.3421, 0.4097] | 0.3671 | 0.3916 |
 | FedBN non_iid_label [3N] {image} | total_time_s | 3 | 6162.8 ± 170.0314 [5740.4, 6585.1] | 6020.9 | 6351.2 |
-| FedProx(mu=0.01) non_iid_label [3N] {image} | best_accuracy | 3 | 0.9925 ± 0.0023 [0.9868, 0.9982] | 0.9904 | 0.9949 |
-| FedProx(mu=0.01) non_iid_label [3N] {image} | final_accuracy | 3 | 0.9922 ± 0.0024 [0.9863, 0.9982] | 0.9904 | 0.9949 |
+| FedBN non_iid_label [3N] {image} | v1_final_round_accuracy | 3 | 0.7506 ± 0.0836 [0.5430, 0.9583] | 0.6632 | 0.8297 |
+| FedBN non_iid_label [3N] {image} | v1_final_round_loss | 3 | 0.5774 ± 0.1201 [0.2790, 0.8759] | 0.4623 | 0.7020 |
 | FedProx(mu=0.01) non_iid_label [3N] {image} | final_cumulative_mb | 3 | 110.3102 ± 0.0000 [110.3102, 110.3102] | 110.3102 | 110.3102 |
-| FedProx(mu=0.01) non_iid_label [3N] {image} | final_elapsed_s | 3 | 10499.9 ± 494.1405 [9272.4, 11727.4] | 10098.5 | 11051.8 |
-| FedProx(mu=0.01) non_iid_label [3N] {image} | final_loss | 3 | 0.0248 ± 0.0036 [0.0159, 0.0337] | 0.0207 | 0.0270 |
 | FedProx(mu=0.01) non_iid_label [3N] {image} | round1_accuracy | 3 | 0.9702 ± 0.0196 [0.9214, 1.0189] | 0.9479 | 0.9851 |
 | FedProx(mu=0.01) non_iid_label [3N] {image} | total_time_s | 3 | 10499.9 ± 494.1405 [9272.4, 11727.4] | 10098.5 | 11051.8 |
-| FedProx(mu=0.1) non_iid_label [3N] {image} | best_accuracy | 3 | 0.9835 ± 0.0016 [0.9795, 0.9876] | 0.9819 | 0.9851 |
-| FedProx(mu=0.1) non_iid_label [3N] {image} | final_accuracy | 3 | 0.9833 ± 0.0019 [0.9786, 0.9881] | 0.9813 | 0.9851 |
+| FedProx(mu=0.01) non_iid_label [3N] {image} | v1_final_round_accuracy | 3 | 0.9922 ± 0.0024 [0.9863, 0.9982] | 0.9904 | 0.9949 |
+| FedProx(mu=0.01) non_iid_label [3N] {image} | v1_final_round_loss | 3 | 0.0248 ± 0.0036 [0.0159, 0.0337] | 0.0207 | 0.0270 |
 | FedProx(mu=0.1) non_iid_label [3N] {image} | final_cumulative_mb | 3 | 110.3102 ± 0.0000 [110.3102, 110.3102] | 110.3102 | 110.3102 |
-| FedProx(mu=0.1) non_iid_label [3N] {image} | final_elapsed_s | 3 | 9850.4 ± 483.2760 [8649.9, 11050.9] | 9298.0 | 10195.1 |
-| FedProx(mu=0.1) non_iid_label [3N] {image} | final_loss | 3 | 0.0465 ± 0.0032 [0.0387, 0.0544] | 0.0433 | 0.0496 |
 | FedProx(mu=0.1) non_iid_label [3N] {image} | round1_accuracy | 3 | 0.9703 ± 0.0076 [0.9513, 0.9893] | 0.9633 | 0.9784 |
 | FedProx(mu=0.1) non_iid_label [3N] {image} | total_time_s | 3 | 9850.4 ± 483.2760 [8649.9, 11050.9] | 9298.0 | 10195.1 |
-| Local-only non_iid_label {group} | best_accuracy | 5 | 0.9295 ± 0.0143 [0.9118, 0.9473] | 0.9125 | 0.9499 |
+| FedProx(mu=0.1) non_iid_label [3N] {image} | v1_final_round_accuracy | 3 | 0.9833 ± 0.0019 [0.9786, 0.9881] | 0.9813 | 0.9851 |
+| FedProx(mu=0.1) non_iid_label [3N] {image} | v1_final_round_loss | 3 | 0.0465 ± 0.0032 [0.0387, 0.0544] | 0.0433 | 0.0496 |
 | Local-only non_iid_label {group} | final_accuracy | 5 | 0.9415 ± 0.0201 [0.9165, 0.9664] | 0.9119 | 0.9598 |
 | Local-only non_iid_label {group} | final_balanced_accuracy | 5 | 0.8790 ± 0.0232 [0.8502, 0.9077] | 0.8553 | 0.9100 |
 | Local-only non_iid_label {group} | final_cumulative_mb | 5 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
@@ -435,7 +402,6 @@
 | Local-only non_iid_label {group} | final_tp | 5 | 4292.0 ± 100.0675 [4167.7, 4416.3] | 4136.0 | 4390.0 |
 | Local-only non_iid_label {group} | round1_accuracy | 5 | 0.8455 ± 0.1197 [0.6969, 0.9942] | 0.6390 | 0.9499 |
 | Local-only non_iid_label {group} | total_time_s | 5 | 2704.9 ± 9.7139 [2692.9, 2717.0] | 2693.9 | 2717.3 |
-| Local-only non_iid_label {image} | best_accuracy | 3 | 0.9960 ± 0.0006 [0.9946, 0.9974] | 0.9953 | 0.9964 |
 | Local-only non_iid_label {image} | final_accuracy | 3 | 0.9950 ± 0.0003 [0.9944, 0.9957] | 0.9949 | 0.9953 |
 | Local-only non_iid_label {image} | final_cumulative_mb | 3 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
 | Local-only non_iid_label {image} | final_elapsed_s | 3 | 5453.5 ± 100.9820 [5202.6, 5704.3] | 5383.1 | 5569.2 |
@@ -447,7 +413,6 @@
 
 | config | metric | n_seeds | mean ± std [95% CI] | min | max |
 |---|---|---|---|---|---|
-| Centralized non_iid_label_sub0.01 {group} | best_accuracy | 3 | 0.9185 ± 0.0105 [0.8924, 0.9446] | 0.9092 | 0.9299 |
 | Centralized non_iid_label_sub0.01 {group} | final_accuracy | 3 | 0.8936 ± 0.0563 [0.7537, 1.0335] | 0.8288 | 0.9314 |
 | Centralized non_iid_label_sub0.01 {group} | final_balanced_accuracy | 3 | 0.9078 ± 0.0391 [0.8106, 1.0050] | 0.8637 | 0.9384 |
 | Centralized non_iid_label_sub0.01 {group} | final_cumulative_mb | 3 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
@@ -470,7 +435,6 @@
 | Centralized non_iid_label_sub0.01 {group} | final_tp | 3 | 3854.3 ± 488.1571 [2641.7, 5067.0] | 3291.0 | 4153.0 |
 | Centralized non_iid_label_sub0.01 {group} | round1_accuracy | 3 | 0.8913 ± 0.0259 [0.8270, 0.9555] | 0.8648 | 0.9165 |
 | Centralized non_iid_label_sub0.01 {group} | total_time_s | 3 | 234.4967 ± 44.3003 [124.4485, 344.5448] | 208.7700 | 285.6500 |
-| Local-only non_iid_label_sub0.01 {group} | best_accuracy | 3 | 0.8621 ± 0.0212 [0.8094, 0.9147] | 0.8490 | 0.8865 |
 | Local-only non_iid_label_sub0.01 {group} | final_accuracy | 3 | 0.8889 ± 0.0320 [0.8094, 0.9684] | 0.8587 | 0.9225 |
 | Local-only non_iid_label_sub0.01 {group} | final_balanced_accuracy | 3 | 0.7980 ± 0.0817 [0.5950, 1.0010] | 0.7207 | 0.8835 |
 | Local-only non_iid_label_sub0.01 {group} | final_cumulative_mb | 3 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
@@ -498,7 +462,6 @@
 
 | config | metric | n_seeds | mean ± std [95% CI] | min | max |
 |---|---|---|---|---|---|
-| Centralized non_iid_label_sub0.05 {group} | best_accuracy | 3 | 0.9275 ± 0.0300 [0.8529, 1.0020] | 0.9083 | 0.9621 |
 | Centralized non_iid_label_sub0.05 {group} | final_accuracy | 3 | 0.9129 ± 0.0516 [0.7848, 1.0411] | 0.8551 | 0.9542 |
 | Centralized non_iid_label_sub0.05 {group} | final_balanced_accuracy | 3 | 0.9159 ± 0.0437 [0.8072, 1.0246] | 0.8657 | 0.9458 |
 | Centralized non_iid_label_sub0.05 {group} | final_cumulative_mb | 3 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
@@ -521,7 +484,6 @@
 | Centralized non_iid_label_sub0.05 {group} | final_tp | 3 | 4089.7 ± 348.8041 [3223.2, 4956.1] | 3728.0 | 4424.0 |
 | Centralized non_iid_label_sub0.05 {group} | round1_accuracy | 3 | 0.9030 ± 0.0619 [0.7492, 1.0568] | 0.8386 | 0.9621 |
 | Centralized non_iid_label_sub0.05 {group} | total_time_s | 3 | 318.2333 ± 54.2809 [183.3921, 453.0745] | 285.8600 | 380.9000 |
-| Local-only non_iid_label_sub0.05 {group} | best_accuracy | 3 | 0.9162 ± 0.0021 [0.9110, 0.9215] | 0.9139 | 0.9179 |
 | Local-only non_iid_label_sub0.05 {group} | final_accuracy | 3 | 0.9039 ± 0.0795 [0.7065, 1.1013] | 0.8121 | 0.9498 |
 | Local-only non_iid_label_sub0.05 {group} | final_balanced_accuracy | 3 | 0.8532 ± 0.0383 [0.7580, 0.9483] | 0.8090 | 0.8777 |
 | Local-only non_iid_label_sub0.05 {group} | final_cumulative_mb | 3 | 0.0000 ± 0.0000 [0.0000, 0.0000] | 0.0000 | 0.0000 |
