@@ -65,6 +65,8 @@ from src.evaluation.model_selection import (  # noqa: E402
     select_round,
     weighted_val_loss,
 )
+from src.evaluation.bootstrap import BOOT_METRICS, DEFAULT_B, Unit, config_ci  # noqa: E402
+from src.evaluation.predictions import load_npz, metrics_from_predictions  # noqa: E402
 
 
 # --------------------------------------------------------------------------- #
@@ -1172,6 +1174,11 @@ def runs_dataframe(runs: Sequence[Dict[str, Any]]) -> pd.DataFrame:
         for name in SELECTED_RUN_COLUMNS:
             row["selected_test_" + name] = selected.get(name)
         row["v1_final_round_accuracy"] = record.get("v1_final_round_accuracy")
+        clean = record.get("selected_test_clean_metrics") or {}
+        row["selected_test_clean_accuracy"] = clean.get("accuracy")
+        row["selected_test_clean_balanced_accuracy"] = clean.get("balanced_accuracy")
+        row["clean_excluded_n"] = record.get("clean_excluded_n")
+        row["pred_check_max_diff"] = record.get("pred_check_max_diff")
         row["total_time_s"] = record.get("total_time_s")
         row["total_time_raw_s"] = record.get("total_time_raw_s")
         row["final_elapsed_s"] = record.get("final_elapsed_s")
@@ -1180,7 +1187,8 @@ def runs_dataframe(runs: Sequence[Dict[str, Any]]) -> pd.DataFrame:
     columns = RECORD_FIELDS + [
         "tags", "final_accuracy", "round1_accuracy", "final_loss",
     ] + ["selected_test_" + name for name in SELECTED_RUN_COLUMNS] + [
-        "v1_final_round_accuracy",
+        "v1_final_round_accuracy", "selected_test_clean_accuracy",
+        "selected_test_clean_balanced_accuracy", "clean_excluded_n", "pred_check_max_diff",
         "total_time_s", "total_time_raw_s", "final_elapsed_s", "final_cumulative_mb",
     ]
     df = pd.DataFrame(rows, columns=columns)
@@ -1226,6 +1234,11 @@ def _run_metric_values(record: Dict[str, Any]) -> Dict[str, float]:
             fval = _as_float(record.get(key))
             if fval is not None:
                 values[key] = fval
+        # pre-registered clean subset (needs per-image predictions)
+        for name, val in (record.get("selected_test_clean_metrics") or {}).items():
+            fval = _as_float(val)
+            if fval is not None:
+                values["selected_test_clean_" + str(name)] = fval
     elif source == HEADLINE_FINAL_EPOCH:
         for name, val in (record.get("metrics_final") or {}).items():
             fval = _as_float(val)
@@ -1258,8 +1271,125 @@ def _metric_sort_key(name: str) -> Tuple[int, str]:
     return (len(METRIC_ORDER) + 1, name)
 
 
-def summary_table(runs: Sequence[Dict[str, Any]]) -> pd.DataFrame:
-    """Per config key and per available metric: n_seeds, mean, std, CI, min, max."""
+SPLITS_DIR = os.path.join(_REPO_ROOT, "data", "splits")
+CLEAN_DIR = os.path.join(_REPO_ROOT, "analysis", "leakage", "clean_subset")
+_PARTITION_CACHE: Dict[str, Tuple[Dict[str, str], set]] = {}
+
+
+def partition_tables(partition: str) -> Optional[Tuple[Dict[str, str], set]]:
+    """({path: group_id}, excluded paths) of a partition from data/splits and the
+    pre-registered clean-subset list; None when the partition is not in data/splits."""
+    if partition not in _PARTITION_CACHE:
+        manifest = os.path.join(SPLITS_DIR, "%s.csv.gz" % partition)
+        excluded = os.path.join(CLEAN_DIR, "%s_excluded.csv.gz" % partition)
+        if not (os.path.isfile(manifest) and os.path.isfile(excluded)):
+            return None
+        m = pd.read_csv(manifest, dtype={"group_id": str})
+        ex = pd.read_csv(excluded)
+        _PARTITION_CACHE[partition] = (dict(zip(m.path, m.group_id)), set(ex.path))
+    return _PARTITION_CACHE[partition]
+
+
+def _prediction_files(record: Dict[str, Any]) -> Tuple[Optional[str], List[str]]:
+    """(aggregation, test-prediction files of the headline model) or (None, [])."""
+    pred_dir = os.path.join(record["run_dir"], "predictions")
+    if record.get("headline_source") != HEADLINE_SELECTED or not os.path.isdir(pred_dir):
+        return None, []
+    if record["kind"] == "fl" and record.get("selected_round") is not None:
+        pattern = "r%03d_*_test.npz" % int(record["selected_round"])
+        aggregation = "weighted"
+    else:
+        pattern = "selected_*_test.npz"
+        aggregation = "pooled" if record["kind"] == "centralized" else "mean"
+    import glob as _glob
+    return aggregation, sorted(_glob.glob(os.path.join(pred_dir, pattern)))
+
+
+def _aggregate_point(units: List[Dict[str, Any]], aggregation: str) -> Dict[str, float]:
+    """Headline metrics of a run from its units' predictions (no resampling)."""
+    if not units:
+        return {}
+    if aggregation == "pooled":
+        per = [metrics_from_predictions(np.concatenate([u["label"] for u in units]),
+                                        np.concatenate([u["margin"] for u in units]))]
+        w = [1.0]
+    else:
+        per = [metrics_from_predictions(u["label"], u["margin"]) for u in units]
+        w = [len(u["label"]) if aggregation == "weighted" else 1.0 for u in units]
+    out = {}
+    for m in BOOT_METRICS:
+        vals = [(wi, p[m]) for wi, p in zip(w, per) if p.get(m) is not None]
+        if vals:
+            out[m] = float(sum(wi * v for wi, v in vals) / sum(wi for wi, _ in vals))
+    return out
+
+
+def attach_prediction_metrics(runs: Sequence[Dict[str, Any]], warn: bool = True) -> None:
+    """For runs with per-image predictions: join sequence ids, apply the pre-registered
+    clean-subset rule, and add ``selected_test_clean_metrics`` (idempotent)."""
+    for record in runs:
+        if "pred_units" in record:
+            continue
+        record["pred_units"] = None
+        aggregation, files = _prediction_files(record)
+        tables = partition_tables(str(record.get("distribution"))) if files else None
+        if not files or tables is None:
+            continue
+        groups, excluded = tables
+        units, clean = [], []
+        for path in files:
+            d = load_npz(path)
+            keep = np.array([p in groups for p in d["path"]])
+            if not keep.all() and warn:
+                print("[warn] %s: %d prediction paths not in the partition manifest"
+                      % (path, int((~keep).sum())))
+            gid = np.array([groups.get(p, "unknown") for p in d["path"]])
+            is_clean = np.array([p not in excluded for p in d["path"]])
+            units.append({"label": d["label"], "margin": d["logit_margin"], "group": gid})
+            clean.append({"label": d["label"][is_clean], "margin": d["logit_margin"][is_clean],
+                          "group": gid[is_clean]})
+        record["pred_units"], record["pred_units_clean"] = units, clean
+        record["pred_aggregation"] = aggregation
+        full = _aggregate_point(units, aggregation)
+        logged = record.get("selected_test_metrics") or {}
+        diffs = [abs(full[m] - logged[m]) for m in ("accuracy", "balanced_accuracy", "mcc")
+                 if m in full and _as_float(logged.get(m)) is not None]
+        record["pred_check_max_diff"] = max(diffs) if diffs else None
+        if warn and diffs and max(diffs) > 1e-5:
+            print("[warn] %s: metrics recomputed from predictions differ from the logged ones "
+                  "by %.2e" % (record["run_name"], max(diffs)))
+        record["selected_test_clean_metrics"] = _aggregate_point(clean, aggregation)
+        record["clean_excluded_n"] = int(sum(len(u["label"]) - len(c["label"])
+                                             for u, c in zip(units, clean)))
+
+
+def _bootstrap_cis(group: Sequence[Dict[str, Any]], config_id: str,
+                   B: int) -> Dict[str, Dict[str, float]]:
+    """Cluster (sequence) bootstrap CIs of the selected-test metrics of one configuration,
+    full held-out set and clean subset -- only when every run has per-image predictions."""
+    runs = [r for r in group if r.get("headline_source") == HEADLINE_SELECTED]
+    if B <= 0 or not runs or len(runs) != len(group) or not all(r.get("pred_units") for r in runs):
+        return {}
+    out: Dict[str, Dict[str, float]] = {}
+    aggregation = runs[0]["pred_aggregation"]
+    for suffix, key in (("", "pred_units"), ("clean_", "pred_units_clean")):
+        units = [[Unit(u["label"], u["margin"], u["group"]) for u in r[key]] for r in runs]
+        if any(not u for u in units):
+            continue
+        cis = config_ci(units, aggregation, "%s|%s" % (config_id, suffix), B=B)
+        for metric, ci in cis.items():
+            out["selected_test_%s%s" % (suffix, metric)] = ci
+    return out
+
+
+def summary_table(runs: Sequence[Dict[str, Any]], bootstrap_B: int = DEFAULT_B) -> pd.DataFrame:
+    """Per config key and per available metric: n_seeds, mean, std, CI, min, max.
+
+    CIs of the selected-test metrics (full held-out set and clean subset) are
+    sequence-level cluster bootstrap CIs (``ci_method`` = ``cluster_bootstrap``) when every
+    run of the configuration has per-image predictions; every other CI is the t-interval of
+    the mean over seeds (``ci_method`` = ``t_seeds``).
+    """
     rows = []
     for config_id, group in _group_by_config(runs).items():
         first = group[0]
@@ -1268,8 +1398,15 @@ def summary_table(runs: Sequence[Dict[str, Any]]) -> pd.DataFrame:
             for name, val in _run_metric_values(record).items():
                 per_metric.setdefault(name, []).append(val)
         seeds = sorted({r["seed_label"] for r in group})
+        boot = _bootstrap_cis(group, config_id, bootstrap_B)
         for name in sorted(per_metric, key=_metric_sort_key):
             stats_dict = describe(per_metric[name])
+            ci_method = "t_seeds"
+            if name in boot:
+                b = boot[name]
+                stats_dict = dict(stats_dict, ci_low=b["ci_low"], ci_high=b["ci_high"],
+                                  ci95=(b["ci_high"] - b["ci_low"]) / 2.0)
+                ci_method = "cluster_bootstrap_B%d" % b["B"]
             rows.append({
                 "config_id": config_id,
                 "label": first["label"],
@@ -1290,13 +1427,14 @@ def summary_table(runs: Sequence[Dict[str, Any]]) -> pd.DataFrame:
                 "ci95": stats_dict["ci95"],
                 "ci_low": stats_dict["ci_low"],
                 "ci_high": stats_dict["ci_high"],
+                "ci_method": ci_method,
                 "min": stats_dict["min"],
                 "max": stats_dict["max"],
             })
     df = pd.DataFrame(rows, columns=[
         "config_id", "label", "protocol", "kind", "strategy", "mu", "distribution", "n_nodes",
         "num_rounds", "local_epochs", "lr", "metric", "n_seeds", "seeds", "mean", "std", "ci95",
-        "ci_low", "ci_high", "min", "max",
+        "ci_low", "ci_high", "ci_method", "min", "max",
     ])
     if not df.empty:
         df = df.sort_values(["distribution", "kind", "label", "metric"]).reset_index(drop=True)
@@ -1381,11 +1519,13 @@ def per_client_selected_table(runs: Sequence[Dict[str, Any]]) -> pd.DataFrame:
     ])
 
 
-def summarize(runs: Sequence[Dict[str, Any]]) -> Dict[str, pd.DataFrame]:
+def summarize(runs: Sequence[Dict[str, Any]],
+              bootstrap_B: int = DEFAULT_B) -> Dict[str, pd.DataFrame]:
     """All tables at once: ``runs``, ``summary``, ``per_round`` and ``per_client_selected``."""
+    attach_prediction_metrics(runs)
     return {
         "runs": runs_dataframe(runs),
-        "summary": summary_table(runs),
+        "summary": summary_table(runs, bootstrap_B),
         "per_round": per_round_table(runs),
         "per_client_selected": per_client_selected_table(runs),
     }
@@ -2072,6 +2212,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--metric", default="accuracy",
                         help="metric used for curves and statistical tests (default: accuracy)")
     parser.add_argument("--no_plots", action="store_true", help="skip figure generation")
+    parser.add_argument("--bootstrap_B", type=int, default=DEFAULT_B,
+                        help="cluster-bootstrap replicates for the selected-test CIs "
+                             "(default %d; 0 = t-interval over seeds only)" % DEFAULT_B)
     return parser
 
 
@@ -2098,7 +2241,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if not runs:
         print("[warn] no runs found under {}".format(results_dir))
 
-    tables = summarize(runs)
+    tables = summarize(runs, args.bootstrap_B)
     pairs = pairwise_tests(runs, metric=args.metric)
     friedman = friedman_tests(runs, metric=args.metric)
 

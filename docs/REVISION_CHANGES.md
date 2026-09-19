@@ -258,6 +258,36 @@ credentials) so that the P0 leakage/re-split chain can run (see the 2026-09-17 s
 * Old result files carry no timing/communication per round; the analysis script marks
   those curves as estimated.  New runs record them exactly.
 
+## Leakage sensitivity, pre-registered clean subset, cluster bootstrap, per-image predictions (2026-09-19)
+
+* **Partition kept** (dHash τ = 8). Coarser groupings (dHash ≤ 8 ∪ pHash ≤ 3/4/6) were built and
+  compared in scratch: they shrink the residual near-neighbour band but never close it, and they
+  worsen balance and single-sequence dominance.
+* **Pre-registration** (commit 873b389, pushed before any clean-subset metric existed):
+  `scripts/clean_subset.py`, `analysis/leakage/phash.csv.gz`, `analysis/leakage/clean_subset/`
+  (`RULE.json`, excluded lists for all 15 partitions, `nearest_train_distance.csv/.tex`). Rule:
+  exclude held-out images within dHash ≤ 12 or pHash ≤ 10 of a training image of the same
+  partition. CLAUDE.md hard rule 7 freezes it. `--check` reproduces the files byte for byte.
+* **Per-image predictions** (`src/evaluation/predictions.py`): the FL client packs
+  `path, label, logit_margin, p_fire` for val and test after the test pass (timer
+  `pred_pack_time_s`, excluded from the reported round time together with the server's file
+  writes); the server strips the `pred_<split>_npz` payloads before aggregation and writes
+  `results/<run>/predictions/r<round>_<node>_<split>.npz` + README (`*.npz` gitignored).
+  `scripts/predict_from_checkpoint.py` regenerates baseline predictions from `model_selected.pt`
+  and checks them against the logged metrics.
+* **Cluster bootstrap** (`src/evaluation/bootstrap.py`): hierarchical over seeds and held-out
+  sequences (group_id), B = 1000, vectorised (exact against materialised resamples).
+  `analyze_results.py` uses it for the selected-test metrics of every configuration whose runs
+  all have predictions (`ci_method` column), adds `selected_test_clean_<m>`, and checks that the
+  predictions reproduce the logged metrics (`pred_check_max_diff`). Other CIs stay the t-interval
+  over seeds. `scripts/heldout_dominance.py` writes `analysis/leakage/heldout_dominance.csv`.
+* **Bug found by the new tests:** the first server version stripped every `pred_*` key, including
+  the float timer `pred_pack_time_s`, which would have left packing time inside the reported round
+  time; only the `_npz` payloads are stripped now.
+* Paper: leakage guarantee stated as relative to its definition, `tab:nn_distance`, new
+  subsection "Pre-Registered Clean-Subset Analysis", bootstrap CIs in the statistics section,
+  ninth limitation (node C). Response letter: note on the leakage guarantee with the numbers.
+
 ## Model-selection protocol (2026-09-19, before the 98-run matrix)
 
 Declared rule (paper §III, "Model Selection and Use of the Test Split"): the reported

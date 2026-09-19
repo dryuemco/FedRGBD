@@ -52,6 +52,7 @@ from src.evaluation.metrics import (  # noqa: E402
     confusion_matrix_from_flat,
     metrics_from_confusion_matrix,
 )
+from src.evaluation.predictions import PRED_PREFIX, README_TEXT  # noqa: E402
 from src.evaluation.model_selection import (  # noqa: E402
     SELECTION_RULE,
     SELECTION_RULE_TEXT,
@@ -68,9 +69,10 @@ _CM_KEY_RE = re.compile(r"^(?:val_|test_)?(?:cm_\d+_\d+|confusion_matrix_json)$"
 TIMING_DEFINITION = (
     "round_time_s = server round wall-clock (end of previous evaluate phase to end of this "
     "one) minus test_eval_overhead_s, where test_eval_overhead_s = max_k(eval_wall_s) - "
-    "max_k(eval_wall_s - test_eval_time_s) over clients k, i.e. the part of the "
-    "evaluate phase's critical path spent on the report-only test pass. elapsed_s and "
-    "total_time_s are raw wall-clock and include the test pass."
+    "max_k(eval_wall_s - test_eval_time_s - pred_pack_time_s) over clients k, i.e. the part "
+    "of the evaluate phase's critical path spent on the report-only test pass and on packing "
+    "the per-image predictions. The server's writing of the prediction files is excluded as "
+    "well. elapsed_s and total_time_s are raw wall-clock and include all of these."
 )
 
 # metric keys that are averaged with num_examples weights
@@ -139,6 +141,8 @@ class RoundRecorder:
         self.total_test_overhead_s = 0.0
         self._last_eval_elapsed = 0.0
         self._elapsed_excl_test = 0.0
+        # per-image predictions (pred_*_npz byte metrics) are written here when set
+        self.pred_dir: Optional[str] = None
 
     # -- helpers ---------------------------------------------------------- #
     def elapsed(self) -> float:
@@ -193,10 +197,13 @@ class RoundRecorder:
         walls, without_test = [], []
         for _, m in metrics:
             wall, test = m.get("eval_wall_s"), m.get("test_eval_time_s")
+            pack_t = m.get("pred_pack_time_s", 0.0)
+            if not cls._is_number(pack_t) or not math.isfinite(pack_t):
+                pack_t = 0.0
             if cls._is_number(wall) and cls._is_number(test) and math.isfinite(wall) \
                     and math.isfinite(test):
                 walls.append(float(wall))
-                without_test.append(float(wall) - float(test))
+                without_test.append(float(wall) - float(test) - float(pack_t))
         if not walls:
             return 0.0
         return max(0.0, max(walls) - max(without_test))
@@ -286,8 +293,46 @@ class RoundRecorder:
         entry["cumulative_communication_bytes"] = self.cumulative_bytes
         return agg
 
+    @staticmethod
+    def pop_predictions(metrics: List[Tuple[int, Metrics]]) -> List[Tuple[str, str, bytes]]:
+        """Remove every ``pred_<split>_npz`` payload from the clients' metrics -> [(client, split, bytes)].
+
+        Runs before anything else looks at the metrics, so byte payloads never reach the
+        aggregation, the per-client rows or results.json.
+        """
+        out = []
+        for i, (_, m) in enumerate(metrics):
+            client = RoundRecorder._client_key(m, i)
+            # only the payloads (pred_<split>_npz); pred_pack_time_s is a timer the server needs
+            for key in [k for k in m if str(k).startswith(PRED_PREFIX) and str(k).endswith("_npz")]:
+                value = m.pop(key)
+                if isinstance(value, (bytes, bytearray)):
+                    split = key[len(PRED_PREFIX):].split("_")[0]
+                    out.append((client, split, bytes(value)))
+        return out
+
+    def write_predictions(self, rnd: int, preds: List[Tuple[str, str, bytes]]) -> Dict[str, dict]:
+        """Write r<round>_<client>_<split>.npz into ``pred_dir`` -> index for results.json."""
+        index: Dict[str, dict] = {}
+        if not preds:
+            return index
+        if self.pred_dir:
+            os.makedirs(self.pred_dir, exist_ok=True)
+            readme = os.path.join(self.pred_dir, "README.md")
+            if not os.path.isfile(readme):
+                with open(readme, "w", encoding="utf-8") as f:
+                    f.write(README_TEXT)
+        for client, split, blob in preds:
+            name = "r%03d_%s_%s.npz" % (rnd, client, split)
+            if self.pred_dir:
+                with open(os.path.join(self.pred_dir, name), "wb") as f:
+                    f.write(blob)
+            index.setdefault(client, {})[split] = {"file": name, "bytes": len(blob)}
+        return index
+
     def evaluate_aggregation(self, metrics: List[Tuple[int, Metrics]]) -> Dict[str, float]:
         self._eval_calls += 1
+        preds = self.pop_predictions(metrics)          # before any other use of the metrics
         rnd = self._round_of(metrics, self._eval_calls)
         clients = {}
         round_bytes = 0
@@ -323,7 +368,11 @@ class RoundRecorder:
             "elapsed_excl_test_s": round(self._elapsed_excl_test, 3),
         }
         entry["evaluate"]["elapsed_excl_test_s"] = round(self._elapsed_excl_test, 3)
-        self._last_eval_elapsed = now
+        if preds:
+            entry["predictions"] = self.write_predictions(rnd, preds)
+        # the next round starts after the prediction files are written: writing them is in
+        # neither round's reported time
+        self._last_eval_elapsed = self.elapsed() if preds else now
         # Flower history requires "accuracy" (v2 key) — guarantee it exists
         if "accuracy" not in agg:
             agg["accuracy"] = weighted_average(metrics)["accuracy"] if all("accuracy" in m for _, m in metrics) else 0.0
@@ -497,6 +546,7 @@ def main(argv=None):
     os.makedirs(args.output_dir, exist_ok=True)
 
     recorder = RoundRecorder()
+    recorder.pred_dir = os.path.join(args.output_dir, "predictions")
     strategy = get_strategy(args.strategy, min_clients=args.min_clients, recorder=recorder)
     payload = model_payload_bytes()
 

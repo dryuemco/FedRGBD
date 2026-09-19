@@ -52,6 +52,44 @@ uses the aggregated validation loss only; the reported test metrics are those of
 selected round. No maximum over rounds is reported. The centralized and local-only
 references are re-run under the same rule.
 
+**Note on the leakage guarantee (raised by us).** The group-level partition is built so that
+no validation or test image lies within Hamming distance 8 of any training image under the
+64-bit dHash, and the audit confirms leak rate 0 at that threshold for all 15 partitions. We
+want to be explicit that this guarantee is relative to that definition. Consecutive segments of
+the same flight can fall just above the threshold. We therefore measured, for every held-out
+image, the distance to its nearest training image under dHash and under an independent second
+hash (pHash), and report it in the revised manuscript (new table `tab:nn_distance`):
+
+| Partition | held-out images | dHash ≤ 8 | dHash 9–12 | pHash ≤ 8 | pHash ≤ 10 |
+|---|---|---|---|---|---|
+| IID | 14,311 | 0 | 735 (5.1 %) | 335 (2.3 %) | 567 (4.0 %) |
+| Label skew | 14,397 | 0 | 712 (4.9 %) | 277 (1.9 %) | 480 (3.3 %) |
+| Dirichlet α = 0.1 | 14,360 | 0 | 1,030 (7.2 %) | 359 (2.5 %) | 682 (4.7 %) |
+| Dirichlet α = 0.5 | 14,400 | 0 | 635 (4.4 %) | 265 (1.8 %) | 535 (3.7 %) |
+| Dirichlet α = 1.0 | 14,399 | 0 | 1,045 (7.3 %) | 293 (2.0 %) | 466 (3.2 %) |
+
+For comparison, 99.6 % of the held-out images of the original image-level split had a training
+near-duplicate within dHash distance 8. The residual cases are concentrated in a few pairs of
+adjacent segments of the same flight. We evaluated coarser groupings (dHash ≤ 8 merged with
+pHash ≤ 3, 4 or 6): they shrink the residual but never remove it, because each merge exposes
+the next band of distances, and they worsen the balance of the partitions and the dominance of
+single sequences in the held-out sets. We kept the partition and instead **pre-registered a
+clean-subset analysis**: on 19 September 2026, before any clean-subset metric was computed
+(at that time the full-set results of the centralized and local-only references and one
+federated run existed), we fixed and published the rule *exclude every held-out image within
+dHash ≤ 12 or pHash ≤ 10 of a training image of the same partition*, together with the
+excluded image lists of all 15 partitions and their checksums (repository commit 873b389,
+`analysis/leakage/clean_subset/`). The rule removes 950–1,466 held-out images (6.6–10.2 %)
+from the five full partitions. Every headline metric is reported on all held-out images and on
+the clean subset. The rule will not be changed after results are seen; any change would be
+disclosed.
+
+Confidence intervals of held-out metrics are now **sequence-level (cluster) bootstrap**
+intervals over seeds and held-out sequences, because a few sequences can dominate a node's
+held-out set (for example, 79 % of node C's IID validation Fire images and 69 % of its test
+Fire images each come from a single sequence). The revised Limitations section states this
+partition property explicitly.
+
 **Note on the testbed network.** The testbed was disassembled and reassembled between the
 original submission and the revision. The v1 experiments ran over WiFi (IEEE 802.11ac); all
 revision experiments run on the same three Jetson nodes connected by wired Gigabit Ethernet

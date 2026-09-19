@@ -206,8 +206,8 @@ def main(argv=None):
             old = open(path, "rb").read() if os.path.isfile(path) else None
             if name.endswith(".gz"):
                 same = old is not None and gzip.decompress(old) == gzip.decompress(content)
-            else:
-                same = old == content
+            else:   # a Windows checkout may have converted the text files to CRLF
+                same = old is not None and old.replace(b"\r\n", b"\n") == content
             if not same:
                 bad.append(name)
         print("clean-subset files: %s" % ("identical to the committed ones" if not bad

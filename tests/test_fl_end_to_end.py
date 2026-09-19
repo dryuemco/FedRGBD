@@ -181,6 +181,22 @@ def test_two_client_run_writes_v3_results(tmp_path, strategy):
         assert t["test_eval_overhead_s"] > 0
     assert res["total_time_excl_test_s"] < res["total_time_s"]
 
+    # per-image predictions: one file per round, client and split; none in results.json
+    from src.evaluation.predictions import load_npz, metrics_from_predictions
+    pred_dir = out_dir / "predictions"
+    expected = {"README.md"} | {"r%03d_%s_%s.npz" % (r, n, s) for r in (1, 2)
+                                for n in ("node_a", "node_b") for s in ("val", "test")}
+    assert set(os.listdir(pred_dir)) == expected
+    assert "_npz" not in (out_dir / "results.json").read_text()
+    for entry in res["rounds"]:
+        agg = entry["evaluate"]["aggregate"]
+        acc, n = 0.0, 0
+        for node in ("node_a", "node_b"):
+            d = load_npz(str(pred_dir / ("r%03d_%s_test.npz" % (entry["round"], node))))
+            acc += metrics_from_predictions(d["label"], d["logit_margin"])["accuracy"] * len(d["label"])
+            n += len(d["label"])
+        assert acc / n == pytest.approx(agg["test_accuracy"], abs=1e-12)
+
     # and the analysis reads it back under the declared rule
     from scripts.analyze_results import load_run
     run = load_run(str(out_dir), warn=False)

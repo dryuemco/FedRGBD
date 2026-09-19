@@ -134,7 +134,9 @@ def test_stand_in_client_dies_when_started_before_the_server(harness, tmp_path):
 # 1. server first, clients only once the port accepts connections
 # --------------------------------------------------------------------------- #
 def test_clients_start_only_after_the_server_accepts_connections(harness):
-    harness["server"] = ("1.5", "4", "0")      # listens only after 1.5 s, then runs 4 s
+    # listens only after 1.5 s, then runs 20 s: generous, so that a loaded machine's slow
+    # Python start-up of the stand-in clients cannot outlast the server
+    harness["server"] = ("1.5", "20", "0")
     rc, why = run_matrix.execute_run(harness["run"], 1, ready_timeout=30, run_timeout=60,
                                      poll=0.2)
     assert (rc, why) == (0, "server exited")

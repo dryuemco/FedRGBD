@@ -380,6 +380,17 @@ Elle koşmak gerekirse komutlar kaldığı yerden üretilir; biten koşular atla
 * Testbed fotoğrafı (Şekil 1).
 * Sahne sayısı `S` teyidi (§6.4).
 
+### 6.7 Tahmin dosyaları ve bloğun yeniden başlatılması (19 Eylül 2026)
+
+* FL koşuları artık her tur, her istemci ve val/test için görüntü başına tahminleri
+  `results/<koşu>/predictions/r<tur>_<node>_<split>.npz` dosyalarına yazar (Node A'da, sunucu
+  tarafından). Bu dosyalar **gitignore'dadır**; koşudan başka kaynağı yoktur. Her bloktan sonra
+  `results/*/predictions/` dizinlerini masaüstüne kopyala ve arşivle.
+* Temiz-alt-küme kuralı ön-kayıtlıdır (commit 873b389, CLAUDE.md kural 7). Asla değiştirme.
+* **Yeniden başlatma:** üç node'da `git pull` (en az bu commit). Tahmin dosyası olmayan tek
+  bitmiş FL koşusunun dizinini `results/` dışına taşı (silme), yoksa koşucu onu atlar. Sonra
+  `python3 scripts/run_matrix.py --check_only` ve `--dry_run`, ardından bloğu başlat.
+
 ### 6.6 Gözetimsiz blok koşucusu: `scripts/run_matrix.py`
 
 `print_revision_commands.py --format bash` sunucuyu başlatır ve üç istemcinin 10 sn içinde

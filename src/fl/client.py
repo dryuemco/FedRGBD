@@ -31,6 +31,7 @@ sys.path.insert(0, ".")
 from src.data.dataset import FlameDataset
 from src.evaluation.metrics import MetricAccumulator, format_metrics, to_flower_metrics
 from src.evaluation.model_selection import report_only
+from src.evaluation.predictions import PRED_PREFIX, pack
 from src.models.mobilenetv3_multimodal import create_model
 
 
@@ -86,6 +87,7 @@ class FedRGBDClient(fl.client.NumPyClient):
         self.local_epochs = local_epochs
         self.seed = seed
         self._fedbn_mode = False
+        self._last_outputs = (np.zeros((0, 2), np.float32), np.zeros(0, np.int64))
 
         set_seed(seed)
 
@@ -262,10 +264,22 @@ class FedRGBDClient(fl.client.NumPyClient):
         val_eval_time = time.perf_counter() - val_start
         eval_time = time.perf_counter() - eval_start  # reported: excludes the test pass
 
+        val_outputs = self._last_outputs
+
         test_start = time.perf_counter()
         with report_only(self.device):     # logged only; RNG streams left untouched
             test_metrics = self.evaluate_loader(self.test_loader)
         test_eval_time = time.perf_counter() - test_start
+        test_outputs = self._last_outputs
+
+        # per-image predictions for both splits, packed after the test pass; like the test
+        # pass, this time is excluded from the reported round time (server: test overhead)
+        pack_start = time.perf_counter()
+        pred_blobs = {
+            PRED_PREFIX + "val_npz": self._pack_predictions(self.val_loader, val_outputs),
+            PRED_PREFIX + "test_npz": self._pack_predictions(self.test_loader, test_outputs),
+        }
+        pred_pack_time = time.perf_counter() - pack_start
         eval_wall = time.perf_counter() - eval_start
 
         total = int(val_metrics["n_examples"])
@@ -287,13 +301,19 @@ class FedRGBDClient(fl.client.NumPyClient):
             "eval_time_s": eval_time,
             "val_eval_time_s": val_eval_time,
             "test_eval_time_s": test_eval_time,
+            "pred_pack_time_s": pred_pack_time,
             "eval_wall_s": eval_wall,
             "payload_bytes_down": bytes_down,
         })
+        flat.update(pred_blobs)            # bytes; the server strips them before aggregation
         return avg_loss, total, flat
 
     def evaluate_loader(self, loader):
-        """Run the model over ``loader`` and return the full metrics dict (incl. ``loss``)."""
+        """Run the model over ``loader`` and return the full metrics dict (incl. ``loss``).
+
+        The raw outputs of the pass (logits, labels, in loader order) are kept in
+        ``self._last_outputs`` for the per-image predictions.
+        """
         criterion = nn.CrossEntropyLoss(reduction="sum")
         acc = MetricAccumulator(num_classes=2, positive_class=1)
         self.model.eval()
@@ -303,7 +323,23 @@ class FedRGBDClient(fl.client.NumPyClient):
                 outputs = self.model(images)
                 loss_sum = criterion(outputs, labels).item()
                 acc.update(outputs, labels, loss_sum)
+        self._last_outputs = acc.outputs()
         return acc.compute()
+
+    @staticmethod
+    def _pack_predictions(loader, outputs):
+        """``.npz`` bytes keyed by manifest path (never by position: the dataset order comes
+        from an unsorted os.listdir).  The loader is unshuffled, so outputs follow
+        ``dataset.samples``."""
+        logits, labels = outputs
+        samples = getattr(getattr(loader, "dataset", None), "samples", [])
+        if len(samples) != len(labels):
+            raise RuntimeError("prediction/sample count mismatch: %d vs %d"
+                               % (len(labels), len(samples)))
+        for (_, want), got in zip(samples, labels):
+            if int(want) != int(got):
+                raise RuntimeError("loader order does not match dataset.samples")
+        return pack([p for p, _ in samples], labels, logits)
 
 
 def main():

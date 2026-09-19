@@ -275,6 +275,12 @@ class MetricAccumulator:
     def __len__(self) -> int:
         return int(sum(len(l) for l in self._labels))
 
+    def outputs(self):
+        """``(logits (N, C) float32, labels (N,) int64)`` in the order they were added."""
+        if not self._labels:
+            return np.zeros((0, self.num_classes), np.float32), np.zeros(0, np.int64)
+        return np.concatenate(self._logits, axis=0), np.concatenate(self._labels, axis=0)
+
     def compute(self) -> Dict[str, object]:
         if not self._labels:
             m = compute_metrics(np.zeros((0, self.num_classes)), np.zeros(0), self.num_classes)
