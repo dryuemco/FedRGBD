@@ -385,9 +385,26 @@ Elle koşmak gerekirse komutlar kaldığı yerden üretilir; biten koşular atla
 `print_revision_commands.py --format bash` sunucuyu başlatır ve üç istemcinin 10 sn içinde
 elle başlatılmasını ister; 20 koşuluk, 46 saatlik bir blok için kullanışsızdır.
 `run_matrix.py` aynı üretilmiş betiği (her zaman `--all_seeds` ile) ayrıştırır ve bloğu
-Node A'dan yürütür: node_b / node_c istemcilerini SSH ile, node_a istemcisini yerelde,
-sonra sunucuyu başlatır; sunucu bitince `results/<koşu>/results.json` dosyasının
-okunabildiğini ve `model_selection.selected_round` içerdiğini denetler.
+Node A'dan yürütür. Sıra şöyledir:
+1. Önce **sunucu** başlatılır.
+2. Node A'nın 8080 portu TCP bağlantısı kabul edene kadar beklenir. Varsayılan
+   `--server_ready_timeout 180` sn'dir; port açılmazsa koşu başarısız sayılır.
+3. Port açılınca **istemciler** başlatılır: node_b / node_c SSH ile, node_a yerelde.
+4. Sunucu bitince `results/<koşu>/results.json` dosyasının okunabildiği ve
+   `model_selection.selected_round` içerdiği denetlenir.
+
+**İstemci sunucudan önce başlatılmamalı.** Flower 1.13.1'in varsayılan gRPC-bidi istemcisi
+reddedilen ilk bağlantıyı **yeniden denemez** ve `StatusCode.UNAVAILABLE` ile ölür.
+`start_client` belgesindeki `max_retries=None` yalnızca diğer transport'lar için geçerlidir.
+İlk gözetimsiz koşu bu yüzden başarısız oldu: istemciler öldü, sunucu 2,5 saat bekledi.
+`tests/test_fl_end_to_end.py` bu davranışı gerçek Flower ile test eder.
+
+**Ölü istemcide hemen durur.** Bir istemci sunucudan önce sıfırdan farklı bir kodla
+çıkarsa koşu anında sonlandırılır, logun son satırları `logs/run_matrix.log`'a yazılır ve
+koşu başarısız sayılır. Uzak node'larda `ssh` uzak çıkış kodunu, bağlantı koparsa 255'i
+döndürür. Çıkış kodu 0 normal bitiştir: Flower önce istemcileri ayırır, sonra sunucu
+sonuçları yazıp çıkar. Bütün istemciler bittikten sonra sunucu `--finish_grace`
+(varsayılan 600 sn) içinde çıkmazsa koşu yine başarısız sayılır.
 
 **Uyarlamalı değildir.** Batch boyutunu, seed'i ya da komutu asla değiştirmez. Başarısız
 koşu **bir kez, aynı parametrelerle** yeniden denenir; yine olmazsa blok durur ve insan

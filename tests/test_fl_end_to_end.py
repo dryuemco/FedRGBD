@@ -3,9 +3,10 @@
 This is an integration test of ``src/fl/server.py`` + ``src/fl/client.py`` with
 the real Flower 1.13.1 gRPC stack — NOT an experiment.  It checks that the
 per-round, per-client metrics reach ``results.json`` in the v3 layout while the
-v2 keys stay intact.  The server runs in the test process (Flower installs a
-signal handler on the client side, so clients run as subprocesses).
-Runtime ≈ 15-30 s per strategy.
+v2 keys stay intact.  Server and clients run as subprocesses, launched in the
+order scripts/run_matrix.py uses (server, wait for its port, clients); a
+client started before the server dies, which is tested too.
+Runtime ≈ 10-15 s per strategy.
 """
 
 import json
@@ -14,6 +15,7 @@ import socket
 import subprocess
 import sys
 import textwrap
+import time
 
 import numpy as np
 import pytest
@@ -55,35 +57,67 @@ def _free_port():
         return s.getsockname()[1]
 
 
+def test_client_started_before_the_server_dies(tmp_path):
+    """flwr 1.13.1's default gRPC-bidi client does NOT retry a refused first connection
+    (its RetryInvoker is unused on that transport), whatever the start_client docstring
+    says about max_retries=None.  This is why scripts/run_matrix.py starts the server
+    first and waits for its port."""
+    node = _make_node(str(tmp_path / "node_a"), 0)
+    code = CLIENT_SNIPPET.format(repo=_REPO, data_dir=node, img=IMG, port=_free_port())
+    r = subprocess.run([sys.executable, "-c", code], cwd=_REPO, stdout=subprocess.PIPE,
+                       stderr=subprocess.STDOUT, text=True, timeout=120)
+    assert r.returncode != 0
+    assert "UNAVAILABLE" in r.stdout
+
+
 @pytest.mark.parametrize("strategy", ["fedprox_0.01", "fedbn"])
 def test_two_client_run_writes_v3_results(tmp_path, strategy):
-    import server as fl_server
+    """Launch order as in scripts/run_matrix.py: server, wait for its port, clients."""
+    from scripts.run_matrix import wait_for_port
 
     nodes = [_make_node(str(tmp_path / f"node_{c}"), i) for i, c in enumerate("ab")]
     port = _free_port()
     out_dir = tmp_path / "run"
     rounds = 2
 
-    procs = []
-    for data_dir in nodes:
-        code = CLIENT_SNIPPET.format(repo=_REPO, data_dir=data_dir, img=IMG, port=port)
-        procs.append(subprocess.Popen([sys.executable, "-c", code], cwd=_REPO,
-                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True))
+    # output goes to files: an unread PIPE fills up with Flower's logging and blocks the
+    # processes while this test polls them
+    logs = [open(tmp_path / name, "w+") for name in ("server.log", "client0.log", "client1.log")]
+    server = subprocess.Popen(
+        [sys.executable, "src/fl/server.py", "--strategy", strategy, "--rounds", str(rounds),
+         "--address", f"127.0.0.1:{port}", "--output_dir", str(out_dir), "--min_clients", "2",
+         "--seed", "42", "--tag", "unit_test"],
+        cwd=_REPO, stdout=logs[0], stderr=subprocess.STDOUT)
+    procs, exited = [], {}
     try:
-        fl_server.main(["--strategy", strategy, "--rounds", str(rounds), "--address", f"127.0.0.1:{port}",
-                        "--output_dir", str(out_dir), "--min_clients", "2", "--seed", "42",
-                        "--tag", "unit_test"])
+        ready, why = wait_for_port("127.0.0.1", port, timeout=120, server=server, poll=0.2)
+        assert ready, why
+        for i, data_dir in enumerate(nodes):
+            code = CLIENT_SNIPPET.format(repo=_REPO, data_dir=data_dir, img=IMG, port=port)
+            procs.append(subprocess.Popen([sys.executable, "-c", code], cwd=_REPO,
+                                          stdout=logs[1 + i], stderr=subprocess.STDOUT))
+        # record the real shutdown order (run_matrix treats rc=0 clients as finished)
+        deadline = time.time() + 300
+        while len(exited) < 3 and time.time() < deadline:
+            for name, p in [("server", server)] + [("client%d" % i, p) for i, p in enumerate(procs)]:
+                if name not in exited and p.poll() is not None:
+                    exited[name] = time.time()
+            time.sleep(0.05)
     finally:
-        outputs = []
-        for p in procs:
-            try:
-                out, _ = p.communicate(timeout=60)
-            except subprocess.TimeoutExpired:
+        for p in procs + [server]:
+            if p.poll() is None:
                 p.kill()
-                out, _ = p.communicate()
-            outputs.append(out)
-    for p, out in zip(procs, outputs):
+            p.wait(timeout=60)
+    outputs = []
+    for f in logs:
+        f.seek(0)
+        outputs.append(f.read())
+        f.close()
+    for p, out in zip([server] + procs, outputs):
         assert p.returncode == 0, out[-3000:]
+    # clients end normally no later than the server (Flower disconnects them, then the
+    # server writes results.json and exits)
+    assert max(exited["client0"], exited["client1"]) <= exited["server"] + 0.5, exited
 
     res = json.loads((out_dir / "results.json").read_text())
     # v2 keys

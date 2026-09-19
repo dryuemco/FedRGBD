@@ -12,9 +12,13 @@ same generated script and drives the whole block:
                       (multi-user.target) on every node, and every split the
                       run reads has the manifest md5 of
                       analysis/leakage/P0_SUMMARY.md on every node
-        start       : clients on node_b / node_c over SSH, client on node_a
-                      locally, then the server
-        wait        : until the server exits
+        start       : the server on node_a; once node_a:8080 accepts TCP
+                      connections, the clients (node_b / node_c over SSH,
+                      node_a locally).  Clients must not start earlier: the
+                      default gRPC-bidi Flower client does not retry a
+                      refused first connection and dies.
+        wait        : until the server exits; a client exiting non-zero
+                      before that ends the run at once
         check       : results/<run>/results.json exists and parses, and the
                       model_selection block is present
         on failure  : ONE retry with identical parameters, then stop the block
@@ -177,6 +181,24 @@ def node_shell(node, inner):
             % (shlex.quote(cfg['repo']), shlex.quote(cfg['venv']), inner))
 
 
+def _popen(argv, out):
+    """Background process in its own session, so the whole group can be killed."""
+    return subprocess.Popen(argv, stdout=out, stderr=subprocess.STDOUT,
+                            start_new_session=True)
+
+
+def _kill(proc, sig=signal.SIGTERM):
+    if proc.poll() is not None:
+        return
+    try:
+        if hasattr(os, 'killpg'):
+            os.killpg(os.getpgid(proc.pid), sig)
+        else:  # pragma: no cover - Windows (CPU tests only)
+            proc.kill()
+    except (OSError, ProcessLookupError):
+        pass
+
+
 def run_on(node, inner, log_path):
     """Start a client (background Popen). Local for node_a, SSH otherwise."""
     cfg = NODES[node]
@@ -188,8 +210,45 @@ def run_on(node, inner, log_path):
                 '-o', 'ServerAliveInterval=30', '-o', 'ServerAliveCountMax=4',
                 '%s@%s' % (cfg['user'], cfg['host']),
                 'bash -lc %s' % shlex.quote(node_shell(node, inner))]
-    return subprocess.Popen(argv, stdout=out, stderr=subprocess.STDOUT,
-                            preexec_fn=os.setsid), out
+    return _popen(argv, out), out
+
+
+def start_server(run, log_path):
+    """Start the FL server on node_a (this machine)."""
+    out = open(log_path, 'ab')
+    return _popen(['bash', '-lc', node_shell('node_a', run['server'])], out), out
+
+
+def wait_for_port(host, port, timeout, server=None, poll=1.0):
+    """Block until host:port accepts a TCP connection.
+
+    -> (True, 'ready') or (False, reason).  Gives up early when the server
+    process exits.  Flower's default gRPC-bidi client does NOT retry a refused
+    first connection (flwr 1.13.1 ignores max_retries on that transport): a
+    client started before the server listens dies with UNAVAILABLE, so clients
+    are only started once this returns True.
+    """
+    deadline = time.time() + timeout
+    while True:
+        if server is not None and server.poll() is not None:
+            return False, 'server exited with rc=%s before accepting connections' % server.poll()
+        try:
+            with socket.create_connection((host, port), timeout=2):
+                return True, 'ready'
+        except OSError:
+            pass
+        if time.time() >= deadline:
+            return False, '%s:%d did not accept connections within %ds' % (host, port, timeout)
+        time.sleep(poll)
+
+
+def log_tail(path, lines=15):
+    try:
+        with open(path, 'rb') as f:
+            text = f.read().decode('utf-8', 'replace')
+    except OSError:
+        return '(no log)'
+    return '\n'.join('        | ' + l for l in text.rstrip().splitlines()[-lines:])
 
 
 # --- pre-flight --------------------------------------------------------------
@@ -342,6 +401,20 @@ def kill_stragglers():
 
 
 # --- one run -----------------------------------------------------------------
+RE_CLIENT_SERVER = re.compile(r'--server (\S+)')
+
+
+def check_server_address(runs):
+    """Every client must dial node_a's configured host:port, the address the
+    runner polls.  A mismatch (config vs generated commands) would start clients
+    against a server that is not there."""
+    want = '%s:%d' % (NODES['node_a']['host'], SERVER_PORT)
+    bad = sorted({m.group(1) for r in runs for cmd in r['clients'].values()
+                  for m in [RE_CLIENT_SERVER.search(cmd)] if m and m.group(1) != want})
+    if bad:
+        raise SystemExit('clients dial %s but node_a is configured as %s (%s); fix '
+                         'configs/testbed.local.yaml or the generator'
+                         % (', '.join(bad), want, TESTBED_LOCAL))
 def result_ok(out_dir):
     path = os.path.join(out_dir, 'results.json')
     if not os.path.isfile(path):
@@ -357,39 +430,69 @@ def result_ok(out_dir):
     return True, 'selected_round=%s' % ms.get('selected_round')
 
 
-def execute_run(run, attempt, client_lead, run_timeout):
+def execute_run(run, attempt, ready_timeout, run_timeout, poll=5.0, finish_grace=600):
+    """Server first, clients once the port accepts, then watch all four processes.
+
+    -> (rc, reason).  rc is the server's exit code, or negative when the runner
+    ended the run: -1 timeout, -2 server never became ready, -3 a client died,
+    -4 the server did not exit after every client had finished.
+
+    A client that exits with a non-zero code before the server exits ends the run
+    at once: without it the server can never complete.  Exit code 0 is a client's
+    normal end (the server disconnects the clients, then writes results.json and
+    exits), so it only starts the ``finish_grace`` window for the server.
+    """
     tag = os.path.basename(run['out_dir'])
     stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    procs, handles = [], []
+    server, clients, handles = None, [], []
     try:
+        slog = os.path.join(LOG_DIR, '%s_try%d_server_%s.log' % (tag, attempt, stamp))
+        server, sh = start_server(run, slog)
+        handles.append(sh)
+        log('    server started (pid %d); waiting for %s:%d to accept connections'
+            % (server.pid, NODES['node_a']['host'], SERVER_PORT))
+        ready, why = wait_for_port(NODES['node_a']['host'], SERVER_PORT, ready_timeout,
+                                   server=server)
+        if not ready:
+            log('    SERVER NOT READY: %s\n%s' % (why, log_tail(slog)))
+            return -2, why
+        log('    server accepting connections')
+
         for node in ('node_a', 'node_b', 'node_c'):
             lp = os.path.join(LOG_DIR, '%s_try%d_%s_%s.log' % (tag, attempt, node, stamp))
             p, h = run_on(node, run['clients'][node], lp)
-            procs.append((node, p))
+            clients.append((node, p, lp))
             handles.append(h)
             log('    client up on %s (pid %d)' % (node, p.pid))
-        time.sleep(client_lead)
 
-        slog = os.path.join(LOG_DIR, '%s_try%d_server_%s.log' % (tag, attempt, stamp))
-        with open(slog, 'ab') as sh:
-            server = subprocess.Popen(
-                ['bash', '-lc', node_shell('node_a', run['server'])],
-                stdout=sh, stderr=subprocess.STDOUT, preexec_fn=os.setsid)
-            log('    server up (pid %d), waiting...' % server.pid)
-            try:
-                rc = server.wait(timeout=run_timeout)
-            except subprocess.TimeoutExpired:
-                log('    TIMEOUT after %ds -- killing server' % run_timeout)
-                os.killpg(os.getpgid(server.pid), signal.SIGKILL)
-                rc = -1
-        return rc
+        start = time.time()
+        all_done_at = None
+        while server.poll() is None:
+            for node, p, lp in clients:
+                rc = p.poll()
+                if rc is not None and rc != 0:
+                    why = 'client %s exited with rc=%s before the server' % (node, rc)
+                    log('    CLIENT DIED: %s -- ending the run now. Last lines of its log '
+                        '(%s):\n%s' % (why, lp, log_tail(lp)))
+                    return -3, why
+            if all_done_at is None and all(p.poll() == 0 for _, p, _ in clients):
+                all_done_at = time.time()
+                log('    all clients finished; waiting for the server to exit')
+            if all_done_at is not None and time.time() - all_done_at > finish_grace:
+                why = 'server still running %ds after every client finished' % finish_grace
+                log('    %s\n%s' % (why, log_tail(slog)))
+                return -4, why
+            if time.time() - start > run_timeout:
+                why = 'TIMEOUT after %ds' % run_timeout
+                log('    %s -- killing the run' % why)
+                return -1, why
+            time.sleep(poll)
+        return server.returncode, 'server exited'
     finally:
-        for node, p in procs:
-            if p.poll() is None:
-                try:
-                    os.killpg(os.getpgid(p.pid), signal.SIGTERM)
-                except Exception:
-                    pass
+        if server is not None:
+            _kill(server, getattr(signal, 'SIGKILL', signal.SIGTERM))   # no SIGKILL on Windows
+        for _, p, _ in clients:
+            _kill(p)
         time.sleep(3)
         kill_stragglers()
         for h in handles:
@@ -403,8 +506,13 @@ def main():
                     help='block name passed to print_revision_commands.py')
     ap.add_argument('--script', help='use an already-generated bash file instead (it must '
                                      'have been generated with --all_seeds)')
-    ap.add_argument('--client_lead', type=int, default=15,
-                    help='seconds between starting the clients and the server')
+    ap.add_argument('--server_ready_timeout', type=int, default=180,
+                    help='seconds to wait for the server to accept TCP connections on '
+                         'node_a before the clients are started (the run fails if it never '
+                         'does)')
+    ap.add_argument('--finish_grace', type=int, default=600,
+                    help='seconds the server may keep running after every client has '
+                         'exited normally')
     ap.add_argument('--gap', type=int, default=30, help='seconds between runs')
     ap.add_argument('--round_timeout', type=int, default=4 * 3600,
                     help='per-round allowance: a run is killed after rounds x this many '
@@ -456,6 +564,7 @@ def main():
                            stdout=f, check=True)
 
     runs = parse_block(script)
+    check_server_address(runs)
     todo = [r for r in runs if not os.path.isfile(os.path.join(r['out_dir'], 'results.json'))]
     log('block script: %s' % script)
     log('%d run(s) defined, %d still to do' % (len(runs), len(todo)))
@@ -496,11 +605,12 @@ def main():
                 preflight_failed = True
                 break
             t0 = time.time()
-            rc = execute_run(run, attempt, args.client_lead, timeout)
+            rc, ended = execute_run(run, attempt, args.server_ready_timeout, timeout,
+                                    finish_grace=args.finish_grace)
             dt = time.time() - t0
             ok, why = result_ok(run['out_dir'])
-            log('    server rc=%s, %.1f min, result: %s (%s)'
-                % (rc, dt / 60.0, 'OK' if ok else 'BAD', why))
+            log('    %s (rc=%s), %.1f min, result: %s (%s)'
+                % (ended, rc, dt / 60.0, 'OK' if ok else 'BAD', why))
             if ok:
                 break
         if ok:
