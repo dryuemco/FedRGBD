@@ -10,6 +10,15 @@ v3 (NCAA revision): every round the server now persists, in ``results.json``,
   the cumulative communication volume of the run,
 * the server-side elapsed time at the end of every fit / evaluate phase.
 
+Schema 3 (model-selection protocol): clients evaluate every round on the
+validation split (``val_*`` keys; the unprefixed keys stay = validation) and on
+the test split (``test_*`` keys, report only).  The server persists both sets
+per client and weighted-global (test metrics weighted by test-set size), the
+round timing with the test pass removed (``rounds[i]["timing"]``,
+``total_time_excl_test_s``), and ``model_selection`` -- the round chosen by the
+declared rule in ``src/evaluation/model_selection.py`` from validation losses
+only.
+
 All keys written by the previous version (``strategy``, ``num_rounds``,
 ``min_clients``, ``seed``, ``total_time_s``, ``timestamp``,
 ``losses_distributed``, ``metrics_distributed``) are kept unchanged so the
@@ -18,8 +27,10 @@ existing analysis code and the old result files remain compatible.
 
 import argparse
 import json
+import math
 import os
 import random
+import re
 import sys
 import time
 from datetime import datetime
@@ -41,8 +52,26 @@ from src.evaluation.metrics import (  # noqa: E402
     confusion_matrix_from_flat,
     metrics_from_confusion_matrix,
 )
+from src.evaluation.model_selection import (  # noqa: E402
+    SELECTION_RULE,
+    SELECTION_RULE_TEXT,
+    select_round,
+    weighted_val_loss,
+)
 
-RESULTS_SCHEMA_VERSION = 2
+RESULTS_SCHEMA_VERSION = 3
+
+#: metric namespaces sent by schema-3 clients (unprefixed keys = validation, as in v2)
+NAMESPACES = ("val_", "test_")
+_CM_KEY_RE = re.compile(r"^(?:val_|test_)?(?:cm_\d+_\d+|confusion_matrix_json)$")
+
+TIMING_DEFINITION = (
+    "round_time_s = server round wall-clock (end of previous evaluate phase to end of this "
+    "one) minus test_eval_overhead_s, where test_eval_overhead_s = max_k(eval_wall_s) - "
+    "max_k(eval_wall_s - test_eval_time_s) over clients k, i.e. the part of the "
+    "evaluate phase's critical path spent on the report-only test pass. elapsed_s and "
+    "total_time_s are raw wall-clock and include the test pass."
+)
 
 # metric keys that are averaged with num_examples weights
 WEIGHTED_KEYS = set(METRIC_KEYS) | {"loss", "train_loss"}
@@ -105,6 +134,11 @@ class RoundRecorder:
         self.cumulative_bytes = 0
         self._fit_calls = 0
         self._eval_calls = 0
+        # model selection and timing (schema 3)
+        self.val_loss_by_round: Dict[int, Optional[float]] = {}
+        self.total_test_overhead_s = 0.0
+        self._last_eval_elapsed = 0.0
+        self._elapsed_excl_test = 0.0
 
     # -- helpers ---------------------------------------------------------- #
     def elapsed(self) -> float:
@@ -120,20 +154,64 @@ class RoundRecorder:
         return max(rounds) if rounds else counter
 
     @staticmethod
+    def _split_ns(key: str) -> Tuple[str, str]:
+        """``"test_accuracy"`` -> ``("test_", "accuracy")``; unprefixed -> ``("", key)``."""
+        for ns in NAMESPACES:
+            if key.startswith(ns):
+                return ns, key[len(ns):]
+        return "", key
+
+    @staticmethod
     def _client_row(num_examples: int, m: Metrics) -> dict:
-        """Readable per-client row: nested confusion matrix, no flattened duplicates."""
+        """Readable per-client row: nested confusion matrices, no flattened duplicates."""
         row = {}
-        cm = confusion_matrix_from_flat(m)
         for k, v in m.items():
-            if k.startswith("cm_") or k == "confusion_matrix_json":
+            if _CM_KEY_RE.match(k):
                 continue
             if isinstance(v, (np.generic,)):
                 v = v.item()
             row[k] = v
         row["num_examples"] = int(num_examples)
-        if cm is not None:
-            row["confusion_matrix"] = cm.tolist()
+        for ns in ("",) + NAMESPACES:
+            cm = confusion_matrix_from_flat(m, prefix=ns)
+            if cm is not None:
+                row[ns + "confusion_matrix"] = cm.tolist()
         return row
+
+    @staticmethod
+    def _is_number(value) -> bool:
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+    @classmethod
+    def test_eval_overhead(cls, metrics: List[Tuple[int, Metrics]]) -> float:
+        """Critical-path time of the evaluate phase spent on the report-only test pass.
+
+        Clients evaluate in parallel, so the phase lasts as long as the slowest
+        client.  Removing the test pass shortens it from ``max_k(eval_wall_s)`` to
+        ``max_k(eval_wall_s - test_eval_time_s)``.  0 for clients without timers.
+        """
+        walls, without_test = [], []
+        for _, m in metrics:
+            wall, test = m.get("eval_wall_s"), m.get("test_eval_time_s")
+            if cls._is_number(wall) and cls._is_number(test) and math.isfinite(wall) \
+                    and math.isfinite(test):
+                walls.append(float(wall))
+                without_test.append(float(wall) - float(test))
+        if not walls:
+            return 0.0
+        return max(0.0, max(walls) - max(without_test))
+
+    @staticmethod
+    def round_val_loss(metrics: List[Tuple[int, Metrics]]) -> Optional[float]:
+        """Validation loss of the round, weighted by client validation-set size.
+
+        Reads validation keys only (``val_loss`` / ``val_n_examples``, falling back
+        to the v2 ``loss`` / ``num_examples``, which are validation as well).
+        """
+        return weighted_val_loss(
+            (m.get("val_n_examples", n), m.get("val_loss", m.get("loss")))
+            for n, m in metrics
+        )
 
     @staticmethod
     def aggregate(metrics: List[Tuple[int, Metrics]]) -> Dict[str, float]:
@@ -144,14 +222,23 @@ class RoundRecorder:
         for _, m in metrics:
             keys |= set(m.keys())
         for key in sorted(keys):
-            vals = [(n, m[key]) for n, m in metrics if key in m and isinstance(m[key], (int, float)) and not isinstance(m[key], bool)]
-            if not vals or key in IDENTITY_KEYS:
+            ns, base = RoundRecorder._split_ns(key)
+            vals = []
+            for n, m in metrics:
+                if key in m and RoundRecorder._is_number(m[key]):
+                    # test_* metrics are weighted by the client's test-set size,
+                    # everything else by the validation count Flower passes in
+                    w = m.get("test_n_examples", n) if ns == "test_" else n
+                    vals.append((w, m[key]))
+            if not vals or (not ns and key in IDENTITY_KEYS):
                 continue
-            if key in SUMMED_KEYS or key.startswith(SUMMED_PREFIXES):
+            if ns and base == "n_examples":
+                agg[key + "_total"] = int(sum(v for _, v in vals))
+            elif base in SUMMED_KEYS or base.startswith(SUMMED_PREFIXES):
                 total_v = int(sum(v for _, v in vals))
                 if key == "num_examples":
                     agg["num_examples_total"] = total_v
-                elif key.startswith("payload_bytes"):
+                elif base.startswith("payload_bytes"):
                     agg[key + "_total"] = total_v
                 else:
                     agg[key] = total_v
@@ -163,10 +250,12 @@ class RoundRecorder:
                 w = float(sum(n for n, _ in vals)) or 1.0
                 agg[key] = float(sum(n * v for n, v in vals) / w)
 
-        # pooled metrics from the summed confusion matrix
-        cms = [confusion_matrix_from_flat(m) for _, m in metrics]
-        cms = [c for c in cms if c is not None]
-        if cms:
+        # pooled metrics from the summed confusion matrix, per namespace
+        for ns in ("",) + NAMESPACES:
+            cms = [confusion_matrix_from_flat(m, prefix=ns) for _, m in metrics]
+            cms = [c for c in cms if c is not None]
+            if not cms:
+                continue
             k = max(c.shape[0] for c in cms)
             pooled_cm = np.zeros((k, k), dtype=np.int64)
             for c in cms:
@@ -174,7 +263,7 @@ class RoundRecorder:
             pooled = metrics_from_confusion_matrix(pooled_cm)
             for key in METRIC_KEYS:
                 if key in pooled and pooled[key] is not None:
-                    agg[f"pooled_{key}"] = float(pooled[key])
+                    agg[f"pooled_{ns}{key}"] = float(pooled[key])
         return agg
 
     # -- Flower callbacks ------------------------------------------------- #
@@ -209,8 +298,32 @@ class RoundRecorder:
         agg = self.aggregate(metrics)
         self.cumulative_bytes += round_bytes
         entry = self.rounds.setdefault(rnd, {"round": rnd})
-        entry["evaluate"] = {"clients": clients, "aggregate": agg, "elapsed_s": self.elapsed()}
+        now = self.elapsed()
+        entry["evaluate"] = {"clients": clients, "aggregate": agg, "elapsed_s": now}
         entry["cumulative_communication_bytes"] = self.cumulative_bytes
+
+        # model selection input: validation loss only
+        self.val_loss_by_round[rnd] = self.round_val_loss(metrics)
+        entry["weighted_val_loss"] = self.val_loss_by_round[rnd]
+
+        # reported round time excludes the report-only test pass
+        overhead = self.test_eval_overhead(metrics)
+        round_wall = max(0.0, now - self._last_eval_elapsed)
+        round_time = max(0.0, round_wall - overhead)
+        fit_elapsed = (entry.get("fit") or {}).get("elapsed_s")
+        self._elapsed_excl_test += round_time
+        self.total_test_overhead_s += overhead
+        entry["timing"] = {
+            "round_wall_s": round(round_wall, 3),
+            "test_eval_overhead_s": round(overhead, 3),
+            "round_time_s": round(round_time, 3),
+            "fit_phase_s": (round(fit_elapsed - self._last_eval_elapsed, 3)
+                            if fit_elapsed is not None else None),
+            "eval_phase_s": round(now - fit_elapsed, 3) if fit_elapsed is not None else None,
+            "elapsed_excl_test_s": round(self._elapsed_excl_test, 3),
+        }
+        entry["evaluate"]["elapsed_excl_test_s"] = round(self._elapsed_excl_test, 3)
+        self._last_eval_elapsed = now
         # Flower history requires "accuracy" (v2 key) — guarantee it exists
         if "accuracy" not in agg:
             agg["accuracy"] = weighted_average(metrics)["accuracy"] if all("accuracy" in m for _, m in metrics) else 0.0
@@ -297,6 +410,30 @@ def json_safe(obj):
     return obj
 
 
+def model_selection_block(recorder: RoundRecorder) -> dict:
+    """``results.json["model_selection"]``: the declared rule applied to val losses.
+
+    Selection reads ``recorder.val_loss_by_round`` only.  The test metrics of the
+    selected round are copied afterwards, for reporting.
+    """
+    selected = select_round(recorder.val_loss_by_round)
+    block = {
+        "rule": SELECTION_RULE,
+        "description": SELECTION_RULE_TEXT,
+        "val_loss_by_round": {str(r): v for r, v in sorted(recorder.val_loss_by_round.items())},
+        "selected_round": selected,
+        "selected_val_loss": recorder.val_loss_by_round.get(selected) if selected else None,
+        "selected_round_test": {},
+    }
+    if selected is not None:
+        agg = ((recorder.rounds.get(selected) or {}).get("evaluate") or {}).get("aggregate") or {}
+        block["selected_round_test"] = {
+            k[len("test_"):]: v for k, v in agg.items()
+            if k.startswith("test_") and not k.endswith(("_mean", "_max"))
+        }
+    return block
+
+
 def build_results(args, history, total_time: float, recorder: RoundRecorder,
                   payload_bytes: Optional[int]) -> dict:
     """Assemble results.json — v2 keys first (unchanged), v3 keys appended."""
@@ -331,6 +468,11 @@ def build_results(args, history, total_time: float, recorder: RoundRecorder,
             for key, values in getattr(history, "metrics_distributed_fit", {}).items()
         },
         "rounds": recorder.to_list(),
+        # ---- schema 3: model selection and test-free timing ----
+        "model_selection": model_selection_block(recorder),
+        "total_test_eval_overhead_s": round(recorder.total_test_overhead_s, 3),
+        "total_time_excl_test_s": round(max(0.0, total_time - recorder.total_test_overhead_s), 2),
+        "timing_definition": TIMING_DEFINITION,
     })
     return json_safe(results)
 

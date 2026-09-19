@@ -13,6 +13,7 @@ import os
 import sys
 
 import numpy as np
+import pandas as pd
 import pytest
 from scipy import stats
 
@@ -420,11 +421,20 @@ def test_runs_table_has_one_row_per_run(synthetic_runs):
     runs_df = tables["runs"]
     assert len(runs_df) == len(synthetic_runs)
     for column in ("kind", "strategy", "distribution", "seed_label", "final_accuracy",
-                   "best_accuracy", "total_time_s"):
+                   "total_time_s", "headline_source", "selected_round",
+                   "selected_test_accuracy", "v1_final_round_accuracy"):
         assert column in runs_df.columns
+    # the post-hoc "max over rounds" is gone
+    assert "best_accuracy" not in runs_df.columns
     row = runs_df[runs_df["run_name"] == "3node_noniid_fedprox_0.01_seed42"].iloc[0]
     assert row["final_accuracy"] == pytest.approx(FEDPROX_ACCS[42])
-    assert row["best_accuracy"] >= row["final_accuracy"]
+    # v1 FL run: labelled as final-round (validation) accuracy, no selected-round test value
+    assert row["headline_source"] == "v1_final_round_val"
+    assert row["v1_final_round_accuracy"] == pytest.approx(FEDPROX_ACCS[42])
+    assert pd.isna(row["selected_test_accuracy"])
+    central = runs_df[runs_df["kind"] == "centralized"].iloc[0]
+    assert central["headline_source"] == "final_epoch_test"
+    assert pd.isna(central["v1_final_round_accuracy"])
 
 
 def test_summary_ci_matches_scipy_hand_computation(synthetic_runs):
@@ -442,7 +452,7 @@ def test_summary_ci_matches_scipy_hand_computation(synthetic_runs):
     expected_ci = float(stats.t.ppf(0.975, n - 1) * expected_std / math.sqrt(n))
 
     row = summary[(summary["config_id"] == config_id) &
-                  (summary["metric"] == "final_accuracy")].iloc[0]
+                  (summary["metric"] == "v1_final_round_accuracy")].iloc[0]
     assert int(row["n_seeds"]) == n
     assert row["mean"] == pytest.approx(expected_mean)
     assert row["std"] == pytest.approx(expected_std)
@@ -460,13 +470,19 @@ def test_summary_ci_matches_scipy_hand_computation(synthetic_runs):
     assert math.isnan(float(crow["ci95"]))
     assert math.isnan(float(crow["std"]))
 
-    # new-format runs contribute every metric at the final round
+    # FL runs without per-round test metrics (v1 and schema 2) report only the
+    # labelled final-round validation value: no final_* / selected_test_* column
     new_run = [r for r in synthetic_runs if r["schema_version"] == 2][0]
     metrics = set(summary[summary["config_id"] == new_run["config_id"]]["metric"])
+    assert "v1_final_round_accuracy" in metrics
     for metric in NEW_METRICS:
-        assert "final_" + metric in metrics
+        assert "final_" + metric not in metrics
+        assert "selected_test_" + metric not in metrics
     assert "total_time_s" in metrics
     assert "round1_accuracy" in metrics
+    # the v1 FL rows never share a column with baseline test metrics
+    fl_ids = {r["config_id"] for r in synthetic_runs if r["kind"] == "fl"}
+    assert not (set(summary[summary["metric"] == "final_accuracy"]["config_id"]) & fl_ids)
 
 
 def test_per_round_table(synthetic_runs):
@@ -556,14 +572,15 @@ def test_make_plots_writes_non_empty_figures(synthetic_runs, tmp_path):
         "accuracy_vs_round_non_iid_label.pdf",
         "accuracy_vs_round_dirichlet_0.1.png",
         "accuracy_vs_round_all.png",
-        "final_metrics_dirichlet_0.1.png",
     ]
     for name in expected:
         path = os.path.join(out, name)
         assert os.path.isfile(path), "missing figure {}".format(name)
         assert os.path.getsize(path) > 0
 
-    # accuracy-only (old-format) distributions get no all-metrics bar chart
+    # the all-metrics bar chart shows selected-round test metrics: runs without
+    # per-round test metrics (every run here) get none
+    assert not os.path.isfile(os.path.join(out, "final_metrics_dirichlet_0.1.png"))
     assert not os.path.isfile(os.path.join(out, "final_metrics_non_iid_label.png"))
     # every synthetic run here is v1 (image-level, not rev_*): no time / communication axes
     assert not os.path.isfile(os.path.join(out, "accuracy_vs_time_non_iid_label.png"))

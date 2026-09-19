@@ -88,14 +88,115 @@ def test_client_fit_and_evaluate_return_full_metrics(nodes):
     assert client._fedbn_mode is True
 
 
-def test_client_eval_split_test(nodes):
+@pytest.fixture(scope="module")
+def uneven_node(tmp_path_factory):
+    """A node whose validation and test splits differ in size (4 vs 10 images)."""
+    root = str(tmp_path_factory.mktemp("uneven") / "node_u")
+    rng = np.random.RandomState(7)
+    for split, per_class in (("train", 4), ("val", 2), ("test", 5)):
+        for cls in ("Fire", "No_Fire"):
+            d = os.path.join(root, split, cls)
+            os.makedirs(d, exist_ok=True)
+            for i in range(per_class):
+                arr = rng.randint(0, 255, (IMG, IMG, 3), dtype=np.uint8)
+                Image.fromarray(arr).save(os.path.join(d, f"{split}_{cls}_{i}.png"))
+    return root
+
+
+def test_client_evaluates_val_and_test_with_namespaced_metrics(uneven_node):
     from src.fl.client import FedRGBDClient
 
-    client = FedRGBDClient(nodes[1], batch_size=4, local_epochs=1, device="cpu", seed=1,
-                           pretrained=False, img_size=IMG, eval_split="test", node_name="custom")
+    client = FedRGBDClient(uneven_node, batch_size=4, local_epochs=1, device="cpu", seed=1,
+                           pretrained=False, img_size=IMG, node_name="custom")
     assert client.node_name == "custom"
-    _, n, ev = client.evaluate(client.get_parameters({}), {})
-    assert n == len(client.test_ds) and ev["eval_split"] == "test" and ev["server_round"] == 0
+    n_val, n_test = len(client.val_ds), len(client.test_ds)
+    assert (n_val, n_test) == (4, 10)
+
+    loss, n, ev = client.evaluate(client.get_parameters({}), {"server_round": 3})
+
+    # what Flower aggregates (loss, num_examples) is the validation split
+    assert n == n_val and ev["num_examples"] == n_val and ev["eval_split"] == "val"
+    assert loss == pytest.approx(ev["val_loss"])
+    assert ev["val_n_examples"] == n_val and ev["test_n_examples"] == n_test
+    # full metric set in both namespaces; unprefixed keys = validation (v3 compatibility)
+    for k in METRIC_KEYS:
+        assert isinstance(ev["val_" + k], float), k
+        assert isinstance(ev["test_" + k], float), k
+        assert ev[k] == ev["val_" + k], k
+    for ns, n_split in (("val_", n_val), ("test_", n_test)):
+        cm = json.loads(ev[ns + "confusion_matrix_json"])
+        assert sum(map(sum, cm)) == n_split
+        assert ev[ns + "tp"] + ev[ns + "fp"] + ev[ns + "fn"] + ev[ns + "tn"] == n_split
+    assert "test_loss" in ev
+    assert ev["server_round"] == 3
+    # Flower requires scalar metric values
+    assert all(isinstance(v, (bool, int, float, str, bytes)) for v in ev.values())
+
+
+def test_client_test_pass_is_report_only(uneven_node, monkeypatch):
+    """The test split runs after validation, changes nothing, and never reaches fit()."""
+    from src.fl.client import FedRGBDClient
+
+    client = FedRGBDClient(uneven_node, batch_size=4, local_epochs=1, device="cpu", seed=1,
+                           pretrained=False, img_size=IMG)
+    params = client.get_parameters({})
+
+    calls = []
+    original = client.evaluate_loader
+
+    def spy(loader):
+        calls.append("test" if loader is client.test_loader else
+                     "val" if loader is client.val_loader else "other")
+        return original(loader)
+
+    monkeypatch.setattr(client, "evaluate_loader", spy)
+    loss, n, ev = client.evaluate(params, {"server_round": 1})
+    assert calls == ["val", "test"]          # selection inputs are fixed before test runs
+
+    # the test pass leaves the model untouched (eval mode, no grad): same state as loaded
+    after = client.get_parameters({})
+    assert all(np.array_equal(a, b) for a, b in zip(params, after))
+
+    # the returned loss does not depend on the test split: replacing the test
+    # split's metrics with garbage leaves loss / num_examples / val_* unchanged
+    def poisoned(loader):
+        m = original(loader)
+        if loader is client.test_loader:
+            m = dict(m, loss=123.0, accuracy=0.0)
+        return m
+
+    monkeypatch.setattr(client, "evaluate_loader", poisoned)
+    loss2, n2, ev2 = client.evaluate(params, {"server_round": 1})
+    assert (loss2, n2) == (pytest.approx(loss), n)
+    assert ev2["val_loss"] == pytest.approx(ev["val_loss"])
+    assert ev2["test_loss"] == 123.0
+
+    # fit() never touches the test split
+    class Boom:
+        def __iter__(self):
+            raise AssertionError("fit() read the test split")
+
+        def __len__(self):
+            return 0
+
+    monkeypatch.setattr(client, "evaluate_loader", original)
+    client.test_loader = Boom()
+    new_params, n_train, _ = client.fit(params, {"server_round": 1})
+    assert n_train == len(client.train_ds)
+
+
+def test_client_eval_timers_separate_val_and_test(uneven_node):
+    from src.fl.client import FedRGBDClient
+
+    client = FedRGBDClient(uneven_node, batch_size=4, local_epochs=1, device="cpu", seed=1,
+                           pretrained=False, img_size=IMG)
+    _, _, ev = client.evaluate(client.get_parameters({}), {"server_round": 1})
+    for k in ("eval_time_s", "val_eval_time_s", "test_eval_time_s", "eval_wall_s"):
+        assert ev[k] > 0, k
+    # eval_time_s (counted in the reported round time) = loading + validation, no test pass
+    assert ev["val_eval_time_s"] <= ev["eval_time_s"]
+    assert ev["eval_time_s"] + ev["test_eval_time_s"] <= ev["eval_wall_s"] + 1e-6
+    assert ev["eval_wall_s"] - ev["eval_time_s"] >= ev["test_eval_time_s"] - 1e-6
 
 
 def test_train_local_batch_writes_full_metrics(nodes, tmp_path):

@@ -168,8 +168,11 @@ recall (sensitivity), specificity, F1 / macro-F1, MCC, ROC-AUC and the
 confusion matrix from logits + labels (pure NumPy, validated against
 scikit-learn in `tests/test_metrics.py`).  It is wired into
 
-* `src/fl/client.py` – `evaluate()` returns every metric per client per round,
-  plus `eval_time_s`, `fit_time_s` and the model payload bytes sent/received;
+* `src/fl/client.py` – `evaluate()` scores every round's global model on the
+  validation split (`val_*`, plus the unprefixed legacy keys) and then on the test
+  split (`test_*`, report only), with separate timers `val_eval_time_s`,
+  `test_eval_time_s`, `eval_time_s` (excludes the test pass), `eval_wall_s`, plus
+  `fit_time_s` and the model payload bytes sent/received;
 * `src/fl/server.py` – persists per-client rows, the num-examples-weighted
   global aggregate **and** pooled metrics from the summed confusion matrix for
   every round, plus server elapsed time and cumulative communication bytes;
@@ -178,22 +181,37 @@ scikit-learn in `tests/test_metrics.py`).  It is wired into
 
 `results.json` keeps every previous key (`strategy`, `num_rounds`, `seed`,
 `total_time_s`, `losses_distributed`, `metrics_distributed`, …) and adds
-`results_schema_version: 2`, `proximal_mu`, `tags`, `client_config`,
-`model_payload_bytes`, `total_communication_bytes`, `metrics_distributed_fit`
+`results_schema_version: 3`, `proximal_mu`, `tags`, `client_config`,
+`model_payload_bytes`, `total_communication_bytes`, `metrics_distributed_fit`,
+`model_selection`, `total_time_excl_test_s`, `total_test_eval_overhead_s`
 and a `rounds` list:
 ```
 rounds[i] = {
   "round": r,
   "fit":      {"clients": {node_a: {train_loss, fit_time_s, payload_bytes_up, payload_bytes_down, ...}},
                "aggregate": {...}, "elapsed_s": ...},
-  "evaluate": {"clients": {node_a: {accuracy, balanced_accuracy, precision, recall, specificity,
-                                    f1, macro_f1, mcc, roc_auc, loss, confusion_matrix, eval_time_s, ...}},
-               "aggregate": {accuracy, ..., pooled_accuracy, pooled_f1, ..., cm_0_0, ...}, "elapsed_s": ...},
+  "evaluate": {"clients": {node_a: {accuracy, ..., loss, confusion_matrix,          # = validation
+                                    val_accuracy, ..., val_loss, val_n_examples, val_confusion_matrix,
+                                    test_accuracy, ..., test_loss, test_n_examples, test_confusion_matrix,
+                                    eval_time_s, val_eval_time_s, test_eval_time_s, eval_wall_s, ...}},
+               "aggregate": {accuracy, ..., val_*, test_* (weighted by test-set size),
+                             pooled_accuracy, pooled_val_*, pooled_test_*, cm_0_0, ...},
+               "elapsed_s": ..., "elapsed_excl_test_s": ...},
+  "weighted_val_loss": ...,
+  "timing": {round_wall_s, test_eval_overhead_s, round_time_s, fit_phase_s, eval_phase_s,
+             elapsed_excl_test_s},
   "cumulative_communication_bytes": ...
 }
+model_selection = {rule, description, val_loss_by_round, selected_round, selected_val_loss,
+                   selected_round_test}
 ```
+**Model selection (declared rule):** the reported model is the one from the round with
+the lowest validation loss, weighted by client validation-set size; ties go to the
+earlier round; test metrics are reported for that round only and never influence
+selection (`src/evaluation/model_selection.py`).  Reported times exclude the test pass.
 New server flag: `--tag <dist> ...` stores free-form tags (e.g. `dirichlet_0.1`)
-used by the analysis script.  New client flags: `--node_name`, `--eval_split`.
+used by the analysis script.  New client flag: `--node_name` (`--eval_split` was
+removed: both splits are evaluated every round).
 
 ### Statistical analysis and plots
 `scripts/analyze_results.py` reads every `results/**/results.json` (old

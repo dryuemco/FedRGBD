@@ -2,11 +2,12 @@
 
 Reads every experiment run under ``results/`` (federated, centralized and
 local-only), in both the *old* ``results.json`` schema and the *new*
-``results_schema_version: 2`` schema, and produces:
+``results_schema_version: 2`` / ``3`` schema, and produces:
 
     runs.csv                            one row per run
     summary_table.csv / .md             mean +/- std [95% CI] per config & metric
-    per_round_table.csv                 mean/std/CI per config & round
+    per_round_table.csv                 mean/std/CI per config & round (validation)
+    per_client_selected.csv             per-client test metrics at the selected round
     pairwise_tests.csv / .md            paired strategy comparisons per distribution
     friedman.csv                        Friedman omnibus test per distribution
     <metric>_vs_round_<dist>.png/.pdf   convergence curves
@@ -18,6 +19,18 @@ Usage:
     python3 scripts/analyze_results.py --results_dir results --output_dir analysis
 
 Everything is written to ``--output_dir`` (never inside ``results/``).
+Headline numbers (never mixed in one column):
+
+* revision FL runs   ``selected_test_<m>``: test metrics of the round with the lowest
+  validation loss weighted by client validation-set size (earliest round on ties),
+  ``src/evaluation/model_selection.py``.  The test split is read at that round only.
+* baselines          ``final_<m>``: final-epoch test metrics (fixed epoch budget).
+* v1 FL runs         ``v1_final_round_accuracy``: final-round *validation* accuracy;
+  these runs have no per-round test metrics.
+
+There is no "best accuracy over rounds": that maximum selects the round by the
+metric it reports.  Statistics are computed within one partitioning protocol.
+
 The module is import-safe: every step is a pure function so that tests can
 call ``load_run``, ``collect_runs``, ``summarize``, ``pairwise_tests``,
 ``friedman_tests``, ``make_plots`` and ``main`` directly.
@@ -45,6 +58,12 @@ try:  # optional, only used for cross-checking
     import pingouin as pg
 except Exception:  # pragma: no cover - environment dependent
     pg = None
+
+from src.evaluation.model_selection import (  # noqa: E402
+    SELECTION_RULE,
+    select_round,
+    weighted_val_loss,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -102,11 +121,28 @@ CONFIG_KEY_FIELDS = (
     "kind", "strategy", "distribution", "num_rounds", "local_epochs", "lr", "n_nodes",
 )
 
+# What the headline (reported) numbers of a run are.  Never mix these in one column.
+#: revision FL runs: test metrics of the round picked by the declared selection rule
+HEADLINE_SELECTED = "selected_round_test"
+#: centralized / local-only baselines: test metrics of the final epoch (fixed budget)
+HEADLINE_FINAL_EPOCH = "final_epoch_test"
+#: FL runs without per-round test metrics (v1): final-round *validation* accuracy
+HEADLINE_V1 = "v1_final_round_val"
+#: FL run with test metrics but no round with a finite validation loss
+HEADLINE_NONE = "no_valid_round"
+
+#: confusion counts reported alongside the selected-round test metrics
+COUNT_KEYS = ("tp", "fp", "fn", "tn")
+#: selected-round test metrics copied into runs.csv (all of them are in summary_table.csv)
+SELECTED_RUN_COLUMNS = ("accuracy", "balanced_accuracy", "recall", "specificity",
+                        "macro_f1", "mcc", "roc_auc", "loss")
+
 RECORD_FIELDS = [
     "run_dir", "run_name", "protocol", "kind", "strategy", "strategy_display", "mu",
     "distribution", "seed", "seed_label", "num_rounds", "local_epochs", "lr",
     "n_nodes", "schema_version", "config_id", "label", "timestamp",
     "time_estimated", "comm_estimated", "n_curve_points",
+    "headline_source", "selected_round", "selected_val_loss",
 ]
 
 _PAYLOAD_CACHE: Dict[str, float] = {}
@@ -410,6 +446,12 @@ def _round_value_pairs(entries: Any, value_key: str) -> Dict[int, float]:
     return out
 
 
+def _is_test_key(name: str) -> bool:
+    """Per-round test-split keys (schema 3).  They never enter curves or final metrics:
+    the test split is read only at the selected round (:func:`select_fl_round`)."""
+    return str(name).startswith(("test_", "pooled_test_"))
+
+
 def _metrics_distributed_by_round(data: Dict[str, Any]) -> Dict[int, Dict[str, float]]:
     """{round: {metric: value}} from ``metrics_distributed`` + ``losses_distributed``."""
     by_round: Dict[int, Dict[str, float]] = {}
@@ -417,6 +459,8 @@ def _metrics_distributed_by_round(data: Dict[str, Any]) -> Dict[int, Dict[str, f
     if isinstance(metrics, dict):
         for name, entries in metrics.items():
             if name.endswith("confusion_matrix_json") or name.startswith("cm_"):
+                continue
+            if _is_test_key(name):
                 continue
             for rnd, val in _round_value_pairs(entries, "value").items():
                 by_round.setdefault(rnd, {})[str(name)] = val
@@ -440,11 +484,11 @@ def _pooled_metrics_by_round(data: Dict[str, Any]) -> Dict[int, Dict[str, float]
         if isinstance(pooled, dict):
             for name, val in pooled.items():
                 fval = _as_float(val)
-                if fval is not None:
+                if fval is not None and not _is_test_key(name):
                     out.setdefault(rnd, {})["pooled_" + str(name)] = fval
         if isinstance(aggregate, dict):
             for name, val in aggregate.items():
-                if name == "pooled":
+                if name == "pooled" or _is_test_key(name):
                     continue
                 fval = _as_float(val)
                 if fval is not None:
@@ -466,6 +510,8 @@ def _round_timing_and_comm(data: Dict[str, Any]) -> Dict[int, Dict[str, float]]:
         evaluate = entry.get("evaluate") if isinstance(entry.get("evaluate"), dict) else {}
         fit = entry.get("fit") if isinstance(entry.get("fit"), dict) else {}
         elapsed = _first_not_none(
+            # schema 3: reported time excludes the report-only test pass
+            _as_float(evaluate.get("elapsed_excl_test_s")),
             _as_float(evaluate.get("elapsed_s")),
             _as_float(fit.get("elapsed_s")),
             _as_float(entry.get("elapsed_s")),
@@ -526,7 +572,11 @@ def _new_record(
         "n_nodes": parse_n_nodes(data, run_name, client_config),
         "schema_version": int(data.get("results_schema_version", 1) or 1),
         "timestamp": data.get("timestamp"),
-        "total_time_s": _as_float(data.get("total_time_s")),
+        # schema 3 FL: the reported time excludes the report-only test pass;
+        # total_time_raw_s keeps the raw server wall-clock
+        "total_time_s": _first_not_none(_as_float(data.get("total_time_excl_test_s")),
+                                        _as_float(data.get("total_time_s"))),
+        "total_time_raw_s": _as_float(data.get("total_time_s")),
         "tags": list(data.get("tags") or []),
         "curve": [],
         "metrics_final": {},
@@ -562,27 +612,95 @@ def _finalize(record: Dict[str, Any]) -> Dict[str, Any]:
         record["final_loss"] = _first_not_none(
             _as_float(record.get("final_loss")), _as_float(final.get("loss"))
         )
-        accs = [_as_float(r.get("accuracy")) for r in curve]
-        accs = [a for a in accs if a is not None]
-        record["best_accuracy"] = max(accs) if accs else None
+        # No "best accuracy over rounds": a post-hoc maximum picks the round by the
+        # very metric it reports.  FL runs report the selected round instead.
         record["round1_accuracy"] = _as_float(curve[0].get("accuracy"))
         record["final_elapsed_s"] = _as_float(final.get("elapsed_s"))
         record["final_cumulative_mb"] = _as_float(final.get("cumulative_mb"))
     else:
         record.setdefault("final_accuracy", None)
         record.setdefault("final_loss", None)
-        record["best_accuracy"] = record.get("final_accuracy")
         record["round1_accuracy"] = None
         record["final_elapsed_s"] = None
         record["final_cumulative_mb"] = None
 
-    if record.get("best_accuracy") is None:
-        record["best_accuracy"] = record.get("final_accuracy")
+    if record.get("headline_source") == HEADLINE_V1:
+        # v1 FL runs have neither a test split per round nor a selection rule: their
+        # only number is the final-round (validation) accuracy, labelled as such.
+        record["v1_final_round_accuracy"] = record.get("final_accuracy")
+        record["v1_final_round_loss"] = record.get("final_loss")
 
     record["config_key"] = make_config_key(record)
     record["config_id"] = config_id_of(record)
     record["label"] = make_label(record)
     return record
+
+
+def _test_metrics(row: Dict[str, Any]) -> Dict[str, float]:
+    """``test_<metric>`` entries of an aggregate / client row -> {metric: value}."""
+    out: Dict[str, float] = {}
+    for name in list(METRIC_ORDER) + list(COUNT_KEYS):
+        fval = _as_float(row.get("test_" + name))
+        if fval is not None:
+            out[name] = fval
+    n = _as_float(_first_not_none(row.get("test_n_examples_total"), row.get("test_n_examples")))
+    if n is not None:
+        out["n_examples"] = n
+    return out
+
+
+def select_fl_round(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Apply the declared model-selection rule to one FL ``results.json``.
+
+    The selected round is ``argmin`` over rounds of the validation loss weighted by
+    client validation-set size (earliest round on ties), recomputed here from the
+    per-client validation losses -- see ``src/evaluation/model_selection.py``.
+    Only then are the test metrics of that one round read.  Runs without
+    per-round test metrics (v1) return ``has_test = False``.
+    """
+    rounds = data.get("rounds") if isinstance(data.get("rounds"), list) else []
+    val_loss: Dict[int, Optional[float]] = {}
+    entries: Dict[int, Dict[str, Any]] = {}
+    has_test = False
+    for i, entry in enumerate(rounds):
+        if not isinstance(entry, dict):
+            continue
+        rnd = int(entry.get("round", i + 1))
+        evaluate = entry.get("evaluate") if isinstance(entry.get("evaluate"), dict) else {}
+        clients = evaluate.get("clients") if isinstance(evaluate.get("clients"), dict) else {}
+        aggregate = evaluate.get("aggregate") if isinstance(evaluate.get("aggregate"), dict) else {}
+        has_test = has_test or any(str(k).startswith("test_") for k in aggregate)
+        rows = [row for row in clients.values() if isinstance(row, dict)]
+        if rows:
+            val_loss[rnd] = weighted_val_loss(
+                (_first_not_none(row.get("val_n_examples"), row.get("num_examples")),
+                 _first_not_none(row.get("val_loss"), row.get("loss")))
+                for row in rows
+            )
+        else:
+            val_loss[rnd] = _as_float(_first_not_none(aggregate.get("val_loss"),
+                                                      aggregate.get("loss")))
+        entries[rnd] = {"clients": clients, "aggregate": aggregate}
+
+    out: Dict[str, Any] = {"has_test": has_test, "val_loss_by_round": val_loss,
+                           "selected_round": None, "selected_val_loss": None,
+                           "test": {}, "clients": {}}
+    if not has_test:
+        return out
+    selected = select_round(val_loss)             # validation losses only
+    out["selected_round"] = selected
+    if selected is None:
+        return out
+    out["selected_val_loss"] = val_loss[selected]
+    chosen = entries[selected]                     # the one read of the test split
+    out["test"] = _test_metrics(chosen["aggregate"])
+    for node, row in sorted(chosen["clients"].items()):
+        if isinstance(row, dict):
+            metrics = _test_metrics(row)
+            if isinstance(row.get("test_confusion_matrix"), list):
+                metrics["confusion_matrix"] = row["test_confusion_matrix"]
+            out["clients"][str(node)] = metrics
+    return out
 
 
 def load_fl_run(
@@ -643,6 +761,28 @@ def load_fl_run(
         curve.append(row)
 
     record["curve"] = curve
+
+    selection = select_fl_round(data)
+    record["val_loss_by_round"] = selection["val_loss_by_round"]
+    if selection["has_test"]:
+        record["headline_source"] = (HEADLINE_SELECTED if selection["selected_round"] is not None
+                                     else HEADLINE_NONE)
+        record["selection_rule"] = SELECTION_RULE
+        record["selected_round"] = selection["selected_round"]
+        record["selected_val_loss"] = selection["selected_val_loss"]
+        record["selected_test_metrics"] = selection["test"]
+        record["selected_test_clients"] = selection["clients"]
+        declared = (data.get("model_selection") or {}).get("selected_round")
+        if (warn and declared is not None and selection["selected_round"] is not None
+                and int(declared) != int(selection["selected_round"])):
+            print("[warn] {}: results.json model_selection says round {}, the recomputed "
+                  "rule gives round {} (using the recomputed one)".format(
+                      record["run_name"], declared, selection["selected_round"]))
+        if warn and selection["selected_round"] is None:
+            print("[warn] {}: no round has a finite validation loss; no headline "
+                  "metrics".format(record["run_name"]))
+    else:
+        record["headline_source"] = HEADLINE_V1
     return _finalize(record)
 
 
@@ -652,6 +792,7 @@ def load_centralized_run(
 ) -> Dict[str, Any]:
     """Centralized ``results.json`` -> run record (epochs mapped to FL rounds)."""
     record = _new_record(run_dir, data, "centralized", "centralized", None, missing_seed, warn)
+    record["headline_source"] = HEADLINE_FINAL_EPOCH
     history = data.get("history") if isinstance(data.get("history"), list) else []
 
     cumulative: Dict[int, float] = {}
@@ -729,6 +870,7 @@ def load_local_run(
     epochs ``local_epochs_equiv, 2*local_epochs_equiv, ...``.
     """
     record = _new_record(run_dir, data, "local", "local_only", None, missing_seed, warn)
+    record["headline_source"] = HEADLINE_FINAL_EPOCH
 
     node_files: List[str] = []
     if os.path.isdir(run_dir):
@@ -929,16 +1071,22 @@ def runs_dataframe(runs: Sequence[Dict[str, Any]]) -> pd.DataFrame:
         row = {field: record.get(field) for field in RECORD_FIELDS}
         row["tags"] = ",".join(record.get("tags") or [])
         row["final_accuracy"] = record.get("final_accuracy")
-        row["best_accuracy"] = record.get("best_accuracy")
         row["round1_accuracy"] = record.get("round1_accuracy")
         row["final_loss"] = record.get("final_loss")
+        selected = record.get("selected_test_metrics") or {}
+        for name in SELECTED_RUN_COLUMNS:
+            row["selected_test_" + name] = selected.get(name)
+        row["v1_final_round_accuracy"] = record.get("v1_final_round_accuracy")
         row["total_time_s"] = record.get("total_time_s")
+        row["total_time_raw_s"] = record.get("total_time_raw_s")
         row["final_elapsed_s"] = record.get("final_elapsed_s")
         row["final_cumulative_mb"] = record.get("final_cumulative_mb")
         rows.append(row)
     columns = RECORD_FIELDS + [
-        "tags", "final_accuracy", "best_accuracy", "round1_accuracy", "final_loss",
-        "total_time_s", "final_elapsed_s", "final_cumulative_mb",
+        "tags", "final_accuracy", "round1_accuracy", "final_loss",
+    ] + ["selected_test_" + name for name in SELECTED_RUN_COLUMNS] + [
+        "v1_final_round_accuracy",
+        "total_time_s", "total_time_raw_s", "final_elapsed_s", "final_cumulative_mb",
     ]
     df = pd.DataFrame(rows, columns=columns)
     if not df.empty:
@@ -954,29 +1102,59 @@ def _group_by_config(runs: Sequence[Dict[str, Any]]) -> "Dict[str, List[Dict[str
 
 
 def _run_metric_values(record: Dict[str, Any]) -> Dict[str, float]:
-    """Scalar metrics of one run used by the summary table."""
+    """Scalar metrics of one run used by the summary table.
+
+    Each headline source gets its own metric family, so no summary column ever
+    mixes them:
+
+    * revision FL runs      -> ``selected_test_<m>`` (+ ``selected_round``, ``selected_val_loss``)
+    * v1 FL runs            -> ``v1_final_round_accuracy`` / ``v1_final_round_loss``
+    * centralized/local-only -> ``final_<m>`` (final-epoch test metrics)
+
+    ``round1_accuracy`` (validation), ``total_time_s`` and ``final_cumulative_mb``
+    are reported for every run that has them.
+    """
     values: Dict[str, float] = {}
-    for name, val in (record.get("metrics_final") or {}).items():
-        fval = _as_float(val)
-        if fval is not None:
-            values["final_" + str(name)] = fval
-    for key, name in (
-        ("final_accuracy", "final_accuracy"),
-        ("final_loss", "final_loss"),
-        ("round1_accuracy", "round1_accuracy"),
-        ("best_accuracy", "best_accuracy"),
-        ("total_time_s", "total_time_s"),
-        ("final_cumulative_mb", "final_cumulative_mb"),
-    ):
+    source = record.get("headline_source")
+    if record.get("kind") == "fl":
+        if source == HEADLINE_V1:
+            for key in ("v1_final_round_accuracy", "v1_final_round_loss"):
+                fval = _as_float(record.get(key))
+                if fval is not None:
+                    values[key] = fval
+        elif source == HEADLINE_SELECTED:
+            for name, val in (record.get("selected_test_metrics") or {}).items():
+                fval = _as_float(val)
+                if fval is not None:
+                    values["selected_test_" + str(name)] = fval
+            for key in ("selected_round", "selected_val_loss"):
+                fval = _as_float(record.get(key))
+                if fval is not None:
+                    values[key] = fval
+    else:
+        for name, val in (record.get("metrics_final") or {}).items():
+            fval = _as_float(val)
+            if fval is not None:
+                values["final_" + str(name)] = fval
+        for key in ("final_accuracy", "final_loss"):
+            fval = _as_float(record.get(key))
+            if fval is not None:
+                values[key] = fval
+    for key in ("round1_accuracy", "total_time_s", "final_cumulative_mb"):
         fval = _as_float(record.get(key))
         if fval is not None:
-            values[name] = fval
+            values[key] = fval
     return values
 
 
 def _metric_sort_key(name: str) -> Tuple[int, str]:
-    core = name[len("final_"):] if name.startswith("final_") else name
-    if name == "final_accuracy":
+    for prefix in ("selected_test_", "final_", "v1_final_round_"):
+        if name.startswith(prefix):
+            core = name[len(prefix):]
+            break
+    else:
+        core = name
+    if core == "accuracy" and name != "round1_accuracy":
         return (-2, name)
     if name == "round1_accuracy":
         return (-1, name)
@@ -1071,12 +1249,50 @@ def per_round_table(runs: Sequence[Dict[str, Any]]) -> pd.DataFrame:
     return df
 
 
+def per_client_selected_table(runs: Sequence[Dict[str, Any]]) -> pd.DataFrame:
+    """Per config, client and metric: the selected-round test metric over seeds.
+
+    Only revision FL runs (``headline_source == selected_round_test``) contribute;
+    per-client values of other rounds are never reported.
+    """
+    rows = []
+    for config_id, group in _group_by_config(runs).items():
+        selected = [r for r in group if r.get("headline_source") == HEADLINE_SELECTED]
+        if not selected:
+            continue
+        first = selected[0]
+        per_node: Dict[str, Dict[str, List[float]]] = {}
+        for record in selected:
+            for node, metrics in (record.get("selected_test_clients") or {}).items():
+                for name, val in metrics.items():
+                    fval = _as_float(val)
+                    if fval is not None:
+                        per_node.setdefault(node, {}).setdefault(name, []).append(fval)
+        for node in sorted(per_node):
+            for name in sorted(per_node[node], key=lambda m: _metric_sort_key("x_" + m)):
+                stats_dict = describe(per_node[node][name])
+                rows.append({
+                    "config_id": config_id, "label": first["label"],
+                    "protocol": first.get("protocol"), "kind": first["kind"],
+                    "strategy": first["strategy"], "distribution": first["distribution"],
+                    "node": node, "metric": "selected_test_" + name,
+                    "n_seeds": stats_dict["n"], "mean": stats_dict["mean"],
+                    "std": stats_dict["std"], "ci_low": stats_dict["ci_low"],
+                    "ci_high": stats_dict["ci_high"],
+                })
+    return pd.DataFrame(rows, columns=[
+        "config_id", "label", "protocol", "kind", "strategy", "distribution", "node",
+        "metric", "n_seeds", "mean", "std", "ci_low", "ci_high",
+    ])
+
+
 def summarize(runs: Sequence[Dict[str, Any]]) -> Dict[str, pd.DataFrame]:
-    """All three tables at once: ``runs``, ``summary`` and ``per_round``."""
+    """All tables at once: ``runs``, ``summary``, ``per_round`` and ``per_client_selected``."""
     return {
         "runs": runs_dataframe(runs),
         "summary": summary_table(runs),
         "per_round": per_round_table(runs),
+        "per_client_selected": per_client_selected_table(runs),
     }
 
 
@@ -1084,6 +1300,18 @@ def summarize(runs: Sequence[Dict[str, Any]]) -> Dict[str, pd.DataFrame]:
 # statistics
 # --------------------------------------------------------------------------- #
 def _final_metric(record: Dict[str, Any], metric: str) -> Optional[float]:
+    """The run's headline value of ``metric`` (see the ``HEADLINE_*`` constants).
+
+    Revision FL runs: the test metric of the selected round.  Baselines: the
+    final-epoch test metric.  v1 FL runs: the final-round (validation) value.
+    Statistics are computed within one protocol only, so v1 and revision values
+    never meet in one test (:func:`_seed_values_by_strategy`).
+    """
+    source = record.get("headline_source")
+    if source == HEADLINE_SELECTED:
+        return _as_float((record.get("selected_test_metrics") or {}).get(metric))
+    if source == HEADLINE_NONE:
+        return None
     metrics_final = record.get("metrics_final") or {}
     candidates = [
         metrics_final.get(metric),
@@ -1103,9 +1331,15 @@ def _final_metric(record: Dict[str, Any], metric: str) -> Optional[float]:
 
 def _seed_values_by_strategy(
     runs: Sequence[Dict[str, Any]], metric: str
-) -> Dict[str, Dict[str, Dict[int, float]]]:
-    """{distribution: {strategy: {seed: metric}}} — seeds without a value are dropped."""
-    out: Dict[str, Dict[str, Dict[int, List[float]]]] = {}
+) -> Dict[Tuple[str, str], Dict[str, Dict[int, float]]]:
+    """{(protocol, distribution): {strategy: {seed: metric}}} — seeds without a value
+    are dropped.
+
+    Keyed by protocol as well: a v1 (image-level) run and a revision (group-level)
+    run of the same strategy, distribution and seed are different experiments on
+    different partitions and must never be averaged or paired with each other.
+    """
+    out: Dict[Tuple[str, str], Dict[str, Dict[int, List[float]]]] = {}
     for record in runs:
         seed = record.get("seed")
         if seed is None:
@@ -1113,10 +1347,10 @@ def _seed_values_by_strategy(
         value = _final_metric(record, metric)
         if value is None:
             continue
-        dist = record.get("distribution") or "unknown"
+        key = (record.get("protocol") or "", record.get("distribution") or "unknown")
         strategy = record.get("strategy_display") or record.get("strategy") or "unknown"
-        out.setdefault(dist, {}).setdefault(strategy, {}).setdefault(int(seed), []).append(value)
-    collapsed: Dict[str, Dict[str, Dict[int, float]]] = {}
+        out.setdefault(key, {}).setdefault(strategy, {}).setdefault(int(seed), []).append(value)
+    collapsed: Dict[Tuple[str, str], Dict[str, Dict[int, float]]] = {}
     for dist, strategies in out.items():
         for strategy, seeds in strategies.items():
             for seed, values in seeds.items():
@@ -1152,12 +1386,13 @@ def pairwise_tests(runs: Sequence[Dict[str, Any]], metric: str = "accuracy") -> 
     """Paired strategy comparisons within each distribution (>=2 common seeds)."""
     rows = []
     by_dist = _seed_values_by_strategy(runs, metric)
-    for dist in sorted(by_dist):
-        strategies = sorted(by_dist[dist])
+    for key in sorted(by_dist):
+        protocol, dist = key
+        strategies = sorted(by_dist[key])
         for i in range(len(strategies)):
             for j in range(i + 1, len(strategies)):
                 name_a, name_b = strategies[i], strategies[j]
-                map_a, map_b = by_dist[dist][name_a], by_dist[dist][name_b]
+                map_a, map_b = by_dist[key][name_a], by_dist[key][name_b]
                 seeds = sorted(set(map_a) & set(map_b))
                 if len(seeds) < 2:
                     continue
@@ -1203,6 +1438,7 @@ def pairwise_tests(runs: Sequence[Dict[str, Any]], metric: str = "accuracy") -> 
                 d_paired = cohens_d_paired(a, b)
 
                 rows.append({
+                    "protocol": protocol,
                     "distribution": dist,
                     "metric": metric,
                     "strategy_a": name_a,
@@ -1223,7 +1459,7 @@ def pairwise_tests(runs: Sequence[Dict[str, Any]], metric: str = "accuracy") -> 
                     "note": "; ".join(notes),
                 })
     return pd.DataFrame(rows, columns=[
-        "distribution", "metric", "strategy_a", "strategy_b", "n_seeds", "seeds",
+        "protocol", "distribution", "metric", "strategy_a", "strategy_b", "n_seeds", "seeds",
         "mean_a", "mean_b", "mean_diff", "cohen_d_paired", "cohen_d_unpaired",
         "wilcoxon_stat", "wilcoxon_p", "ttest_t", "ttest_p", "pg_cohen_d_av",
         "pg_wilcoxon_p", "note",
@@ -1234,20 +1470,21 @@ def friedman_tests(runs: Sequence[Dict[str, Any]], metric: str = "accuracy") -> 
     """Friedman omnibus test per distribution (>=3 strategies sharing >=2 seeds)."""
     rows = []
     by_dist = _seed_values_by_strategy(runs, metric)
-    for dist in sorted(by_dist):
-        strategies = sorted(by_dist[dist])
+    for key in sorted(by_dist):
+        protocol, dist = key
+        strategies = sorted(by_dist[key])
         # drop the strategy with the fewest seeds until the shared seed set is usable
         while len(strategies) >= 3:
-            shared = set.intersection(*[set(by_dist[dist][s]) for s in strategies])
+            shared = set.intersection(*[set(by_dist[key][s]) for s in strategies])
             if len(shared) >= 2:
                 break
-            strategies = sorted(strategies, key=lambda s: len(by_dist[dist][s]))[1:]
+            strategies = sorted(strategies, key=lambda s: len(by_dist[key][s]))[1:]
             strategies = sorted(strategies)
         else:
             continue
-        shared_seeds = sorted(set.intersection(*[set(by_dist[dist][s]) for s in strategies]))
+        shared_seeds = sorted(set.intersection(*[set(by_dist[key][s]) for s in strategies]))
         samples = [
-            [by_dist[dist][s][seed] for seed in shared_seeds] for s in strategies
+            [by_dist[key][s][seed] for seed in shared_seeds] for s in strategies
         ]
         chi2, p_value, note = float("nan"), float("nan"), ""
         try:
@@ -1271,6 +1508,7 @@ def friedman_tests(runs: Sequence[Dict[str, Any]], metric: str = "accuracy") -> 
         else:
             note = (note + "; " if note else "") + "pingouin not installed"
         rows.append({
+            "protocol": protocol,
             "distribution": dist,
             "metric": metric,
             "n_strategies": len(strategies),
@@ -1284,7 +1522,7 @@ def friedman_tests(runs: Sequence[Dict[str, Any]], metric: str = "accuracy") -> 
             "note": note,
         })
     return pd.DataFrame(rows, columns=[
-        "distribution", "metric", "n_strategies", "strategies", "n_seeds", "seeds",
+        "protocol", "distribution", "metric", "n_strategies", "strategies", "n_seeds", "seeds",
         "chi_square", "p_value", "pg_chi_square", "pg_p_value", "note",
     ])
 
@@ -1335,16 +1573,22 @@ def summary_markdown(df: pd.DataFrame) -> str:
 
 
 def pairwise_markdown(df: pd.DataFrame, metric: str) -> str:
-    out = ["# Pairwise strategy comparisons (final {})".format(metric), "",
-           "Paired by seed within each data distribution. `d_paired` = mean(diff) / "
-           "std(diff, ddof=1); `d_unpaired` uses the pooled standard deviation.", ""]
+    out = ["# Pairwise strategy comparisons (headline {})".format(metric), "",
+           "Paired by seed within each partitioning protocol and data distribution. "
+           "Headline value per run: selected-round test metric (revision FL), final-epoch "
+           "test metric (centralized / local-only), final-round validation metric (v1 FL). "
+           "`d_paired` = mean(diff) / std(diff, ddof=1); `d_unpaired` uses the pooled "
+           "standard deviation.", ""]
     if df.empty:
         out.append("_No strategy pair shares at least two seeds._\n")
         return "\n".join(out)
-    for dist in sorted(df["distribution"].unique()):
-        out.append("## Distribution: `{}`".format(dist))
+    protocols = df["protocol"].fillna("").astype(str) if "protocol" in df.columns \
+        else pd.Series([""] * len(df), index=df.index)
+    for protocol, dist in sorted(set(zip(protocols, df["distribution"].astype(str)))):
+        out.append("## Distribution: `{}`{}".format(
+            dist, " — protocol `{}`".format(protocol) if protocol else ""))
         out.append("")
-        sub = df[df["distribution"] == dist]
+        sub = df[(protocols == protocol) & (df["distribution"].astype(str) == dist)]
         rows = []
         for _, row in sub.iterrows():
             rows.append([
@@ -1596,13 +1840,14 @@ def make_plots(
                   "{}_vs_communication_{}".format(_safe_name(metric), _safe_name(dist)), written)
             plt.close(fig)
 
-        # --- all-metrics bar chart (new-format runs only) ------------------ #
+        # --- all-metrics bar chart (selected-round test metrics) ----------- #
         bar_groups = []
         for config_id, group in sorted(_group_by_config(subset).items()):
+            group = [r for r in group if r.get("headline_source") == HEADLINE_SELECTED]
             names = set()
             for record in group:
                 names |= {
-                    k for k, v in (record.get("metrics_final") or {}).items()
+                    k for k, v in (record.get("selected_test_metrics") or {}).items()
                     if k in METRIC_ORDER and k != "loss" and _as_float(v) is not None
                 }
             if len(names) > 1:
@@ -1618,7 +1863,8 @@ def make_plots(
                     means, errs = [], []
                     for name in metric_names:
                         values = [
-                            _as_float((r.get("metrics_final") or {}).get(name)) for r in group
+                            _as_float((r.get("selected_test_metrics") or {}).get(name))
+                            for r in group
                         ]
                         stats_dict = describe([v for v in values if v is not None])
                         means.append(stats_dict["mean"])
@@ -1632,8 +1878,9 @@ def make_plots(
                 ax.set_xticks(x)
                 ax.set_xticklabels([m.replace("_", " ") for m in metric_names],
                                    rotation=30, ha="right", fontsize=8)
-                ax.set_ylabel("Score (final round)")
-                ax.set_title("Final global metrics — {}".format(dist), fontweight="bold", pad=8)
+                ax.set_ylabel("Test score (selected round)")
+                ax.set_title("Selected-round test metrics — {}".format(dist),
+                             fontweight="bold", pad=8)
                 ax.grid(True, alpha=0.2, linestyle="--", axis="y")
                 ax.set_axisbelow(True)
                 _legend_outside(fig, ax)
@@ -1673,11 +1920,15 @@ def print_summary(
     print("-" * 78)
 
     summary = tables["summary"]
-    key = "final_" + metric
-    rows = summary[summary["metric"].isin([key, "final_accuracy"])]
-    rows = rows[rows["metric"] == (key if (summary["metric"] == key).any() else "final_accuracy")]
-    if not rows.empty:
-        print("  final {} per configuration (mean ± std, n seeds)".format(metric))
+    for key, title in (
+        ("selected_test_" + metric, "test {} at the selected round (revision FL)"),
+        ("final_" + metric, "final-epoch test {} (centralized / local-only)"),
+        ("v1_final_round_" + metric, "v1 final-round validation {} (not comparable)"),
+    ):
+        rows = summary[summary["metric"] == key]
+        if rows.empty:
+            continue
+        print("  " + title.format(metric) + " — mean ± std, n seeds")
         for _, row in rows.sort_values(["distribution", "mean"], ascending=[True, False]).iterrows():
             print("    {:<34} {:<16} {} ± {}  (n={})".format(
                 row["label"][:34], row["distribution"][:16],
@@ -1690,16 +1941,17 @@ def print_summary(
         if sig.empty:
             print("    none")
         for _, row in sig.iterrows():
-            print("    [{}] {} vs {}: diff={} d={} p={}".format(
-                row["distribution"], row["strategy_a"], row["strategy_b"],
+            print("    [{} {{{}}}] {} vs {}: diff={} d={} p={}".format(
+                row["distribution"], row.get("protocol", ""), row["strategy_a"], row["strategy_b"],
                 _fmt(row["mean_diff"]), _fmt(row["cohen_d_paired"], 3), _fmt(row["ttest_p"], 4)))
         print("-" * 78)
 
     if not friedman.empty:
         print("  Friedman omnibus:")
         for _, row in friedman.iterrows():
-            print("    [{}] k={} n={} chi2={} p={}".format(
-                row["distribution"], int(row["n_strategies"]), int(row["n_seeds"]),
+            print("    [{} {{{}}}] k={} n={} chi2={} p={}".format(
+                row["distribution"], row.get("protocol", ""), int(row["n_strategies"]),
+                int(row["n_seeds"]),
                 _fmt(row["chi_square"], 3), _fmt(row["p_value"], 4)))
         print("-" * 78)
 
@@ -1772,6 +2024,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     _write_csv(tables["summary"], "summary_table.csv")
     _write_text(summary_markdown(tables["summary"]), "summary_table.md")
     _write_csv(tables["per_round"], "per_round_table.csv")
+    _write_csv(tables["per_client_selected"], "per_client_selected.csv")
     _write_csv(pairs, "pairwise_tests.csv")
     _write_text(pairwise_markdown(pairs, args.metric), "pairwise_tests.md")
     _write_csv(friedman, "friedman.csv")

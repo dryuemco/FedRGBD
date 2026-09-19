@@ -54,7 +54,8 @@ INPUT_FILES = {
 }
 
 #: summary metrics exported by default (those actually present are used)
-DEFAULT_METRICS = ("final_accuracy", "final_loss", "total_time_s")
+DEFAULT_METRICS = ("final_accuracy", "final_loss", "total_time_s",
+                   "selected_test_accuracy", "v1_final_round_accuracy")
 
 #: column order of full_metrics_<dist>.tex
 FULL_METRIC_ORDER = (
@@ -66,8 +67,12 @@ FULL_METRIC_ORDER = (
 
 METRIC_LABELS = {
     "final_accuracy": "Accuracy",
-    "best_accuracy": "Best accuracy",
-    "round1_accuracy": "Round-1 accuracy",
+    "selected_test_accuracy": "Test accuracy (selected round)",
+    "selected_round": "Selected round",
+    "selected_val_loss": "Validation loss (selected round)",
+    "v1_final_round_accuracy": "v1 final-round accuracy (validation)",
+    "v1_final_round_loss": "v1 final-round loss (validation)",
+    "round1_accuracy": "Round-1 accuracy (validation)",
     "final_loss": "Loss",
     "final_f1": "F1",
     "final_macro_f1": "Macro F1",
@@ -401,6 +406,20 @@ def per_round_tex(df: pd.DataFrame, metric: str = "accuracy", digits: int = 4,
 # --------------------------------------------------------------------------- #
 # pairwise_tests.tex
 # --------------------------------------------------------------------------- #
+_PROTOCOL_TEXT = {"group": "group-level", "image": "image-level, v1"}
+
+
+def _protocol_column(df: pd.DataFrame) -> pd.Series:
+    """The ``protocol`` column as strings ('' for CSVs written before it existed)."""
+    if "protocol" in df.columns:
+        return df["protocol"].fillna("").astype(str)
+    return pd.Series([""] * len(df), index=df.index)
+
+
+def _protocol_suffix(protocol: str) -> str:
+    return " ({})".format(_PROTOCOL_TEXT.get(protocol, escape_latex(protocol))) if protocol else ""
+
+
 def pairwise_tex(df: pd.DataFrame, digits: int = 4, siunitx: bool = False) -> Optional[str]:
     """Paired strategy comparisons, one block per data distribution."""
     if df.empty:
@@ -411,11 +430,12 @@ def pairwise_tex(df: pd.DataFrame, digits: int = 4, siunitx: bool = False) -> Op
     ]
     body: List[str] = []
     n_columns = 8
-    for dist in sorted(df["distribution"].astype(str).unique()):
-        block = df[df["distribution"].astype(str) == dist]
+    protocols = _protocol_column(df)
+    for protocol, dist in sorted(set(zip(protocols, df["distribution"].astype(str)))):
+        block = df[(protocols == protocol) & (df["distribution"].astype(str) == dist)]
         if body:
             body.append("\\midrule")
-        body.append(_group_row(n_columns, dist_label(dist)))
+        body.append(_group_row(n_columns, dist_label(dist) + _protocol_suffix(protocol)))
         for _, row in block.iterrows():
             n_seeds = _as_float(row.get("n_seeds"))
             body.append(_row([
@@ -435,10 +455,14 @@ def pairwise_tex(df: pd.DataFrame, digits: int = 4, siunitx: bool = False) -> Op
         column_spec="l" + "c" * 7,
         header_lines=header,
         body_lines=body,
-        caption="Pairwise strategy comparisons on the final {}, paired by seed within each "
-                "data distribution.".format(escape_latex(metric.replace("_", " "))),
+        caption="Pairwise strategy comparisons on the headline {}, paired by seed within each "
+                "partitioning protocol and data distribution.".format(
+                    escape_latex(metric.replace("_", " "))),
         label="tab:pairwise_tests",
-        note="$\\Delta$ = mean(A) $-$ mean(B); $d_z$ = mean(diff) / std(diff). "
+        note="Headline value per run: test metric of the selected round (revision "
+             "federated runs), final-epoch test metric (centralized, local-only), final-round "
+             "validation metric (v1 federated runs). "
+             "$\\Delta$ = mean(A) $-$ mean(B); $d_z$ = mean(diff) / std(diff). "
              "Significance: $^{*}p<0.05$, $^{**}p<0.01$, $^{***}p<0.001$ (uncorrected). "
              "Produced from \\texttt{pairwise\\_tests.csv}.",
         small=True,
@@ -453,11 +477,12 @@ def friedman_tex(df: pd.DataFrame, digits: int = 4, siunitx: bool = False) -> Op
         return None
     header = [_row(["Distribution", "$k$ strategies", "$n$ seeds", "$\\chi^2$", "$p$"])]
     body: List[str] = []
-    for _, row in df.iterrows():
+    protocols = _protocol_column(df)
+    for idx, row in df.iterrows():
         n_strategies = _as_float(row.get("n_strategies"))
         n_seeds = _as_float(row.get("n_seeds"))
         body.append(_row([
-            dist_label(str(row.get("distribution"))),
+            dist_label(str(row.get("distribution"))) + _protocol_suffix(protocols[idx]),
             str(int(n_strategies) if n_strategies else 0),
             str(int(n_seeds) if n_seeds else 0),
             fmt_number(row.get("chi_square"), 3, siunitx),
@@ -478,16 +503,28 @@ def friedman_tex(df: pd.DataFrame, digits: int = 4, siunitx: bool = False) -> Op
 # --------------------------------------------------------------------------- #
 # full_metrics_<dist>.tex
 # --------------------------------------------------------------------------- #
+def selected_counterpart(metric: str) -> str:
+    """``final_<m>`` (baselines) -> ``selected_test_<m>`` (revision FL runs)."""
+    return "selected_test_" + metric[len("final_"):] if metric.startswith("final_") else metric
+
+
 def available_full_metrics(df: pd.DataFrame) -> List[str]:
     present = set(df["metric"].astype(str).unique()) if not df.empty else set()
-    return [m for m in FULL_METRIC_ORDER if m in present]
+    return [m for m in FULL_METRIC_ORDER if m in present or selected_counterpart(m) in present]
 
 
 def full_metrics_tex(df: pd.DataFrame, distribution: str, metrics: Sequence[str],
                      digits: int = 4, siunitx: bool = False) -> Optional[str]:
-    """Rows = configuration, columns = every final metric of one distribution."""
+    """Rows = configuration, columns = every headline test metric of one distribution.
+
+    Federated rows show the test metrics of the round picked by the declared
+    selection rule (``selected_test_<m>``); centralized / local-only rows show
+    their final-epoch test metrics (``final_<m>``).  v1 FL rows have no test
+    metrics and do not appear.
+    """
+    wanted = set(metrics) | {selected_counterpart(m) for m in metrics}
     sub = df[(df["distribution"].astype(str) == str(distribution))
-             & (df["metric"].astype(str).isin(list(metrics)))]
+             & (df["metric"].astype(str).isin(list(wanted)))]
     if sub.empty:
         return None
 
@@ -504,6 +541,8 @@ def full_metrics_tex(df: pd.DataFrame, distribution: str, metrics: Sequence[str]
         cells = [name]
         for metric in metrics:
             row = entries[name].get(metric)
+            if row is None:
+                row = entries[name].get(selected_counterpart(metric))
             cells.append(MISSING if row is None
                          else fmt_mean_std(row.get("mean"), row.get("std"), digits, siunitx))
         body.append(_row(cells))
@@ -512,10 +551,13 @@ def full_metrics_tex(df: pd.DataFrame, distribution: str, metrics: Sequence[str]
         column_spec="l" + "c" * len(metrics),
         header_lines=header,
         body_lines=body,
-        caption="Final global metrics for the {} partition (mean $\\pm$ standard deviation "
+        caption="Test-set metrics for the {} partition (mean $\\pm$ standard deviation "
                 "over seeds).".format(dist_label(distribution)),
         label="tab:full_metrics_{}".format(_safe_label(distribution)),
-        note="Produced from \\texttt{summary\\_table.csv}.",
+        note="Federated rows: test metrics of the round with the lowest validation loss "
+             "(weighted by client validation-set size, earliest round on ties); "
+             "centralized and local-only rows: final-epoch test metrics. "
+             "Produced from \\texttt{summary\\_table.csv}.",
         small=len(metrics) > 3,
     )
 
@@ -575,7 +617,7 @@ def time_tex(df: pd.DataFrame, siunitx: bool = False) -> Optional[str]:
     if not rows:
         return None
 
-    header = [_row(["Configuration", "Time (min)", "Comm.\\ (MB)"])]
+    header = [_row(["Configuration", "Time (min)", "Comm.\\ (MB)", "Test acc.\\ (\\%)"])]
     body: List[str] = []
     for (n_nodes, dist, name) in sorted(rows, key=lambda k: (k[0], TIME_TABLE_DISTS.index(k[1]),
                                                               k[2])):
@@ -590,18 +632,27 @@ def time_tex(df: pd.DataFrame, siunitx: bool = False) -> Optional[str]:
             int(n_seeds) if n_seeds else 0).replace(" -- (", " (")
         comm = metrics.get("final_cumulative_mb")
         comm_cell = fmt_number(comm.get("mean"), 1, siunitx) if comm is not None else MISSING
+        acc = metrics.get("selected_test_accuracy")
+        acc_cell = MISSING
+        if acc is not None and _as_float(acc.get("mean")) is not None:
+            std = _as_float(acc.get("std"))
+            acc_cell = fmt_mean_std(100.0 * _as_float(acc.get("mean")),
+                                    100.0 * std if std is not None else None, 2, siunitx)
         body.append(_row(["{}N {} {}".format(n_nodes, dist_label(dist), name),
-                          time_cell, comm_cell]))
+                          time_cell, comm_cell, acc_cell]))
 
     return latex_table(
-        column_spec="lcc",
+        column_spec="lccc",
         header_lines=header,
         body_lines=body,
         caption="Measured Total Training Time, Group-Level Split, Wired Gigabit Ethernet "
                 "(3 Rounds)",
         label="tab:time",
-        note="Time: mean $\\pm$ std [95\\% CI] ($n$ seeds) of the server wall-clock time. "
-             "Communication: measured cumulative payload over the run. Only revision runs "
+        small=True,
+        note="Time: mean $\\pm$ std [95\\% CI] ($n$ seeds) of the server wall-clock time "
+             "excluding the report-only test evaluation. "
+             "Communication: measured cumulative payload over the run. Test accuracy: at the "
+             "round selected by the lowest weighted validation loss. Only revision runs "
              "(group-level split, wired Gigabit Ethernet) are included; v1 timings (WiFi, "
              "image-level split) are not comparable and are omitted. Produced from "
              "\\texttt{summary\\_table.csv}.",

@@ -91,7 +91,7 @@ def test_two_client_run_writes_v3_results(tmp_path, strategy):
     assert [d["round"] for d in res["losses_distributed"]] == [1, 2]
     assert [d["round"] for d in res["metrics_distributed"]["accuracy"]] == [1, 2]
     # v3 keys
-    assert res["results_schema_version"] == 2 and res["tags"] == ["unit_test"]
+    assert res["results_schema_version"] == 3 and res["tags"] == ["unit_test"]
     assert res["proximal_mu"] == (0.01 if strategy.startswith("fedprox") else 0.0)
     assert set(res["client_config"]) == {"node_a", "node_b"}
     assert res["client_config"]["node_a"]["local_epochs"] == 1
@@ -118,3 +118,37 @@ def test_two_client_run_writes_v3_results(tmp_path, strategy):
     assert res["rounds"][1]["cumulative_communication_bytes"] == 2 * 3 * rounds * res["model_payload_bytes"]
     assert res["total_communication_bytes"] == res["rounds"][-1]["cumulative_communication_bytes"]
     assert "NaN" not in (out_dir / "results.json").read_text()
+
+    # schema 3: validation and test metric sets, per client and weighted-global
+    for node_row in r1["evaluate"]["clients"].values():
+        for k in ("val_accuracy", "val_loss", "val_mcc", "val_n_examples", "val_confusion_matrix",
+                  "test_accuracy", "test_loss", "test_mcc", "test_n_examples",
+                  "test_confusion_matrix", "val_eval_time_s", "test_eval_time_s", "eval_wall_s"):
+            assert k in node_row, k
+        assert node_row["accuracy"] == node_row["val_accuracy"]
+        assert node_row["num_examples"] == node_row["val_n_examples"]
+    agg1 = r1["evaluate"]["aggregate"]
+    for k in ("val_accuracy", "test_accuracy", "test_balanced_accuracy", "pooled_test_accuracy",
+              "test_n_examples_total", "val_n_examples_total"):
+        assert k in agg1, k
+    # Flower's distributed loss is the validation loss
+    assert res["losses_distributed"][0]["loss"] == pytest.approx(agg1["val_loss"])
+    # model selection from validation losses; timing without the test pass
+    sel = res["model_selection"]
+    assert sel["selected_round"] in (1, 2)
+    losses = {int(r): v for r, v in sel["val_loss_by_round"].items()}
+    assert sel["selected_round"] == min(losses, key=lambda r: (losses[r], r))
+    assert sel["selected_round_test"]["accuracy"] == pytest.approx(
+        res["rounds"][sel["selected_round"] - 1]["evaluate"]["aggregate"]["test_accuracy"])
+    for entry in res["rounds"]:
+        t = entry["timing"]
+        assert t["round_time_s"] == pytest.approx(t["round_wall_s"] - t["test_eval_overhead_s"],
+                                                  abs=2e-3)
+        assert t["test_eval_overhead_s"] > 0
+    assert res["total_time_excl_test_s"] < res["total_time_s"]
+
+    # and the analysis reads it back under the declared rule
+    from scripts.analyze_results import load_run
+    run = load_run(str(out_dir), warn=False)
+    assert run["headline_source"] == "selected_round_test"
+    assert run["selected_round"] == sel["selected_round"]

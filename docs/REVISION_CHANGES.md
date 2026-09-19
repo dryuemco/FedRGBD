@@ -258,6 +258,52 @@ credentials) so that the P0 leakage/re-split chain can run (see the 2026-09-17 s
 * Old result files carry no timing/communication per round; the analysis script marks
   those curves as estimated.  New runs record them exactly.
 
+## Model-selection protocol (2026-09-19, before the 98-run matrix)
+
+Declared rule (paper §III, "Model Selection and Use of the Test Split"): the reported
+model is the one from the round with the lowest validation loss, aggregated across
+clients weighted by client validation-set size; ties go to the earlier round; test data
+is used exactly once per run, to report the metrics of that round, and never influences
+selection.  Previously `analyze_results.py` reported `best_accuracy` as the maximum
+validation accuracy over rounds, i.e. a post-hoc choice of round by the reported metric.
+
+* New `src/evaluation/model_selection.py`: `weighted_val_loss()`, `select_round()` --
+  the single implementation used by the server and the analysis.  A round in which any
+  client's validation loss is non-finite is not eligible.
+* `src/fl/client.py`: `evaluate()` scores the validation split, then the test split.
+  Returned loss / `num_examples` and the unprefixed metric keys are validation (as
+  before); new `val_*` and `test_*` metric sets incl. `*_n_examples` and confusion
+  counts; timers `val_eval_time_s`, `test_eval_time_s`, `eval_time_s` (loading +
+  validation, excludes the test pass) and `eval_wall_s`.  `--eval_split` removed.
+* `src/fl/server.py` (results schema 3): per-namespace aggregation (`test_*` weighted by
+  test-set size, `pooled_val_*`, `pooled_test_*`, `*_n_examples_total`), nested
+  `val_/test_confusion_matrix` per client, per-round `weighted_val_loss` and `timing`
+  (`round_time_s` = round wall-clock minus the test pass's critical-path share
+  `max_k(eval_wall_s) - max_k(eval_wall_s - test_eval_time_s)`), `elapsed_excl_test_s`,
+  and top-level `model_selection`, `total_time_excl_test_s`,
+  `total_test_eval_overhead_s`, `timing_definition`.  All v2/v3 keys kept.
+* `scripts/analyze_results.py`: `best_accuracy` removed.  `select_fl_round()` recomputes
+  the selection from per-client validation losses and then reads that round's test
+  metrics.  Headline metric families never share a column: `selected_test_<m>`
+  (revision FL), `final_<m>` (baselines, final-epoch test), `v1_final_round_accuracy`
+  (FL runs without per-round test metrics).  Curves and `metrics_final` never contain
+  test keys.  `total_time_s` of schema-3 runs is the test-free time
+  (`total_time_raw_s` keeps the raw one).  New `per_client_selected.csv`.
+  **Bug fix:** pairwise tests and the Friedman test were keyed by distribution only, so
+  v1 and revision runs with the same strategy, distribution and seed were averaged
+  together (the committed `analysis/pairwise_tests.csv` / `friedman.csv` are affected;
+  the paper's `tab:stats` predates the revision baselines and is not).  They are now keyed
+  by (protocol, distribution); the v1 values of `tab:stats` and the Friedman sentence are reproduced exactly.
+* `scripts/export_latex_tables.py`: full-metric tables use `selected_test_<m>` for FL
+  rows; `time.tex` gains the selected-round test accuracy; pairwise / Friedman tables are
+  grouped by protocol.
+* Paper: new §III subsection with the rule; evaluation and profiling text; captions of
+  the revision tables ("Test ... at the Selected Round"); the `tab:v1_ci` footnote labels the v1
+  federated rows as final-round validation accuracy; limitations updated.
+* Tests: `tests/test_model_selection.py`, `tests/test_fl_server_selection.py`,
+  `tests/test_analyze_selection.py`, new client tests; `tests/test_fl_end_to_end.py`
+  checks schema 3 over a real Flower run.
+
 ## Hardware-independent follow-up (2026-09-17)
 
 Everything below was done on the desktop without the Jetson testbed; 227 CPU tests pass

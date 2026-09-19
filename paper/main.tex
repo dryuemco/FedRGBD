@@ -330,9 +330,21 @@ Local-only & No aggregation (lower reference) & -- \\
 \end{tabular}
 \end{table}
 
-Default hyperparameters across FL experiments: three communication rounds, five local epochs per round, batch size~8 (constrained by the 8\,GB shared GPU memory), learning rate $10^{-3}$ with the Adam optimizer, and full client participation. Evaluation is performed after every round on each node's validation split, as in v1; the test split is used only for the final model and for the cross-sensor study. Deviations from these defaults are exactly the sweeps of Section~\ref{sec:sensitivity}.
+Default hyperparameters across FL experiments: three communication rounds, five local epochs per round, batch size~8 (constrained by the 8\,GB shared GPU memory), learning rate $10^{-3}$ with the Adam optimizer, and full client participation. After every round the aggregated model is evaluated on each node's validation split and, separately, on its test split; how the two evaluations may be used is fixed in advance in Section~\ref{sec:selection}. Deviations from these defaults are exactly the sweeps of Section~\ref{sec:sensitivity}.
 
 \textbf{\fedprox{} implementation detail:} The proximal term of~\eqref{eq:fedprox} is computed in the client-side training loop. To avoid GPU out-of-memory errors on the memory-constrained Jetson platform, the global model parameters $w^t$ are stored on CPU and transferred to GPU per-layer during the proximal-term computation. This memory optimisation is necessary for real deployment and is one source of the wall-clock overhead quantified in Section~\ref{sec:res_time}.
+
+\subsection{Model Selection and Use of the Test Split}
+\label{sec:selection}
+
+The model-selection rule was declared before any federated run of the revision was executed. \emph{The reported model is the one from the round with the lowest validation loss, aggregated across clients weighted by client validation-set size. Ties are broken toward the earlier round. Test data is used exactly once per run, to report the metrics of that selected round, and never influences selection.} Formally, with $n_k^{\mathrm{val}}$ the size of client $k$'s validation split and $\ell_k^{\mathrm{val}}(r)$ its validation loss after round $r$,
+\[
+L^{\mathrm{val}}(r) \;=\; \frac{\sum_{k} n_k^{\mathrm{val}}\, \ell_k^{\mathrm{val}}(r)}{\sum_{k} n_k^{\mathrm{val}}},
+\]
+\[
+r^{*} \;=\; \min\Bigl\{\, r \;:\; L^{\mathrm{val}}(r) = \min_{r'} L^{\mathrm{val}}(r') \Bigr\},
+\]
+and a round in which any client's validation loss is not finite is not eligible. Each client evaluates the validation split first and the test split afterwards, with the model in inference mode; the loss and example count returned to the server, and therefore every quantity the server aggregates or the rule reads, are the validation ones. The test metrics of every round are recorded, but only those of round $r^{*}$ are reported; they are not used for early stopping, for aggregation weights, or for any other decision. No maximum over rounds is reported anywhere in this paper. Per-round quantities (convergence curves, round-1 accuracy, per-round confusion matrices) are validation quantities. The centralized and local-only references train for a fixed budget of 15 epochs without selection and report the test metrics of the final epoch, so they too use the test split once. The v1 federated results of Section~\ref{sec:res_v1} predate this protocol: they record no per-round test metrics and are reported as final-round validation accuracy, labelled as such.
 
 \subsection{Hyperparameter Sensitivity Protocol}
 \label{sec:sensitivity}
@@ -408,7 +420,11 @@ Comparing strategies at equal round counts hides the fact that a round costs dif
 B(R) \;=\; 2\,R\,K\,|w| ,
 \label{eq:comm}
 \end{equation}
-which for \fedbn{} is reduced by the fraction of parameters held out of aggregation by~\eqref{eq:fedbn_b}. Results are therefore presented in three panels: accuracy versus round, accuracy versus elapsed wall-clock time, and accuracy versus cumulative megabytes transmitted. The time and volume axes are measured for every run of the revised protocol. The v1 runs are not placed on these axes: they predate the per-round instrumentation and were executed over a different network (WiFi) and under a different partition, so their wall-clock times are not comparable with those of the revision runs (Section~\ref{sec:res_time}).
+which for \fedbn{} is reduced by the fraction of parameters held out of aggregation by~\eqref{eq:fedbn_b}. Each client times three phases separately: local training, the validation pass and the test pass. Because the test pass exists only for reporting (Section~\ref{sec:selection}), it is excluded from every reported time. Clients evaluate in parallel, so the test pass lengthens the evaluation phase of a round by its share of the critical path; with $e_k$ the evaluation wall-clock of client $k$ and $\tau_k$ its test-pass time, the server reports the round time
+\[
+T_{\mathrm{round}} \;=\; T_{\mathrm{round}}^{\mathrm{wall}} \;-\; \Bigl(\max_k e_k \;-\; \max_k \bigl(e_k - \tau_k\bigr)\Bigr),
+\]
+where $T_{\mathrm{round}}^{\mathrm{wall}}$ is the measured server wall-clock of the round. All elapsed-time axes and Table~\ref{tab:time} use this test-free time; the raw wall-clock is kept in the results files. Results are therefore presented in three panels: accuracy versus round, accuracy versus elapsed wall-clock time, and accuracy versus cumulative megabytes transmitted. The time and volume axes are measured for every run of the revised protocol. The v1 runs are not placed on these axes: they predate the per-round instrumentation and were executed over a different network (WiFi) and under a different partition, so their wall-clock times are not comparable with those of the revision runs (Section~\ref{sec:res_time}).
 
 \subsection{Leave-One-Scene-Out Cross-Sensor Protocol}
 \label{sec:loso}
@@ -459,7 +475,7 @@ Table~\ref{tab:main_results} presents the global validation accuracy across comm
 
 \begin{table}[t]
 \centering
-\caption{Final Accuracy Under the Image-Level Split, Aggregated Over Seeds (mean $\pm$ std, 95\% $t$-CI of the mean)}
+\caption{v1 Final-Round Accuracy Under the Image-Level Split, Aggregated Over Seeds (mean $\pm$ std, 95\% $t$-CI of the mean)}
 \label{tab:v1_ci}
 \begin{tabular}{@{}llcl@{}}
 \toprule
@@ -483,7 +499,7 @@ Table~\ref{tab:main_results} presents the global validation accuracy across comm
 \bottomrule
 \end{tabular}
 \vspace{2pt}
-\footnotesize{Image-level split (v1 protocol). $n$ is the number of completed seeds; the 3-node \fedavg{} IID cell and several v1 cells have fewer than three usable seeds, which is why the intervals are wide. $^{\dagger}$Interval truncated at the 100\% boundary; the raw $t$-interval exceeds~1. Values produced by \texttt{scripts/analyze\_results.py}. \todo{Replace this table with the $n=5$ group-level-split results once the seed-extension block has been executed; keep the present table as the image-level-split reference.}}
+\footnotesize{Image-level split (v1 protocol). Federated rows: final-round (R3) global \emph{validation} accuracy; the v1 runs recorded no per-round test metrics and predate the selection rule of Section~\ref{sec:selection}. Centralized and local-only rows: final-epoch test accuracy. $n$ is the number of completed seeds; the 3-node \fedavg{} IID cell and several v1 cells have fewer than three usable seeds, which is why the intervals are wide. $^{\dagger}$Interval truncated at the 100\% boundary; the raw $t$-interval exceeds~1. Values produced by \texttt{scripts/analyze\_results.py}. \todo{Replace this table with the $n=5$ group-level-split results once the seed-extension block has been executed; keep the present table as the image-level-split reference.}}
 \end{table}
 
 \subsubsection{FedProx Proximal Term Analysis}
@@ -629,7 +645,7 @@ Worst per-node test leak rate (\%) & 99.88 & 0.00 \\
 
 \begin{table}[t]
 \centering
-\caption{Effect of the Partitioning Protocol on Final Test Accuracy (3-Node, mean $\pm$ std over seeds)}
+\caption{Effect of the Partitioning Protocol on the Reported Accuracy (3-Node, mean $\pm$ std over seeds)}
 \label{tab:protocol_effect}
 \begin{tabular}{@{}llcc@{}}
 \toprule
@@ -651,7 +667,7 @@ Worst per-node test leak rate (\%) & 99.88 & 0.00 \\
 \bottomrule
 \end{tabular}
 \vspace{2pt}
-\footnotesize{The two columns are \emph{not} paired: they use different partitions and different seed sets. Image-level values are the v1 results of Table~\ref{tab:v1_ci} (validation accuracy for the federated rows, test accuracy for the baselines); group-level baselines are test accuracy under the audited partition (Table~\ref{tab:group_counts}). Local-only Non-IID accuracy is inflated by the class imbalance of each node's own test split; balanced accuracy is $87.9 \pm 2.3$ against $94.5 \pm 1.7$ for the centralized model (Table~\ref{tab:fullmetrics}). \todo{Fill the federated group-level cells from the \texttt{rev\_*} Jetson runs.}}
+\footnotesize{The two columns are \emph{not} paired: they use different partitions and different seed sets. Image-level values are the v1 results of Table~\ref{tab:v1_ci} (validation accuracy for the federated rows, test accuracy for the baselines); group-level baselines are final-epoch test accuracy under the audited partition (Table~\ref{tab:group_counts}), and group-level federated cells are test accuracy at the round selected by the rule of Section~\ref{sec:selection}. Local-only Non-IID accuracy is inflated by the class imbalance of each node's own test split; balanced accuracy is $87.9 \pm 2.3$ against $94.5 \pm 1.7$ for the centralized model (Table~\ref{tab:fullmetrics}). \todo{Fill the federated group-level cells from the \texttt{rev\_*} Jetson runs.}}
 \end{table}
 
 \subsection{Full Metric Set and Per-Client Confusion Matrices}
@@ -661,7 +677,7 @@ The two reference conditions have been run under the audited protocol (Table~\re
 
 \begin{table*}[t]
 \centering
-\caption{Final Test-Set Metrics Under the Group-Level Split (3-Node, mean $\pm$ std, $n=5$ Seeds; Percentages Except MCC)}
+\caption{Test-Set Metrics Under the Group-Level Split (3-Node, mean $\pm$ std, $n=5$ Seeds; Percentages Except MCC)}
 \label{tab:fullmetrics}
 \begin{tabular}{@{}llccccccc@{}}
 \toprule
@@ -683,12 +699,12 @@ The two reference conditions have been run under the audited protocol (Table~\re
 \bottomrule
 \end{tabular}
 \vspace{2pt}
-\parbox{\textwidth}{\footnotesize Centralized: pooled training data, pooled test split. Local-only: each node trained and tested on its own split, metrics averaged over the three nodes (metrics defined in Eqs.~\eqref{eq:acc}--\eqref{eq:auc}). Under label skew the local-only \emph{accuracy} matches the centralized model while its specificity and MCC fall, because a node that sees 80--88\% fire rarely predicts no-fire and is evaluated on an equally skewed test split; balanced accuracy and MCC are the metrics that expose this. Both baselines were trained on a desktop GPU with the Jetson hyperparameters (batch~8, Adam $10^{-3}$, 15 epochs), so their timing is not comparable to the federated rows. \todo{Fill the federated rows from the \texttt{rev\_*} Jetson runs (\texttt{analysis/summary\_table.md}) and add the 95\% CIs.}}
+\parbox{\textwidth}{\footnotesize Federated rows: test metrics at the round selected by the rule of Section~\ref{sec:selection}; centralized and local-only rows: test metrics of the final epoch. Centralized: pooled training data, pooled test split. Local-only: each node trained and tested on its own split, metrics averaged over the three nodes (metrics defined in Eqs.~\eqref{eq:acc}--\eqref{eq:auc}). Under label skew the local-only \emph{accuracy} matches the centralized model while its specificity and MCC fall, because a node that sees 80--88\% fire rarely predicts no-fire and is evaluated on an equally skewed test split; balanced accuracy and MCC are the metrics that expose this. Both baselines were trained on a desktop GPU with the Jetson hyperparameters (batch~8, Adam $10^{-3}$, 15 epochs), so their timing is not comparable to the federated rows. \todo{Fill the federated rows from the \texttt{rev\_*} Jetson runs (\texttt{analysis/summary\_table.md}) and add the 95\% CIs.}}
 \end{table*}
 
 \begin{table}[t]
 \centering
-\caption{Per-Client Metrics at the Final Round Under Manual Label Skew (Group-Level Split, $n=5$)}
+\caption{Per-Client Test Metrics at the Selected Round Under Manual Label Skew (Group-Level Split, $n=5$)}
 \label{tab:perclient_metrics}
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}llcccc@{}}
@@ -712,12 +728,12 @@ The two reference conditions have been run under the audited protocol (Table~\re
 \bottomrule
 \end{tabular}
 \vspace{2pt}
-\footnotesize{\todo{Fill from the per-client rows of \texttt{results.json}; add rounds 1 and 3 so that the recovery of the minority-class sensitivity over rounds is visible.}}
+\footnotesize{\todo{Fill from the per-client rows of \texttt{results.json}; add rounds 1 and 3 on the \emph{validation} split so that the recovery of the minority-class sensitivity over rounds is visible; test metrics are reported only at the selected round (Section~\ref{sec:selection}).}}
 \end{table}
 
 \begin{figure}[t]
 \centering
-\todo{Figure: per-client confusion matrices (3 nodes $\times$ \{round 1, final round\}) for \fedavg{}, \fedprox{}~0.01 and \fedbn{} under manual label skew, normalised by true class. Produced by \texttt{scripts/analyze\_results.py}.}
+\todo{Figure: per-client confusion matrices (3 nodes $\times$ \{round 1 on validation, selected round on test\}) for \fedavg{}, \fedprox{}~0.01 and \fedbn{} under manual label skew, normalised by true class. Produced by \texttt{scripts/analyze\_results.py}.}
 \caption{Per-client confusion matrices under manual label skew, showing which class each client fails on in the first round and to what extent aggregation repairs it.}
 \label{fig:confmat}
 \end{figure}
@@ -729,7 +745,7 @@ Table~\ref{tab:dirichlet} reports the reference conditions on the three Dirichle
 
 \begin{table}[t]
 \centering
-\caption{Final Balanced Accuracy (\%) Under Dirichlet Label Skew (3-Node, Group-Level Split, mean [95\% CI], $n=3$ Seeds)}
+\caption{Test Balanced Accuracy (\%) at the Selected Round Under Dirichlet Label Skew (3-Node, Group-Level Split, mean [95\% CI], $n=3$ Seeds)}
 \label{tab:dirichlet}
 \begin{tabular}{@{}lccc@{}}
 \toprule
@@ -760,7 +776,7 @@ Table~\ref{tab:lowdata} reports the reference conditions at $\rho \in \{1, 0.05,
 
 \begin{table}[t]
 \centering
-\caption{Final Balanced Accuracy (\%) in the Low-Data Regime (3-Node, Group-Level Split, mean [95\% CI])}
+\caption{Test Balanced Accuracy (\%) at the Selected Round in the Low-Data Regime (3-Node, Group-Level Split, mean [95\% CI])}
 \label{tab:lowdata}
 \setlength{\tabcolsep}{3pt}
 \begin{tabular}{@{}llccc@{}}
@@ -789,7 +805,7 @@ Table~\ref{tab:lowdata} reports the reference conditions at $\rho \in \{1, 0.05,
 
 \begin{table}[t]
 \centering
-\caption{Sensitivity of Final Balanced Accuracy to the Local and Federation Hyperparameters (3-Node, Non-IID, mean [95\% CI])}
+\caption{Sensitivity of the Selected-Round Test Balanced Accuracy to the Local and Federation Hyperparameters (3-Node, Non-IID, mean [95\% CI])}
 \label{tab:sensitivity}
 \begin{tabular}{@{}llc@{}}
 \toprule
@@ -834,7 +850,7 @@ Under the v1 three-round budget, \fedbn{} was the weakest method in both distrib
 \label{tab:fedbn10}
 \begin{tabular}{@{}llcc@{}}
 \toprule
-\textbf{Dist.} & \textbf{Method} & \textbf{R3 bal.\ acc.} & \textbf{R10 bal.\ acc.} \\
+\textbf{Dist.} & \textbf{Method} & \textbf{3-round run} & \textbf{10-round run} \\
 \midrule
 \multirow{2}{*}{IID}
  & \fedavg{} & \PHs & \PHs \\
@@ -846,7 +862,7 @@ Under the v1 three-round budget, \fedbn{} was the weakest method in both distrib
 \bottomrule
 \end{tabular}
 \vspace{2pt}
-\footnotesize{\todo{Fill from the \texttt{long\_horizon\_fedbn} block. State explicitly whether the \fedbn{}--\fedavg{} difference at R10 has a CI that excludes zero; if it does not, the conclusion is that ten rounds are still insufficient to separate them, not that they are equivalent.}}
+\footnotesize{Test balanced accuracy at the round selected by the rule of Section~\ref{sec:selection} within each run's budget ($r^{*} \le 3$ and $r^{*} \le 10$). \todo{Fill from the \texttt{long\_horizon\_fedbn} block. State explicitly whether the \fedbn{}--\fedavg{} difference at R10 has a CI that excludes zero; if it does not, the conclusion is that ten rounds are still insufficient to separate them, not that they are equivalent.}}
 \end{table}
 
 \subsection{Time- and Communication-Normalised Comparison}
@@ -861,17 +877,17 @@ The distinction between cost per round and cost per second matters for the inter
 \centering
 \caption{Measured Total Training Time, Group-Level Split, Wired Gigabit Ethernet (3 Rounds)}
 \label{tab:time}
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{@{}lcc@{}}
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{@{}lccc@{}}
 \toprule
-\textbf{Configuration} & \textbf{Time (min)} & \textbf{Comm.\ (MB)} \\
+\textbf{Configuration} & \textbf{Time (min)} & \textbf{Comm.\ (MB)} & \textbf{Test acc.\ (\%)} \\
 \midrule
-2N IID \fedavg{} & \PH & \PH \\
-2N Non-IID \fedavg{} & \PH & \PH \\
-3N IID \fedavg{} & \PH & \PH \\
-3N Non-IID \fedavg{} & \PH & \PH \\
-3N Non-IID \fedprox{} $\mu$=0.01 & \PH & \PH \\
-3N Non-IID \fedbn{} & \PH & \PH \\
+2N IID \fedavg{} & \PH & \PH & \PH \\
+2N Non-IID \fedavg{} & \PH & \PH & \PH \\
+3N IID \fedavg{} & \PH & \PH & \PH \\
+3N Non-IID \fedavg{} & \PH & \PH & \PH \\
+3N Non-IID \fedprox{} $\mu$=0.01 & \PH & \PH & \PH \\
+3N Non-IID \fedbn{} & \PH & \PH & \PH \\
 \bottomrule
 \end{tabular}
 \vspace{2pt}
@@ -969,7 +985,7 @@ We separate the findings by how far they can be carried.
 \subsection{Limitations}
 \label{sec:limitations}
 
-First, the federation has three clients with full participation; convergence dynamics at scale are outside the evidence of this study. Second, one dataset and one binary task are used, and the task is close to saturation under full data, which is why the low-data regime of Section~\ref{sec:lowdata} was added; even so, a single task cannot establish task-independence. Third, one backbone is evaluated; strategy rankings, and particularly the behaviour of \fedbn{}, depend on the normalisation structure of the architecture. Fourth, the main comparison uses a three-round budget, with a ten-round block only for \fedbn{}; nothing here describes asymptotic behaviour. Fifth, batch size is fixed at~8 by the device memory and is therefore not part of the sensitivity analysis, and the sweep varies one factor at a time, so interactions between $\mu$, $E$ and $\eta$ are not resolved. Sixth, the number of seeds is five, which yields wide confidence intervals; we consequently report intervals rather than significance verdicts and avoid equivalence claims. Seventh, the depth modality is not an input to the federated classifier, so sensor heterogeneity is characterised only in the separate centralised cross-sensor study. Eighth, per-round evaluation uses the validation split, as in v1; test-split numbers are reported only for final models.
+First, the federation has three clients with full participation; convergence dynamics at scale are outside the evidence of this study. Second, one dataset and one binary task are used, and the task is close to saturation under full data, which is why the low-data regime of Section~\ref{sec:lowdata} was added; even so, a single task cannot establish task-independence. Third, one backbone is evaluated; strategy rankings, and particularly the behaviour of \fedbn{}, depend on the normalisation structure of the architecture. Fourth, the main comparison uses a three-round budget, with a ten-round block only for \fedbn{}; nothing here describes asymptotic behaviour. Fifth, batch size is fixed at~8 by the device memory and is therefore not part of the sensitivity analysis, and the sweep varies one factor at a time, so interactions between $\mu$, $E$ and $\eta$ are not resolved. Sixth, the number of seeds is five, which yields wide confidence intervals; we consequently report intervals rather than significance verdicts and avoid equivalence claims. Seventh, the depth modality is not an input to the federated classifier, so sensor heterogeneity is characterised only in the separate centralised cross-sensor study. Eighth, per-round quantities are validation quantities; test-split numbers are reported once per run, for the round selected by the rule of Section~\ref{sec:selection} (the final epoch for the centralized and local-only references), which is itself chosen on validation loss only.
 
 A further limitation became visible only after the leakage audit: with whole sequences as the unit of assignment, the held-out test set of each partition consists of a few dozen sequences, and the centralized reference---trained on the same pooled frames---varies between $76.0$\% and $90.5$\% balanced accuracy across the three Dirichlet partitions (Table~\ref{tab:dirichlet}) and fluctuates by up to 20 points between epochs on the validation split. Every number reported under the group-level protocol is therefore conditional on the sequences that the partition (seed 42) holds out; the seed-level confidence intervals capture training randomness, not partition randomness. Repeating the study over several partition seeds is the natural remedy and is left to future work because of its cost on the testbed.
 

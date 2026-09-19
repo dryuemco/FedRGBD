@@ -147,6 +147,13 @@ Sonra `results/smoke` silinir (matris dizin adlarıyla çakışmaz ama temiz kal
   açıkça söyle; (b) son turdan sonra istemcileri `--eval_split test` ile bir kez daha
   bağlayıp 1 turluk "değerlendirme koşusu" yap. Öneri: (a) + subsample/Dirichlet için de aynı
   kural; gerekirse hakem cevabında (b)'yi ek olarak sun.
+  **Güncelleme (2026-09-19): bu karar değişti.** İstemciler artık her turda hem val hem
+  test üzerinde değerlendirir. Raporlanan model, doğrulama kaybı (istemci val boyutuyla
+  ağırlıklı) en düşük olan turdur; eşitlikte erken tur seçilir. Test yalnızca o tur için
+  raporlanır ve seçimi hiçbir şekilde etkilemez. Raporlanan tur süresi test geçişini
+  içermez. `--eval_split` kaldırıldı. Bkz. makale §III "Model Selection and Use of the
+  Test Split" ve `src/evaluation/model_selection.py`. Not: her tura bir test geçişi
+  eklendiği için §6.2'deki süre tahminleri tur başına yaklaşık bir val geçişi kadar artar.
 * **Eşik**: `--threshold 8` varsayılan; 2.1'deki histogramla teyit et ve makaleye yaz.
 * **Dirichlet `--dirichlet_min_size`**: varsayılan 10; α=0.1'de bir node'un çok küçük
   kalması normaldir, bu **istenen** zorluktur. Bunu kaldırma, sadece rapor et.

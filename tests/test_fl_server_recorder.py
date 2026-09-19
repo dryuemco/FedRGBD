@@ -129,7 +129,7 @@ def test_build_results_keeps_v2_keys_and_is_json_serialisable(tmp_path):
     assert res["metrics_distributed"]["accuracy"][0] == {"round": 1, "value": pytest.approx(res["rounds"][0]["evaluate"]["aggregate"]["accuracy"])}
     assert [d["round"] for d in res["losses_distributed"]] == [1, 2, 3]
     # v3 keys
-    assert res["results_schema_version"] == 2
+    assert res["results_schema_version"] == 3
     assert res["proximal_mu"] == 0.01
     assert res["tags"] == ["dirichlet_0.1"]
     assert res["model_payload_bytes"] == 6_000_000

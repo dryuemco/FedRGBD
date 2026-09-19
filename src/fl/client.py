@@ -5,6 +5,11 @@ v3 (NCAA revision): ``evaluate()`` returns the full metric set from
 specificity, F1, MCC, ROC-AUC, confusion matrix); ``fit()`` and ``evaluate()``
 report wall-clock time and the model payload bytes sent/received so the server
 can persist per-client, per-round cost measurements.  The model is unchanged.
+
+Model selection: every round ``evaluate()`` scores the global model on the
+validation split (``val_*`` keys, plus the unprefixed legacy keys) and then on
+the test split (``test_*`` keys, report only).  Selection uses validation only;
+see ``src/evaluation/model_selection.py``.
 """
 
 import argparse
@@ -69,7 +74,7 @@ def get_bn_indices(model):
 class FedRGBDClient(fl.client.NumPyClient):
     def __init__(self, data_dir, batch_size=16, lr=0.001, local_epochs=5,
                  device="cuda", seed=42, node_name=None, pretrained=True,
-                 img_size=224, eval_split="val"):
+                 img_size=224):
         self.device = torch.device(device if torch.cuda.is_available() else "cpu")
         self.hostname = socket.gethostname()
         self.data_dir = data_dir
@@ -79,7 +84,6 @@ class FedRGBDClient(fl.client.NumPyClient):
         self.lr = lr
         self.local_epochs = local_epochs
         self.seed = seed
-        self.eval_split = eval_split
         self._fedbn_mode = False
 
         set_seed(seed)
@@ -231,28 +235,57 @@ class FedRGBDClient(fl.client.NumPyClient):
         }
 
     def evaluate(self, parameters, config):
+        """Evaluate the round's global model on the validation AND the test split.
+
+        Model-selection protocol (paper, Section III): only the validation split
+        drives anything.  The returned loss and example count -- which Flower
+        aggregates into ``losses_distributed`` and which the server's selection
+        rule reads -- are the validation ones, and the unprefixed metric keys are
+        the validation metrics exactly as before.  The test split is evaluated
+        *after* validation, with the model in eval mode and no gradient, and is
+        only reported, under ``test_*`` keys; it feeds no training, weighting or
+        selection decision.
+
+        Timers: ``val_eval_time_s`` / ``test_eval_time_s`` are the two loader
+        passes; ``eval_time_s`` is the evaluation cost that counts toward the
+        reported round time (parameter loading + validation, *excluding* the test
+        pass); ``eval_wall_s`` is the whole call including the test pass.
+        """
         eval_start = time.perf_counter()
         bytes_down = payload_bytes(parameters)
         server_round = int(config.get("server_round", 0))
         self.set_parameters(parameters)
 
-        loader = self.test_loader if self.eval_split == "test" else self.val_loader
-        metrics = self.evaluate_loader(loader)
-        eval_time = time.perf_counter() - eval_start
+        val_start = time.perf_counter()
+        val_metrics = self.evaluate_loader(self.val_loader)
+        val_eval_time = time.perf_counter() - val_start
+        eval_time = time.perf_counter() - eval_start  # reported: excludes the test pass
 
-        total = int(metrics["n_examples"])
-        avg_loss = float(metrics["loss"]) if metrics["loss"] is not None else 0.0
-        print(f"  [{self.hostname}] Eval r{server_round}: loss={avg_loss:.4f}, "
-              f"{format_metrics(metrics)}, time={eval_time:.1f}s")
+        test_start = time.perf_counter()
+        test_metrics = self.evaluate_loader(self.test_loader)
+        test_eval_time = time.perf_counter() - test_start
+        eval_wall = time.perf_counter() - eval_start
 
-        flat = to_flower_metrics(metrics)
+        total = int(val_metrics["n_examples"])
+        avg_loss = float(val_metrics["loss"]) if val_metrics["loss"] is not None else 0.0
+        print(f"  [{self.hostname}] Eval r{server_round} (val): loss={avg_loss:.4f}, "
+              f"{format_metrics(val_metrics)}, time={val_eval_time:.1f}s")
+        print(f"  [{self.hostname}] Eval r{server_round} (test, report only): "
+              f"{format_metrics(test_metrics)}, time={test_eval_time:.1f}s")
+
+        flat = to_flower_metrics(val_metrics)               # v3 keys = validation, unchanged
+        flat.update(to_flower_metrics(val_metrics, prefix="val_"))
+        flat.update(to_flower_metrics(test_metrics, prefix="test_"))
         flat.update({
             "hostname": self.hostname,
             "node_name": self.node_name,
             "server_round": server_round,
-            "eval_split": self.eval_split,
+            "eval_split": "val",               # the split behind loss / num_examples / unprefixed keys
             "num_examples": total,
             "eval_time_s": eval_time,
+            "val_eval_time_s": val_eval_time,
+            "test_eval_time_s": test_eval_time,
+            "eval_wall_s": eval_wall,
             "payload_bytes_down": bytes_down,
         })
         return avg_loss, total, flat
@@ -281,8 +314,6 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--node_name", default=None,
                         help="Client identifier for results.json (default: basename of --data_dir)")
-    parser.add_argument("--eval_split", default="val", choices=["val", "test"],
-                        help="Split evaluated every round (val = paper protocol)")
     args = parser.parse_args()
 
     print("=" * 60)
@@ -292,7 +323,7 @@ def main():
     print(f"  Batch: {args.batch_size}, LR: {args.lr}")
     print(f"  Local epochs: {args.local_epochs}")
     print(f"  Seed: {args.seed}")
-    print(f"  Eval split: {args.eval_split}")
+    print(f"  Eval: val (selection) + test (report only), every round")
     print("=" * 60)
 
     client = FedRGBDClient(
@@ -302,7 +333,6 @@ def main():
         local_epochs=args.local_epochs,
         seed=args.seed,
         node_name=args.node_name,
-        eval_split=args.eval_split,
     )
 
     fl.client.start_client(
