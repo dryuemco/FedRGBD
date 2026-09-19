@@ -262,9 +262,10 @@ credentials) so that the P0 leakage/re-split chain can run (see the 2026-09-17 s
 
 Declared rule (paper §III, "Model Selection and Use of the Test Split"): the reported
 model is the one from the round with the lowest validation loss, aggregated across
-clients weighted by client validation-set size; ties go to the earlier round; test data
-is used exactly once per run, to report the metrics of that round, and never influences
-selection.  Previously `analyze_results.py` reported `best_accuracy` as the maximum
+clients weighted by client validation-set size; ties go to the earlier round. Test
+metrics are computed every round for logging but never influence model selection, which
+uses the aggregated validation loss only; the reported test metrics are those of the
+selected round.  Previously `analyze_results.py` reported `best_accuracy` as the maximum
 validation accuracy over rounds, i.e. a post-hoc choice of round by the reported metric.
 
 * New `src/evaluation/model_selection.py`: `weighted_val_loss()`, `select_round()` --

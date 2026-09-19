@@ -58,6 +58,16 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
 6. The default (no-flag) code path of `data_splitter.py` is pinned bit-identical to the original
    submission by a regression test. Changes must stay behind a flag.
 
+## Model selection (declared rule — use this wording, do not paraphrase it)
+
+The reported model is the one from the round (baselines: epoch) with the lowest validation
+loss, aggregated across clients weighted by client validation-set size; ties are broken
+toward the earlier round. Test metrics are computed every round for logging but never
+influence model selection, which uses the aggregated validation loss only; the reported test
+metrics are those of the selected round. Never report a maximum over rounds, and never write
+that the test set is "used once": it is evaluated every round. Implementation:
+`src/evaluation/model_selection.py`.
+
 ## Why the protocol changed
 
 A near-duplicate audit of FLAME found that **99.6 % of validation/test images had a near-duplicate

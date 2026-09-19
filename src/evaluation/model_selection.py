@@ -3,10 +3,11 @@
 Rule (paper, Section III, "Model selection"):
 
     The reported model is the one from the round with the lowest validation
-    loss, aggregated across clients weighted by client validation-set size.
-    Ties are broken toward the earlier round.  Test data is used exactly once
-    per run, to report the metrics of that selected round, and never
-    influences selection.
+    loss, aggregated across clients weighted by client validation-set size;
+    ties are broken toward the earlier round.  Test metrics are computed every
+    round for logging but never influence model selection, which uses the
+    aggregated validation loss only; the reported test metrics are those of
+    the selected round.
 
 This module is the single implementation of that rule.  ``src/fl/server.py``
 uses it to record ``model_selection`` in ``results.json`` and
@@ -22,8 +23,9 @@ from typing import Iterable, Mapping, Optional, Tuple
 SELECTION_RULE = "min_weighted_val_loss_earliest_round"
 SELECTION_RULE_TEXT = (
     "round with the lowest validation loss, aggregated across clients weighted by "
-    "client validation-set size; ties broken toward the earlier round; test metrics "
-    "are reported for that round only and never influence selection"
+    "client validation-set size; ties broken toward the earlier round; test metrics are "
+    "computed every round for logging but never influence selection; the reported test "
+    "metrics are those of the selected round"
 )
 
 

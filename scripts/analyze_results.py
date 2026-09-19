@@ -23,7 +23,8 @@ Headline numbers (never mixed in one column):
 
 * revision FL runs   ``selected_test_<m>``: test metrics of the round with the lowest
   validation loss weighted by client validation-set size (earliest round on ties),
-  ``src/evaluation/model_selection.py``.  The test split is read at that round only.
+  ``src/evaluation/model_selection.py``.  Test metrics exist for every round (logged);
+  only the selected round's are reported.
 * baselines          ``final_<m>``: final-epoch test metrics (fixed epoch budget).
 * v1 FL runs         ``v1_final_round_accuracy``: final-round *validation* accuracy;
   these runs have no per-round test metrics.
@@ -448,7 +449,8 @@ def _round_value_pairs(entries: Any, value_key: str) -> Dict[int, float]:
 
 def _is_test_key(name: str) -> bool:
     """Per-round test-split keys (schema 3).  They never enter curves or final metrics:
-    the test split is read only at the selected round (:func:`select_fl_round`)."""
+    of the per-round test metrics only the selected round's are reported
+    (:func:`select_fl_round`)."""
     return str(name).startswith(("test_", "pooled_test_"))
 
 
@@ -655,7 +657,7 @@ def select_fl_round(data: Dict[str, Any]) -> Dict[str, Any]:
     The selected round is ``argmin`` over rounds of the validation loss weighted by
     client validation-set size (earliest round on ties), recomputed here from the
     per-client validation losses -- see ``src/evaluation/model_selection.py``.
-    Only then are the test metrics of that one round read.  Runs without
+    Only then are the logged test metrics of that round read.  Runs without
     per-round test metrics (v1) return ``has_test = False``.
     """
     rounds = data.get("rounds") if isinstance(data.get("rounds"), list) else []
@@ -692,7 +694,7 @@ def select_fl_round(data: Dict[str, Any]) -> Dict[str, Any]:
     if selected is None:
         return out
     out["selected_val_loss"] = val_loss[selected]
-    chosen = entries[selected]                     # the one read of the test split
+    chosen = entries[selected]                     # only now are test metrics read
     out["test"] = _test_metrics(chosen["aggregate"])
     for node, row in sorted(chosen["clients"].items()):
         if isinstance(row, dict):

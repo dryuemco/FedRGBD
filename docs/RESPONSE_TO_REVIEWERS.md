@@ -43,6 +43,15 @@ new numbers are not comparable. We therefore retain the v1 results in a clearly 
 subsection ("Results Under the Image-Level-Split Protocol") and present the audited protocol
 separately, so that the effect of the protocol change is itself visible to the reader.
 
+**Note on model selection.** The revision declares its model-selection rule before the
+federated runs (new Section III, "Model Selection and Use of the Test Split"): the reported
+model is the one from the round with the lowest validation loss, aggregated across clients
+weighted by client validation-set size; ties are broken toward the earlier round. Test
+metrics are computed every round for logging but never influence model selection, which
+uses the aggregated validation loss only; the reported test metrics are those of the
+selected round. No maximum over rounds is reported. The centralized and local-only
+references are re-run under the same rule.
+
 **Note on the testbed network.** The testbed was disassembled and reassembled between the
 original submission and the revision. The v1 experiments ran over WiFi (IEEE 802.11ac); all
 revision experiments run on the same three Jetson nodes connected by wired Gigabit Ethernet
