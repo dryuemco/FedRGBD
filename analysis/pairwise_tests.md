@@ -2,6 +2,60 @@
 
 Paired by seed within each partitioning protocol and data distribution. Headline value per run: selected-round test metric (revision FL), final-epoch test metric (centralized / local-only), final-round validation metric (v1 FL). `d_paired` = mean(diff) / std(diff, ddof=1); `d_unpaired` uses the pooled standard deviation.
 
+## Distribution: `dirichlet_0.1` — protocol `group`
+
+| comparison | n | mean A | mean B | diff | d_paired | d_unpaired | Wilcoxon p | t-test p | notes |
+|---|---|---|---|---|---|---|---|---|---|
+| Centralized vs Local-only | 3 | 0.9154 | 0.9232 | -0.0079 | -0.227 | -0.327 | 1.0000 | 0.7324 |  |
+
+## Distribution: `dirichlet_0.5` — protocol `group`
+
+| comparison | n | mean A | mean B | diff | d_paired | d_unpaired | Wilcoxon p | t-test p | notes |
+|---|---|---|---|---|---|---|---|---|---|
+| Centralized vs Local-only | 3 | 0.8944 | 0.9122 | -0.0178 | -0.285 | -0.314 | 0.7500 | 0.6701 |  |
+
+## Distribution: `dirichlet_1` — protocol `group`
+
+| comparison | n | mean A | mean B | diff | d_paired | d_unpaired | Wilcoxon p | t-test p | notes |
+|---|---|---|---|---|---|---|---|---|---|
+| Centralized vs Local-only | 3 | 0.8698 | 0.9387 | -0.0689 | -0.740 | -1.123 | 0.5000 | 0.3283 |  |
+
+## Distribution: `iid` — protocol `group`
+
+| comparison | n | mean A | mean B | diff | d_paired | d_unpaired | Wilcoxon p | t-test p | notes |
+|---|---|---|---|---|---|---|---|---|---|
+| Centralized vs Local-only | 5 | 0.9339 | 0.8685 | 0.0654 | 4.200 | 5.089 | 0.0625 | 0.0007 |  |
+
+## Distribution: `iid_sub0.01` — protocol `group`
+
+| comparison | n | mean A | mean B | diff | d_paired | d_unpaired | Wilcoxon p | t-test p | notes |
+|---|---|---|---|---|---|---|---|---|---|
+| Centralized vs Local-only | 3 | 0.9122 | 0.8192 | 0.0929 | 1.582 | 2.800 | 0.2500 | 0.1114 |  |
+
+## Distribution: `iid_sub0.05` — protocol `group`
+
+| comparison | n | mean A | mean B | diff | d_paired | d_unpaired | Wilcoxon p | t-test p | notes |
+|---|---|---|---|---|---|---|---|---|---|
+| Centralized vs Local-only | 3 | 0.9218 | 0.8200 | 0.1018 | 4.246 | 3.802 | 0.2500 | 0.0180 |  |
+
+## Distribution: `non_iid_label` — protocol `group`
+
+| comparison | n | mean A | mean B | diff | d_paired | d_unpaired | Wilcoxon p | t-test p | notes |
+|---|---|---|---|---|---|---|---|---|---|
+| Centralized vs Local-only | 5 | 0.9428 | 0.9554 | -0.0126 | -0.612 | -0.978 | 0.3125 | 0.2430 |  |
+
+## Distribution: `non_iid_label_sub0.01` — protocol `group`
+
+| comparison | n | mean A | mean B | diff | d_paired | d_unpaired | Wilcoxon p | t-test p | notes |
+|---|---|---|---|---|---|---|---|---|---|
+| Centralized vs Local-only | 3 | 0.9393 | 0.8635 | 0.0758 | 0.830 | 1.198 | 0.2500 | 0.2872 |  |
+
+## Distribution: `non_iid_label_sub0.05` — protocol `group`
+
+| comparison | n | mean A | mean B | diff | d_paired | d_unpaired | Wilcoxon p | t-test p | notes |
+|---|---|---|---|---|---|---|---|---|---|
+| Centralized vs Local-only | 3 | 0.9196 | 0.9481 | -0.0285 | -1.653 | -1.832 | 0.2500 | 0.1034 |  |
+
 ## Distribution: `dirichlet_0.1` — protocol `group_final_epoch`
 
 | comparison | n | mean A | mean B | diff | d_paired | d_unpaired | Wilcoxon p | t-test p | notes |

@@ -282,17 +282,37 @@ resolution of accuracy-based comparisons"). Two harder conditions were added:
 *Reference conditions already executed (desktop GPU, Jetson hyperparameters).* The centralized
 and local-only baselines of every new condition have been run under the audited protocol (62
 runs: five seeds for IID and label skew, three for each Dirichlet and low-data partition).
-Removing the sequence leakage moves the centralized reference from 99.7 % to 90.9 ± 2.4 % (IID)
-and 94.2 ± 2.2 % (label skew) test accuracy and the local-only reference to 78.3 ± 5.0 % and
-94.1 ± 2.0 %, so the task is no longer saturated (Section IV-C, Table IX). Under label skew the
-local-only accuracy matches the centralized one while balanced accuracy (87.9 vs. 94.5 %) and
-MCC (0.78 vs. 0.88) do not — the metric issue the reviewer raised is now visible in our own
-data. Under Dirichlet skew the local-only balanced accuracy falls to 58.7 % at α = 0.1 (two
-clients never see a no-fire frame), 80.1 % at α = 0.5 and 87.7 % at α = 1.0 (Table XI). In the
+Removing the sequence leakage moves the centralized reference from 99.7 % to 93.4 ± 1.2 % (IID)
+and 94.3 ± 1.6 % (label skew) test accuracy and the local-only reference to 86.9 ± 1.4 % and
+95.5 ± 0.8 %, so the task is no longer saturated (Section IV-C, Table IX). Under label skew the
+local-only accuracy is now *higher* than the centralized one (95.5 vs. 94.3 %) while balanced
+accuracy (88.6 vs. 94.7 %) and MCC (0.81 vs. 0.88) go the other way — accuracy alone would rank
+the wrong method first, which is exactly the metric issue the reviewer raised, now visible in
+our own data. Under Dirichlet skew the local-only balanced accuracy falls to 56.2 % at α = 0.1
+(two clients never see a no-fire frame), 82.3 % at α = 0.5 and 94.4 % at α = 1.0 (Table XI). In the
 low-data regime the local-only reference loses little under IID and about eight points under
 label skew when a node is reduced to ~112 training frames, because the frame-level subsample
 still covers most of a node's sequences; we state this conservative reading in the manuscript.
 The federated rows of these tables await the Jetson runs.
+
+**Note on the size of the reference gap (raised by us).** Under the declared model-selection
+rule the centralized-to-local-only gap under IID is **6.5 percentage points** (93.4 % vs.
+86.9 %), not the 12.6 points that the same runs show when the final epoch is reported
+(90.9 % vs. 78.3 %). We report the 6.5-point figure, because selecting the epoch by validation
+loss is the protocol we declared in Section III-F and apply to every condition, federated and
+reference alike. We draw attention to the difference because it is a finding about reporting
+protocol: the effect is asymmetric, since the local-only models are the unstable ones across
+epochs — on node C the validation accuracy of the local-only IID baseline moves between 0.96
+and 0.42 in consecutive epochs while its training loss stays below 0.05 — so a final-epoch
+snapshot penalises them far more often than it penalises the pooled model, and final-epoch
+reporting therefore more than doubles the apparent advantage of pooling the data. Both
+protocols are kept in the repository under separate labels (`group` and `group_final_epoch` in
+`analysis/runs.csv`); the numbers above and in the manuscript are all produced by
+`scripts/analyze_results.py` and `scripts/export_latex_tables.py`, and the values typed into
+the manuscript tables are pinned to `analysis/summary_table.csv` by
+`tests/test_paper_numbers.py`. The narrower gap does not weaken the case for the audited
+protocol: it is the honest size of the band in which federation has to show its value, and it
+is measured under a rule fixed before the federated runs.
 
 ### R3.5 — "Report balanced accuracy, macro-F1, sensitivity, specificity, and per-client confusion matrices."
 

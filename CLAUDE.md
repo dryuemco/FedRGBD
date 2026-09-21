@@ -83,8 +83,17 @@ in some node's training split** under the original random image-level split: the
 frames, and 265 groups cover 99.7 % of the 47,992 images. The revision therefore assigns whole
 sequences (groups) to one node and one of train/val/test. 22 groups contain both fire and no-fire
 frames (42 % of the data) and are kept together regardless of label. Under the audited protocol the
-references drop from ~99.6 % to 90.9 % (centralized IID) and 78.3 % (local-only IID), which is what
-makes the reviewers' question — when does federation help — measurable at all.
+references drop from ~99.6 % to **93.4 % (centralized IID) and 86.9 % (local-only IID)** — a
+6.5-point band, which is what makes the reviewers' question — when does federation help —
+measurable at all.
+
+These two numbers, and every other reference number in the paper, come from
+`analysis/summary_table.csv` (protocol `group`), written by `scripts/analyze_results.py`; never
+re-type them from here, and re-read them after any run. The same runs reported at their **final
+epoch** instead (protocol `group_final_epoch`, kept for comparison) give 90.9 % and 78.3 %, a
+12.6-point band: final-epoch reporting more than doubles the apparent advantage of pooling,
+because the local-only models are the unstable ones across epochs. Report the `group` numbers;
+cite `group_final_epoch` only when the point *is* the reporting protocol.
 
 ## Current state (2026-09-17)
 

@@ -428,3 +428,39 @@ generator, so every such pass shifts the dropout masks of later training.
   per-round/per-epoch test pass would have added one draw per pass and made training
   differ from a run without it. The unguarded version (c98e34b) never produced
   experiment results: no FL run and no baseline was run with it.
+
+## Reference conditions move to the declared selection rule (2026-09-21)
+
+The 62 centralized / local-only baselines were re-run so that they follow the model-selection
+rule of `src/evaluation/model_selection.py` (commit 94e0349); the results landed in
+`results/rev_baselines_sel/` and had never been folded into `analysis/`. `analysis/runs.csv`
+still held only the older final-epoch runs, so every reference number in the paper was a
+final-epoch number.
+
+* **`analysis/` regenerated** with `scripts/analyze_results.py --results_dir results`, which
+  recurses into `results/rev_baselines_sel/`. The runs now carry two protocol labels: `group`
+  (the declared selection rule, reported) and `group_final_epoch` (the older final-epoch
+  reporting of the same configurations, kept for comparison). 97 -> 159 runs.
+* **Reference numbers changed substantially.** IID centralized 90.9 -> 93.4 %, IID local-only
+  78.3 -> 86.9 %, so the centralized-to-local-only band narrows from 12.6 to 6.5 points. Under
+  label skew the local-only *accuracy* now exceeds the centralized one (95.5 vs 94.3 %) while
+  its balanced accuracy does not (88.6 vs 94.7 %) -- an accuracy inversion, where before the
+  two merely tied.
+* **The effect is asymmetric and is a finding about reporting**, not about federation: the
+  local-only models are the unstable ones across epochs (node C's local-only IID baseline
+  swings between 0.96 and 0.42 validation accuracy in consecutive epochs at a training loss
+  below 0.05), so a final-epoch snapshot penalises them far more often than it penalises the
+  pooled model. Stated in Section IV-C of the paper and in the response letter.
+* **`paper/main.tex`**: the group-level cells of `tab:protocol_effect` and the baseline rows of
+  `tab:fullmetrics` updated from `analysis/summary_table.csv`; both footnotes now say that
+  every row uses the selection rule. The two sentences whose claim depends on the size of the
+  band carry `\todo{Revisit after the FL results...}` -- the narrative has to be written against
+  where the federated strategies land inside the 6.5-point band, not before.
+* **New: `tests/test_paper_numbers.py`.** These two tables cannot `\input` a generated file
+  (they hold `\PH` placeholder rows for the federated strategies), so the test re-derives every
+  hand-typed cell from `analysis/summary_table.csv` and fails on any disagreement; a guard test
+  also fails if 90.9 / 78.3 reappear anywhere that does not name them as the superseded
+  final-epoch protocol. This is what keeps rule 4 true for the two inline tables.
+* **`analysis/leakage/` and `paper/tables/`**: `full_metrics_*.tex` are produced again (the
+  selection-rule runs supply the full metric set) and `summary_selected_test_accuracy.tex` is
+  new.
