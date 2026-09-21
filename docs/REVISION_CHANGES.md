@@ -464,3 +464,45 @@ final-epoch number.
 * **`analysis/leakage/` and `paper/tables/`**: `full_metrics_*.tex` are produced again (the
   selection-rule runs supply the full metric set) and `summary_selected_test_accuracy.tex` is
   new.
+
+## The grouping threshold as a trade-off, and the BatchNorm hypothesis (2026-09-21)
+
+* **New: `scripts/grouping_tradeoff.py`** (+ `tests/test_grouping_tradeoff.py`). Rebuilds all
+  five partitions in memory under coarser groupings -- the connected components of the dHash
+  edges at tau=8 unioned with the pHash edges at 3, 4 and 6 bits -- and measures the three
+  quantities the choice trades off: the dHash 9-10 residual of the held-out images, the
+  smallest held-out set any client is left with, and the number of per-node held-out class
+  sets in which one sequence supplies >=90 % of the images. Inputs are the committed hashes
+  (`analysis/leakage/groups.csv`, `phash.csv.gz`), so it needs neither the raw images nor a
+  re-hash, and it never writes to `data/splits` or `data/processed`.
+  Outputs `analysis/leakage/grouping_tradeoff.{csv,tex}`; `export_latex_tables.py` copies the
+  `.tex` into `paper/tables/` so rule 4 keeps one pipeline into the paper.
+
+  | grouping | non-triv. groups | dHash 9-10 residual | min held-out/client | sets >=90 % one seq. |
+  |---|---|---|---|---|
+  | tau=8 (kept) | 265 | 188-476 | 137 | 2/55 |
+  | tau=8 + pHash<=6 | 152 | 65-91 | 116 | 8/53 |
+  | tau=8 + pHash<=4 | 207 | 127-408 | 137 | 7/53 |
+  | tau=8 + pHash<=3 | 247 | 125-520 | 137 | 5/56 |
+
+* **`--check-shipped` verifies the comparison is honest.** `data_splitter.find_images` uses
+  `os.walk`, whose order is not reproducible, while the hash tables are sorted by path, so the
+  rebuild could in principle have produced a different partition from the shipped one. It does
+  not: the `tau=8` row is identical to the shipped manifests on every metric. Keep the flag in
+  the loop on any re-run -- if that equality breaks, the table has silently become a comparison
+  between two different partitions rather than between two groupings.
+* **tau=8 is presented as a justified choice, never as an optimum** (Sections III-C and V-A,
+  and the response letter). pHash<=6 really does shrink the residual (188-476 -> 65-91), and we
+  say so; it costs balance (137 -> 116) and dominance (2/55 -> 8/53). The residual is not even
+  monotone in the merge threshold: Dirichlet alpha=1 goes 473 -> 406 at pHash<=4 but 473 -> 520
+  at pHash<=3, because re-partitioning reshuffles which images are held out. An optimality
+  claim would be refuted by this one table.
+* **BatchNorm running statistics, as an untested hypothesis only** (ninth limitation). The
+  local-only IID baseline of node C holds a training loss of 0.006-0.049 across all fifteen
+  epochs while its validation accuracy swings from 0.96 at epoch 9 to 0.42 at epoch 15, test
+  following at r = 0.82, and the late-epoch models are worse on *every* held-out sequence, not
+  only the dominant one -- so it reads as a shift in the model's overall state rather than as
+  overfitting to one scene. The suggested explanation, that the batch-normalisation running
+  statistics are noisy at batch size 8 (verified: all 124 baseline `results.json` use
+  `batch_size` 8) and drift between epochs, is stated explicitly as untested and is *not*
+  connected to the round-1 label-skew result or to FedBN; neither link has been tested.

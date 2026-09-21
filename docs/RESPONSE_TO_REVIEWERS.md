@@ -70,11 +70,30 @@ hash (pHash), and report it in the revised manuscript (new table `tab:nn_distanc
 
 For comparison, 99.6 % of the held-out images of the original image-level split had a training
 near-duplicate within dHash distance 8. The residual cases are concentrated in a few pairs of
-adjacent segments of the same flight. We evaluated coarser groupings (dHash ≤ 8 merged with
-pHash ≤ 3, 4 or 6): they shrink the residual but never remove it, because each merge exposes
-the next band of distances, and they worsen the balance of the partitions and the dominance of
-single sequences in the held-out sets. We kept the partition and instead **pre-registered a
-clean-subset analysis**: on 19 September 2026, before any clean-subset metric was computed
+adjacent segments of the same flight.
+
+We want to be equally explicit that τ = 8 is a **justified choice, not an optimum**. We
+rebuilt all five partitions under three coarser groupings (the dHash edges at τ = 8 unioned
+with the pHash edges at 3, 4 and 6 bits) and report the full trade-off in the revised
+manuscript (new table `tab:grouping_tradeoff`):
+
+| Grouping | non-trivial groups | dHash 9–10 residual | min held-out per client | sets ≥ 90 % one sequence |
+|---|---|---|---|---|
+| τ = 8 (used) | 265 | 188–476 | 137 | 2 / 55 |
+| τ = 8 + pHash ≤ 6 | 152 | 65–91 | 116 | 8 / 53 |
+| τ = 8 + pHash ≤ 4 | 207 | 127–408 | 137 | 7 / 53 |
+| τ = 8 + pHash ≤ 3 | 247 | 125–520 | 137 | 5 / 56 |
+
+Merging at pHash ≤ 6 genuinely shrinks the residual (188–476 → 65–91 images), and we say so
+rather than claim our threshold wins everywhere. It pays for it on the two other criteria: the
+smallest held-out set left to any client drops from 137 to 116 images, and the number of
+per-node held-out class sets dominated by a single sequence (≥ 90 % of the images) rises from
+2 of 55 to 8 of 53 — worsening exactly the concentration that makes per-node metrics noisy. The
+intermediate thresholds are not reliably better even on the residual: at pHash ≤ 3 the
+Dirichlet α = 1 partition degrades from 473 to 520 images, because re-partitioning under a
+coarser grouping reshuffles which images are held out. No threshold dominates the others, so an
+optimality claim would be refuted by this very table. We kept the partition and instead
+**pre-registered a clean-subset analysis**: on 19 September 2026, before any clean-subset metric was computed
 (at that time the full-set results of the centralized and local-only references and one
 federated run existed), we fixed and published the rule *exclude every held-out image within
 dHash ≤ 12 or pHash ≤ 10 of a training image of the same partition*, together with the
