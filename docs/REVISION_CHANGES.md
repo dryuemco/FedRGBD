@@ -1009,3 +1009,50 @@ directories left behind, and one scheduled pass with `LastTaskResult = 0`.
 **Commit rule unchanged**: no `results/rev_*` FL directory and nothing derived from the FL
 runs is committed until the matrix is done and Node A commits the results. Only the
 scheduler scripts are committed here.
+
+### Fix: block_report enumerated a different run set than the node executes (2026-09-22)
+
+`block_report.py` expanded the matrix **without** `--all_seeds`, while
+`scripts/run_matrix.py` always passes it (CLAUDE.md hard rule 3: runs from before the
+leakage-safe re-split used a different partition and are not comparable). The two
+therefore disagreed about what a block contains:
+
+| block | reported before | actually executed |
+|---|---|---|
+| `seed_extension` | 8 (new seeds 789/1011 only) | **20** (all five seeds) |
+| `baselines_extension` | 50 | **62** |
+
+Consequence, had it not been caught: `seed_extension` would have been declared complete
+after its 8 new-seed runs and the analysis pipeline fired with **12 runs still missing**.
+
+* `print_revision_commands.apply_all_seeds()` is now the single definition of that
+  transformation, used by the CLI's `--all_seeds` flag and by `block_report`. Pure
+  refactor -- the CLI emits the same 20 runs for `seed_extension` as before.
+* `tests/test_block_report.py` (11 tests) pins the two together: for **every** block it
+  compares `block_report`'s enumeration against the run set that
+  `print_revision_commands.py --all_seeds --block <name> --format bash` emits -- i.e.
+  against the command `run_matrix` actually runs -- and fails on any run missing from
+  either side. Verified to catch the defect: reverting the fix fails 3 tests naming both
+  affected blocks.
+* A further test greps the fetch/report path for any expander call that does not mention
+  `all_seeds`, so a second caller cannot reintroduce it.
+
+Audit of every other caller: `scripts/make_desktop_lanes.py` and
+`tests/test_run_matrix.py` both already widen the seed set correctly, but each carries
+its own hand-rolled copy of the transformation -- which is the duplication that produced
+this bug. They are left alone while the block is running; `apply_all_seeds` is now
+available to both.
+
+Corrected status of the seven chained blocks at the time of the fix:
+
+    seed_extension        5/20
+    dirichlet_skew        0/18
+    low_data              0/24
+    long_horizon_fedbn    0/6
+    mu_grid               0/15
+    local_epochs          0/18
+    learning_rate         0/12
+
+(`baselines_extension` reads 0/62 and is not part of the chain: its runs are the
+selection-rule baselines, which already exist under `results/rev_baselines_sel/` rather
+than at the top level, so that block can never be reported complete and can never fire.)

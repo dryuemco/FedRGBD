@@ -39,12 +39,22 @@ REPO_DEFAULT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def expected_runs(repo: str):
-    """{block: [run_dir, ...]} straight from the committed experiment matrix."""
+    """{block: [run_dir, ...]}, exactly the runs the testbed will execute.
+
+    ``scripts/run_matrix.py`` always invokes ``print_revision_commands.py`` with
+    ``--all_seeds`` (CLAUDE.md hard rule 3, because runs from before the
+    leakage-safe re-split used a different partition and are not comparable), so
+    that transformation must be applied here too. Without it ``seed_extension``
+    enumerates only the 8 *new*-seed runs instead of all 20, and a block would be
+    declared complete -- and the pipeline fired -- with 12 runs missing.
+
+    ``tests/test_block_report.py`` pins this set to the one the real CLI emits.
+    """
     sys.path.insert(0, repo)
     import scripts.print_revision_commands as prc
 
     cfg = prc.load_config(os.path.join(repo, "configs", "experiment_matrix.yaml"))
-    revision = cfg.get("revision", cfg)
+    revision = prc.apply_all_seeds(cfg.get("revision", cfg))
     blocks = prc.expand_all(revision)
     return {name: [r.output_dir for r in blocks.get(name, [])] for name in prc.BLOCK_ORDER}
 

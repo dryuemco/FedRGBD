@@ -323,6 +323,23 @@ def expand_baselines_extension(cfg: dict) -> List[Run]:
     return runs
 
 
+def apply_all_seeds(revision_cfg: dict) -> dict:
+    """The transformation ``--all_seeds`` applies to the config.
+
+    Only ``seed_extension`` and ``baselines_extension`` are seed-limited by default
+    (they otherwise emit only the *new* seeds); every other block already spans its
+    full seed set.  ``scripts/run_matrix.py`` always passes ``--all_seeds``
+    (CLAUDE.md hard rule 3), so anything that needs to know which runs the testbed
+    will actually execute must apply this first -- see
+    ``tests/test_block_report.py``, which pins the two to each other.
+    """
+    out = dict(revision_cfg)
+    for block in ("seed_extension", "baselines_extension"):
+        if block in out:
+            out[block] = dict(out[block], all_seeds=True)
+    return out
+
+
 BLOCK_EXPANDERS = {
     "seed_extension": expand_seed_extension,
     "dirichlet_skew": expand_dirichlet_skew,
@@ -474,9 +491,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     cfg = load_config(args.config)
     revision_cfg = cfg["revision"]
     if args.all_seeds:
-        revision_cfg = dict(revision_cfg)
-        revision_cfg["seed_extension"] = dict(revision_cfg["seed_extension"], all_seeds=True)
-        revision_cfg["baselines_extension"] = dict(revision_cfg["baselines_extension"], all_seeds=True)
+        revision_cfg = apply_all_seeds(revision_cfg)
     runs_by_block = expand_all(revision_cfg, args.block)
     if args.baseline_root:
         rebase_baselines(runs_by_block, args.baseline_root)
