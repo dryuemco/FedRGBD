@@ -773,3 +773,112 @@ validation data**. In the most skewed partition the selection rule is therefore 
 informed for FL than for local-only. Stated as a caveat on that comparison, not as a property
 of either method. No new analysis: the counts come from
 `analysis/leakage/heldout_dominance.csv`.
+
+## Round-1 collapse: interpretation plan, written before the evidence (2026-09-22)
+
+**Status and timing.** Written on 2026-09-22, after exactly **one** federated run existed
+(`rev_iid_fedavg_seed42`, IID, FedAvg, 3 rounds, seed 42) and **before** any local-epoch sweep,
+FedProx or FedBN result of the block had been produced. It is recorded now so that the reading
+of those results is fixed in advance rather than chosen after seeing them. It is a plan, not a
+finding: one seed, one strategy, one partition.
+
+### What was observed (the anchor)
+
+In round 1 the aggregated model predicted **no-fire for all 14,311 held-out images** on all
+three clients: `tp = 0, fp = 0` everywhere, accuracy equal to each node's no-fire base rate
+(0.3517-0.4013), balanced accuracy exactly 0.5000, weighted validation loss 2.913.
+
+The representation was **not** destroyed. Fire images still scored above no-fire images in
+every cell; ROC-AUC reached 0.9876 (node_a test) and 0.9238 (node_b test); the maximum logit
+margin over all images was negative (-0.766 to -1.906, max `p_fire` 0.13-0.32); and a single
+threshold shift recovers balanced accuracy of 0.66-0.94. Meanwhile every client had reached
+`train_loss` 0.020-0.060 locally. The failure is therefore in the **decision boundary /
+output calibration** of the averaged model, not in its features.
+
+The partition alone does not explain it: the `iid_sub0.01` smoke run uses the *same*
+group-level, flight-disjoint partition and did not collapse (0.61 round-1 balanced accuracy),
+differing only in having 1 % of the training data and therefore far less local drift per round.
+
+### Operational definition of "collapse" (mechanical, no judgement)
+
+A round-1 result **collapses** iff, for **every** client `k` and **both** held-out splits
+`s in {val, test}` of that client:
+
+    balanced_accuracy(k, s, round 1) <= 0.55   AND   max_i logit_margin(k, s, i) < 0
+
+The second clause is what distinguishes "predicts one class everywhere" from a low balanced
+accuracy arising some other way. `rev_iid_fedavg_seed42` satisfies it exactly (0.5000 in all
+six cells; largest margin over all six, -0.766).
+
+* **reduced**: the test-size-weighted pooled round-1 balanced accuracy is at least 0.05 above
+  the matched FedAvg run at the same seed and partition, while at least one client still meets
+  both clauses above.
+* **absent**: not a collapse -- some client exceeds 0.55, or some client's maximum margin is
+  positive.
+
+Comparisons are made **within a seed**: the criterion is evaluated per run, and a change counts
+only against the FedAvg run of the same seed, partition and round budget.
+
+### What each outcome would indicate
+
+| Outcome | Reading |
+|---|---|
+| Collapse present at E = 5, absent at E = 1 (same partition, seed, strategy) | **Drift magnitude.** The number of local steps before the first average is the operative variable. |
+| FedProx with mu > 0 removes or reduces it at fixed E = 5 | **Drift magnitude.** The proximal term bounds the distance from the broadcast weights, so it acts on exactly that quantity. |
+| FedBN removes it while FedAvg *and* FedProx do not | **Averaged BatchNorm running statistics.** FedBN differs from FedAvg precisely by keeping normalisation parameters and statistics client-local. |
+| Collapse persists under all of the above | **Neither.** The mechanism is not local-drift magnitude and not BN aggregation; the diagnostic run below becomes necessary. |
+
+Recorded caveats, so they are not discovered afterwards:
+
+* The first two rows are **not independent** -- both reduce drift. If both hold, that is
+  consistent with drift magnitude but does not identify *which* aspect of drift matters.
+* FedBN changes *what is averaged* as well as the BN statistics, so row 3 implicates BN
+  aggregation as a whole, not the running statistics specifically. Separating those needs the
+  diagnostic run.
+* A mixed outcome (e.g. absent at E = 1 *and* removed by FedBN) is evidence for both and
+  resolves neither; it is not to be reported as support for whichever is written up first.
+* None of these rows is established by a single seed.
+
+### Post-block diagnostic run (design only, not implemented)
+
+Runs **only after the whole matrix is finished**, and never mixes into its results: output goes
+to a top-level `diagnostics/` directory, **not** under `results/`, so no analysis script can
+reach it (`iter_run_dirs` walks `results/` only) and no reported table can contain it.
+
+**D0 -- threshold recalibration (costs no testbed time).** Offline from the already-saved
+round-1 `.npz`: the best single decision threshold and the balanced accuracy it yields. Already
+computed for seed 42 (0.66-0.94, thresholds -3.7 to -7.0). Establishes how much of the collapse
+is purely the decision boundary, as the reference point for D1 and D2.
+
+**D1 -- per-client model before aggregation.** One round of FedAvg, IID, seed 42, 5 local
+epochs -- identical to the block's round 1. Each client evaluates **its own locally trained
+model** on its own val and test split and writes predictions *before* returning parameters to
+the server; the server then aggregates and evaluates as usual, reproducing the existing
+post-aggregation numbers in the same run.
+*Decides:* whether each client's model is individually well-calibrated (balanced accuracy high,
+maximum margin > 0) while only their average is collapsed -- which would place the cause in
+averaging -- or whether the clients are already degenerate, which would place it in local
+training. At present this is only **inferred** from `train_loss`, never measured on held-out
+data.
+
+**D2 -- BatchNorm re-estimation.** Reusing D1's saved round-1 aggregated checkpoint, with no
+retraining: re-estimate the BatchNorm running statistics with forward passes in training mode
+over a small sample of each client's *own* training split (256 / 512 / 2048 images, no gradient
+updates), then re-evaluate on the same held-out splits.
+*Decides:* whether restoring the normalisation statistics alone repairs the model -- implicating
+the averaged BN running statistics -- or whether the shift lives in the weights. Sampling is
+per client and local; nothing is pooled, so the federated constraint is not violated.
+
+**Cost**, from this run's measured timings (round-1 fit phase 1,402.7 s, evaluation phase 44.5 s
+for val + test across the three clients in parallel; node_c is the slowest at ~109 images/s):
+
+| | work | testbed wall-clock |
+|---|---|---|
+| D0 | offline, existing files | **0** |
+| D1 | 1 FedAvg round (5 local epochs) + 1 extra val/test pass per client | ~1,490 s (**0.41 h**) |
+| D2 | BN forward passes (<= 2,048 images/client, ~19 s) + 1 val/test pass, x3 sample sizes | ~200 s (**0.06 h**) |
+| | **total, one seed** | **~0.5 h** |
+| | three seeds (42, 123, 456) | **~1.4 h** |
+
+Under 1 % of the block's ~220 h, so cost is not a reason to skip it; the reason to defer it is
+only that it must not perturb the matrix.
