@@ -789,11 +789,22 @@ three clients: `tp = 0, fp = 0` everywhere, accuracy equal to each node's no-fir
 (0.3517-0.4013), balanced accuracy exactly 0.5000, weighted validation loss 2.913.
 
 The representation was **not** destroyed. Fire images still scored above no-fire images in
-every cell; ROC-AUC reached 0.9876 (node_a test) and 0.9238 (node_b test); the maximum logit
-margin over all images was negative (-0.766 to -1.906, max `p_fire` 0.13-0.32); and a single
-threshold shift recovers balanced accuracy of 0.66-0.94. Meanwhile every client had reached
-`train_loss` 0.020-0.060 locally. The failure is therefore in the **decision boundary /
-output calibration** of the averaged model, not in its features.
+every cell, and ROC-AUC reached 0.9876 (node_a test) and 0.9238 (node_b test) -- ROC-AUC is the
+clean evidence here because it is threshold-free and fits nothing. The maximum logit margin
+over all images was negative (-0.766 to -1.906, max `p_fire` 0.13-0.32). Meanwhile every client
+had reached `train_loss` 0.020-0.060 locally. The failure is therefore in the **decision
+boundary / output calibration** of the averaged model, not in its features.
+
+How much a threshold can repair is a separate question, and it must be answered honestly.
+Fitting the threshold on each node's **validation** split and applying it to that node's
+**test** split gives round-1 test balanced accuracy of **0.797 (node_a), 0.814 (node_b) and
+0.487 (node_c)** -- node_c is *below chance*, i.e. its validation-fitted threshold does not
+transfer, which is consistent with its low test ROC-AUC of 0.5721. Choosing the threshold
+directly on test would instead give 0.9368 / 0.9118 / 0.7248; **those numbers are fitted on the
+test set, are an upper bound rather than a result, and are recorded here only as diagnostic
+evidence that the ranking survived.** They must never be reported as a metric or used to select
+anything. An earlier version of this section quoted that test-fitted range (0.66-0.94) without
+the distinction; it overstated the recovery, most of all on node_c.
 
 The partition alone does not explain it: the `iid_sub0.01` smoke run uses the *same*
 group-level, flight-disjoint partition and did not collapse (0.61 round-1 balanced accuracy),
@@ -838,6 +849,15 @@ Recorded caveats, so they are not discovered afterwards:
 * A mixed outcome (e.g. absent at E = 1 *and* removed by FedBN) is evidence for both and
   resolves neither; it is not to be reported as support for whichever is written up first.
 * None of these rows is established by a single seed.
+* **Any threshold recalibration used in evaluating these outcomes is fitted on validation data
+  and applied to test, never fitted on test.** A threshold chosen directly on the test split is
+  diagnostic evidence that the ranking survived and nothing more: it is an upper bound, it is
+  labelled as such wherever it is written down, and it may not be reported as a metric,
+  compared against the references, or used to select a threshold, a round or a strategy. The
+  distinction is not academic here -- on node_c the validation-fitted threshold yields 0.487
+  test balanced accuracy against 0.725 for the test-fitted one, so the test-fitted number would
+  have misrepresented a failed recalibration as a partial recovery. Prefer ROC-AUC, which makes
+  the same point about ranking without fitting anything.
 
 ### Post-block diagnostic run (design only, not implemented)
 
@@ -846,9 +866,21 @@ to a top-level `diagnostics/` directory, **not** under `results/`, so no analysi
 reach it (`iter_run_dirs` walks `results/` only) and no reported table can contain it.
 
 **D0 -- threshold recalibration (costs no testbed time).** Offline from the already-saved
-round-1 `.npz`: the best single decision threshold and the balanced accuracy it yields. Already
-computed for seed 42 (0.66-0.94, thresholds -3.7 to -7.0). Establishes how much of the collapse
-is purely the decision boundary, as the reference point for D1 and D2.
+round-1 `.npz`. **The threshold is fitted on validation data and only then applied to test.**
+For seed 42 that gives round-1 test balanced accuracy 0.797 / 0.814 / 0.487 on nodes A / B / C,
+against 0.5000 at the model's own threshold; node_c's validation-fitted threshold does not
+transfer at all.
+
+The threshold that would be best *on test* (0.9368 / 0.9118 / 0.7248, at -5.67 / -4.62 / -7.00)
+is **fitted on the test set**. It is an upper bound, not an achievable result: it is recorded
+only as diagnostic evidence that the ranking survived aggregation, and it must never appear as
+a reported metric, never be compared against the baselines, and never be used to choose a
+threshold, a round, a strategy or anything else. Wherever it is written down it carries that
+label. The threshold-free statement of the same evidence is ROC-AUC, which fits nothing and is
+the form to prefer.
+
+D0 establishes how much of the collapse is the decision boundary alone, as the reference point
+for D1 and D2.
 
 **D1 -- per-client model before aggregation.** One round of FedAvg, IID, seed 42, 5 local
 epochs -- identical to the block's round 1. Each client evaluates **its own locally trained
