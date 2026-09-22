@@ -914,3 +914,42 @@ for val + test across the three clients in parallel; node_c is the slowest at ~1
 
 Under 1 % of the block's ~220 h, so cost is not a reason to skip it; the reason to defer it is
 only that it must not perturb the matrix.
+
+### The margin clause proved knife-edge at the second seed (2026-09-22, added after seed 123)
+
+`rev_iid_fedavg_seed123` was scored against the collapse criterion **exactly as written above**.
+Verdict: **NOT a collapse**, because the `max logit_margin < 0` clause fails on four of the six
+client/split cells.
+
+| node | split | bal. acc. | `<= 0.55` | max margin | `< 0` | images predicted fire | clauses |
+|---|---|---|---|---|---|---|---|
+| node_a | val | 0.5010 | yes | +0.1515 | no | 3 / 2340 | FAIL |
+| node_a | test | 0.5090 | yes | +0.3571 | no | 27 / 2519 | FAIL |
+| node_b | val | 0.5000 | yes | -0.5389 | yes | 0 / 2326 | pass |
+| node_b | test | 0.5003 | yes | +0.1363 | no | 1 / 2326 | FAIL |
+| node_c | val | 0.5003 | yes | +0.1969 | no | 1 / 2400 | FAIL |
+| node_c | test | 0.5000 | yes | -0.4151 | yes | 0 / 2400 | pass |
+
+**The verdict diverges from the obvious reading, and the criterion is not being changed.** The
+balanced-accuracy clause passes in every cell (0.5000-0.5090, against 0.5000 throughout at seed
+42). What fails is the margin clause, decided by **32 images out of 14,311 (0.22 %)** whose
+margins reach +0.14 to +0.36 while the bulk of the distribution sits near -4. Every one of
+those 32 images is a true fire image, so the model is not mistakenly firing: it is the same
+one-class behaviour as seed 42, with a handful of correct detections barely clearing zero.
+
+Recorded consequences:
+
+* The margin clause was written as a way of saying "predicts one class everywhere". At the
+  second seed it turned out to be a **knife-edge test**: a single image at +0.14 flips the
+  verdict for a whole client/split. It discriminates on a quantity far finer than the
+  phenomenon it was meant to capture.
+* The criterion **stands as written**. Seed 42 is a collapse under it; seed 123 is not. Both
+  verdicts are reported as the criterion gives them.
+* Any alternative criterion adopted later (for instance, a bound on the *fraction* of images
+  predicted as the minority class rather than on the maximum margin) is **post hoc**: it was
+  formulated after seeing seed 123. It must be labelled as such, reported alongside the
+  original criterion and its verdicts, and never substituted for it in a way that erases the
+  original reading. The reason is exactly the one that motivated writing the plan in advance:
+  a threshold chosen after seeing the data it will be applied to is not a prediction.
+* This is a second illustration of the same failure mode as the test-fitted threshold above --
+  a quantity that looks decisive until it is checked against data it was not built on.
