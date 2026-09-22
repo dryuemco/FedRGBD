@@ -77,6 +77,12 @@ logs/
 
 # node hosts / users / paths for scripts/run_matrix.py (public repo: never commit)
 configs/testbed.local.yaml
+# same for the desktop fetch job (scripts/fetch_results.ps1)
+scripts/fetch_results.config.json
+
+# block reports: the mechanical pipeline run over a finished block, regenerated at
+# will and derived from FL runs that are not committed until the matrix is done
+scratch/
 
 # per-image predictions (~54 MB for the matrix): archive with the run, see src/evaluation/predictions.py
 results/**/predictions/*.npz

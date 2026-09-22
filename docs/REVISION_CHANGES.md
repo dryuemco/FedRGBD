@@ -953,3 +953,59 @@ Recorded consequences:
   a threshold chosen after seeing the data it will be applied to is not a prediction.
 * This is a second illustration of the same failure mode as the test-fitted threshold above --
   a quantity that looks decisive until it is checked against data it was not built on.
+
+## Automated result collection from the testbed (2026-09-22)
+
+Node A is chaining the remaining blocks (~6-9 days). Finished runs are pulled to this
+desktop hourly, so that a report can be produced per block and so that there is a second
+copy of every run -- this job is also the backup against SD-card failure on Node A.
+
+Everything runs **on the Windows desktop, never on a Jetson**.
+
+* **`scripts/fetch_results.ps1`** -- one pass of the fetch.
+  * **Strictly read-only on the node.** The complete set of remote operations is:
+    `md5sum results/rev_*/results.json`, `cat` of a run's `results.json`, `tail` of
+    `logs/run_matrix.log`, and `scp` *pulls*. No git, no writes, no deletes, no process
+    control, ever -- Node A is mid-block and a stray write there costs days.
+  * **Only finished runs.** A run is fetched only when its remote `results.json` parses
+    as JSON *and* carries `model_selection.selected_round`; a run still being written
+    fails that test and is retried next pass.
+  * **Never overwrites.** Identical copies (md5 of `results.json`) are skipped. A local
+    copy that differs is left alone and logged as a warning.
+  * Runs already **committed** (the 31 desktop-GPU baselines) legitimately differ from
+    the node's own copies; they are recognised via `git ls-files` and ignored, so the one
+    warning that matters -- a fetched run changing underneath us -- is not buried under
+    thirty that do not.
+  * **Atomic.** Each run lands in `results/.incoming_<run>` and is renamed only after its
+    checksum matches, so an interrupted transfer can never leave a half-written directory
+    that a later pass mistakes for a finished run.
+  * Uses **Windows OpenSSH** explicitly (`C:\Windows\System32\OpenSSH\ssh.exe`): the key
+    is in the Windows ssh-agent, which Git Bash's own ssh cannot see. `BatchMode=yes`
+    plus a connect timeout means auth or network failure logs and exits rather than
+    hanging; the scheduled task also has a 30-minute execution limit as a backstop.
+  * Logs every attempt to `logs/fetch.log` (gitignored).
+* **`scripts/block_report.py`** -- after new runs arrive, checks whether a block is
+  complete and, if so, runs `analyze_results.py` and `export_latex_tables.py` into
+  `scratch/block_reports/<block>/` with a short `STATUS.md`.
+  * Completeness comes from `configs/experiment_matrix.yaml` via
+    `print_revision_commands` -- the same source the node runs from -- not from parsing
+    `run_matrix.log`, so it cannot be fooled by log formatting.
+  * It writes **only** to `scratch/` (gitignored), never to `analysis/` or
+    `paper/tables/`, and commits nothing. The status file is mechanical: counts, selected
+    rounds, wall-clock, where the tables went. **No interpretation** -- that is requested
+    per block.
+* **`scripts/install_fetch_task.ps1` / `uninstall_fetch_task.ps1`** -- register and remove
+  the hourly Task Scheduler entry `FedRGBD-FetchResults`. Registered with
+  `LogonType = Interactive` on purpose: ssh-agent keys are protected per user and a task
+  set to run while logged off cannot reach them. `-RunWhenLoggedOff` exists for the
+  identity-file case.
+* **`scripts/fetch_results.config.json`** is gitignored (it names the host and account);
+  `fetch_results.config.example.json` is the committed template.
+
+Verified by hand before scheduling: connection, dry run, a real fetch of three runs
+(18 prediction files each), an idempotent second pass (0 fetched, 5 present), no staging
+directories left behind, and one scheduled pass with `LastTaskResult = 0`.
+
+**Commit rule unchanged**: no `results/rev_*` FL directory and nothing derived from the FL
+runs is committed until the matrix is done and Node A commits the results. Only the
+scheduler scripts are committed here.
