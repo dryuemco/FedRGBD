@@ -1056,3 +1056,34 @@ Corrected status of the seven chained blocks at the time of the fix:
 (`baselines_extension` reads 0/62 and is not part of the chain: its runs are the
 selection-rule baselines, which already exist under `results/rev_baselines_sel/` rather
 than at the top level, so that block can never be reported complete and can never fire.)
+
+## Post-matrix cleanup list
+
+Work that is deliberately **deferred until the Jetson matrix is finished** and Node A has
+committed the FL results. Nothing here is urgent; each item is recorded at the moment it
+was noticed so it is not rediscovered later. Add to this list rather than fixing mid-block
+whenever a change would touch frozen paths or risk perturbing a running block.
+
+- [ ] **Consolidate `apply_all_seeds`.** `scripts/make_desktop_lanes.py` and
+      `tests/test_run_matrix.py` each carry their own hand-rolled copy of the
+      `--all_seeds` transformation. Both are correct today, but that duplication is
+      exactly what produced the `block_report` defect (8 runs reported against 20
+      executed). Point both at `print_revision_commands.apply_all_seeds()`.
+      `make_desktop_lanes.py` widens only `baselines_extension`; the shared helper also
+      widens `seed_extension`, which that script never reads, so the change is
+      behaviour-preserving -- confirm that with a test rather than by inspection.
+- [ ] **Re-check `NOT_IN_CHAIN` in `scripts/block_report.py`.** `baselines_extension` is
+      excluded because its runs live under `results/rev_baselines_sel/` rather than at the
+      top level. If the baselines are ever moved or re-run at the top level, the exclusion
+      becomes wrong and should be removed.
+- [ ] **Run the D0/D1/D2 diagnostic** for the round-1 collapse (design and cost in the
+      interpretation-plan section above). Only after the whole matrix, into a top-level
+      `diagnostics/` directory, never mixed into `results/`.
+- [ ] **Fold the FL results into `analysis/` and the paper.** After Node A commits them:
+      re-run `analyze_results.py` and `export_latex_tables.py`, then resolve the `\todo`
+      markers that are waiting on FL numbers -- the gap-dependent narrative, the round-1
+      label-skew attribution, the abstract's quantitative sentences, the FedProx overhead
+      factor, and the federated rows of `tab:protocol_effect` / `tab:fullmetrics`.
+      `tests/test_paper_numbers.py` will name any hand-typed cell that went stale.
+- [ ] **Decide the fate of the hourly fetch task.** `scripts/uninstall_fetch_task.ps1`
+      removes it; the local config and `logs/fetch.log` are kept deliberately.

@@ -114,3 +114,34 @@ def test_no_caller_in_the_fetch_path_enumerates_without_all_seeds():
             offenders.append(name)
     assert not offenders, (
         "these enumerate the experiment matrix without --all_seeds: %s" % offenders)
+
+
+def test_blocks_outside_the_chain_are_labelled_not_counted(capsys):
+    """baselines_extension must not read as "0/62 missing".
+
+    Its runs exist, under results/rev_baselines_sel/ rather than at the top level,
+    so it can never be reported complete. Printing a bare count invites reading it
+    as 62 outstanding runs.
+    """
+    from scripts.block_report import NOT_IN_CHAIN, main
+
+    assert "baselines_extension" in NOT_IN_CHAIN
+    main(["--repo", _REPO, "--status_only"])
+    out = capsys.readouterr().out
+    line = next(l for l in out.splitlines() if l.startswith("baselines_extension"))
+    assert NOT_IN_CHAIN["baselines_extension"] in line
+    assert not re.search(r"\d+\s*/\s*\d+", line), \
+        "a bare n/m count is still printed for a block outside the chain: %r" % line
+    # the blocks that ARE in the chain keep their counts
+    other = next(l for l in out.splitlines() if l.startswith("seed_extension"))
+    assert re.search(r"\d+\s*/\s*\d+", other)
+
+
+def test_a_block_outside_the_chain_never_fires_the_pipeline(tmp_path, capsys):
+    """Even asked for by name with --force, it must not run the pipeline."""
+    from scripts.block_report import main
+
+    rc = main(["--repo", _REPO, "--block", "baselines_extension", "--force"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "running the pipeline" not in out

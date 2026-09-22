@@ -37,6 +37,13 @@ import sys
 
 REPO_DEFAULT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+#: Blocks that are not part of the Jetson chain, with the reason. Their runs exist,
+#: but not at the paths this script looks for, so a bare "0/62" would read as 62
+#: missing runs rather than as "not this script's business".
+NOT_IN_CHAIN = {
+    "baselines_extension": "n/a (desktop runs, see results/rev_baselines_sel)",
+}
+
 
 def expected_runs(repo: str):
     """{block: [run_dir, ...]}, exactly the runs the testbed will execute.
@@ -173,6 +180,9 @@ def main(argv=None):
 
     if args.status_only:
         for name, st in status.items():
+            if name in NOT_IN_CHAIN:
+                print("%-22s %s" % (name, NOT_IN_CHAIN[name]))
+                continue
             print("%-22s %3d/%-3d %s" % (name, len(st["done"]), st["expected"],
                                          "COMPLETE" if st["complete"] else ""))
         return 0
@@ -182,6 +192,8 @@ def main(argv=None):
     for name, st in status.items():
         if args.block and name != args.block:
             continue
+        if name in NOT_IN_CHAIN:
+            continue                                  # never reported, never fires
         if not st["complete"]:
             continue
         out_dir = os.path.join(root, name)
@@ -196,7 +208,8 @@ def main(argv=None):
         any_run = True
     if not any_run:
         incomplete = ["%s %d/%d" % (n, len(s["done"]), s["expected"])
-                      for n, s in status.items() if not s["complete"] and s["done"]]
+                      for n, s in status.items()
+                      if n not in NOT_IN_CHAIN and not s["complete"] and s["done"]]
         print("no newly complete block" + ("; in progress: " + ", ".join(incomplete) if incomplete else ""))
     return 0
 
