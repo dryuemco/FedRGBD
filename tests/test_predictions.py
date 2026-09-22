@@ -335,3 +335,100 @@ def test_mean_and_weighted_aggregations_keep_one_unit_per_node():
     assert len(_units_for(raw, "mean")) == 3
     assert len(_units_for(raw, "weighted")) == 3
     assert len(_units_for(raw, "pooled")) == 1
+
+
+# --------------------------------------------------------------------------- #
+# Permanent guards for the three cluster-bootstrap defects found in review.
+# (a) a CI must contain its own point estimate
+# (b) no resample may silently drop a class the unit contains
+# (c) "pooled" must use every unit, not just the first
+# --------------------------------------------------------------------------- #
+def _skewed_units(rng, minority_clusters=1):
+    """Local-only-shaped units where one node's minority class lives in few sequences.
+
+    This is the Dirichlet 0.1 situation: one node held all 211 of its no-fire test
+    images in a single sequence.
+    """
+    from src.evaluation.bootstrap import Unit
+
+    units = []
+    for node in range(3):
+        labels, margins, gids = [], [], []
+        for c in range(20):                      # majority-class sequences
+            k = 40
+            labels.append(np.ones(k, dtype=np.int64))
+            margins.append(rng.normal(2.0, 1.0, k))
+            gids.append(np.array(["n%d_pos%d" % (node, c)] * k))
+        for c in range(minority_clusters):       # the scarce minority class
+            k = 60
+            labels.append(np.zeros(k, dtype=np.int64))
+            margins.append(rng.normal(-1.5, 1.0, k))
+            gids.append(np.array(["n%d_neg%d" % (node, c)] * k))
+        units.append(Unit(np.concatenate(labels), np.concatenate(margins),
+                          np.concatenate(gids)))
+    return units
+
+
+def test_no_resample_silently_drops_a_class():
+    """Guard (b): stratification keeps every class present in every resample."""
+    from src.evaluation.bootstrap import Unit
+
+    rng = np.random.default_rng(3)
+    for minority_clusters in (1, 2, 5):
+        for unit in _skewed_units(rng, minority_clusters):
+            for stratified, allowed in ((False, None), (True, 0.0)):
+                W = unit.weights(2000, rng, stratified)
+                tp, fp, fn, tn = (W @ unit.counts).T
+                missing = (((tp + fn) == 0) | ((tn + fp) == 0)).mean()
+                if allowed is not None:
+                    assert missing == allowed, (
+                        "stratified resampling dropped a class in %.1f%% of resamples"
+                        % (100 * missing))
+        # the unstratified path must still be able to drop one, or the fixture is
+        # no longer exercising the defect this test exists for
+    unit = _skewed_units(np.random.default_rng(3), 1)[0]
+    W = unit.weights(2000, np.random.default_rng(4), stratified=False)
+    tp, fp, fn, tn = (W @ unit.counts).T
+    assert (((tp + fn) == 0) | ((tn + fp) == 0)).mean() > 0.01, \
+        "the fixture no longer reproduces class dropout; guard (b) would pass vacuously"
+
+
+def test_strata_split_by_class_composition_not_majority():
+    """FLAME sequences are videos: a node's whole minority class can sit inside
+    sequences that are majority the other class, so majority-class strata would be
+    empty exactly where they are needed."""
+    from src.evaluation.bootstrap import Unit
+
+    # one sequence, mostly fire, carrying every no-fire image of the unit
+    label = np.array([1] * 90 + [0] * 10 + [1] * 50, dtype=np.int64)
+    margin = np.r_[np.full(90, 2.0), np.full(10, -2.0), np.full(50, 2.0)]
+    group = np.array(["mixed"] * 100 + ["pos"] * 50)
+    unit = Unit(label, margin, group)
+
+    assert [len(s) for s in unit.strata] == [1, 1], \
+        "expected a mixed stratum and a positive-only stratum"
+    W = unit.weights(500, np.random.default_rng(0))
+    tp, fp, fn, tn = (W @ unit.counts).T
+    assert (((tn + fp) == 0).sum()) == 0, "the negative class vanished from a resample"
+
+
+@pytest.mark.parametrize("aggregation", ["mean", "pooled"])
+def test_every_ci_contains_its_point_estimate(aggregation):
+    """Guard (a), on the skewed shape that produced the original symptom."""
+    from scripts.analyze_results import _aggregate_point
+    from src.evaluation.bootstrap import config_ci
+
+    rng = np.random.default_rng(11)
+    units = _skewed_units(rng, minority_clusters=1)
+    raw = [{"label": u.label, "margin": u.margin,
+            "group": u.gid[u.g]} for u in units]
+
+    from scripts.analyze_results import _units_for
+    prepared = _units_for(raw, aggregation)
+    point = _aggregate_point(raw, aggregation)
+    cis = config_ci([prepared], aggregation, "guard-a-%s" % aggregation, B=600)
+    for metric in ("accuracy", "balanced_accuracy", "mcc"):
+        lo, hi = cis[metric]["ci_low"], cis[metric]["ci_high"]
+        assert lo - 1e-9 <= point[metric] <= hi + 1e-9, (
+            "%s/%s: point estimate %.4f outside its CI [%.4f, %.4f]"
+            % (aggregation, metric, point[metric], lo, hi))

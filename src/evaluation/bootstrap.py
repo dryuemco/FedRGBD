@@ -15,6 +15,24 @@ The interval is the 2.5 / 97.5 percentile of B replicates.  Everything is
 vectorised over replicates: threshold metrics come from resampled confusion
 counts (weights @ per-group counts), ROC-AUC from a weighted Mann-Whitney
 statistic with exact ties, the loss from per-group loss sums.
+
+**The sequence resampling is stratified by class composition.**  Drawing
+sequences uniformly lets a resample contain no sequence carrying one of the
+classes, and ``metrics_from_counts`` then silently reports balanced accuracy as
+the recall of the surviving class alone.  That is not a rare edge case here:
+under Dirichlet 0.1 one node holds all 211 of its no-fire test images in a
+*single* sequence, so 37.8 % of uniform resamples dropped the class entirely and
+biased the interval upward, away from its own point estimate.  Even the IID
+partition has a node with 1011 no-fire images in two sequences (13.5 %).
+
+Sequences are therefore split into three strata -- those carrying only class 0,
+only class 1, and both -- and each stratum is resampled with replacement to its
+own size.  Stratifying by a sequence's *majority* class would not work: FLAME
+sequences are videos in which the fire appears and disappears, so a node's whole
+minority class can live inside sequences that are majority the other class (two
+of the three nodes above have no no-fire-dominant sequence at all).  Splitting on
+composition avoids this, because a mixed sequence carries both classes by
+definition: if a class occurs anywhere in a unit, it occurs in every resample.
 """
 
 from __future__ import annotations
@@ -49,17 +67,44 @@ class Unit:
         self.loss_sum = np.zeros(self.G)
         np.add.at(self.loss_sum, self.g, per_image_loss(y, self.margin))
         self.n = np.bincount(self.g, minlength=self.G).astype(float)
+        # class-composition strata of the sequences: only class 0, only class 1, both.
+        # Resampling within these keeps every class that occurs in the unit present in
+        # every resample (a mixed sequence carries both classes by construction).
+        n1 = np.bincount(self.g[y == 1], minlength=self.G)
+        n0 = np.bincount(self.g[y == 0], minlength=self.G)
+        self.strata = [np.flatnonzero(s) for s in ((n0 > 0) & (n1 == 0),
+                                                   (n1 > 0) & (n0 == 0),
+                                                   (n0 > 0) & (n1 > 0))]
+        self.strata = [s for s in self.strata if len(s)]
         order = np.argsort(self.margin, kind="mergesort")
         self._y = y[order]
         self._g = self.g[order]
         s = self.margin[order]
         self._starts = np.flatnonzero(np.r_[True, s[1:] != s[:-1]])
 
-    def weights(self, B: int, rng: np.random.Generator) -> np.ndarray:
-        """(B, G) multiplicities of each sequence in B cluster resamples."""
-        draw = rng.integers(0, self.G, size=(B, self.G))
-        flat = (draw + np.arange(B)[:, None] * self.G).ravel()
-        return np.bincount(flat, minlength=B * self.G).reshape(B, self.G).astype(float)
+    def weights(self, B: int, rng: np.random.Generator,
+                stratified: bool = True) -> np.ndarray:
+        """(B, G) multiplicities of each sequence in B cluster resamples.
+
+        Stratified by class composition by default, so no resample can drop a
+        class that the unit actually contains (see the module docstring).
+        ``stratified=False`` is the plain uniform resampling, kept so the effect
+        of the stratification can be measured; it must not be used for reported
+        intervals.
+        """
+        offset = np.arange(B)[:, None] * self.G
+        if not stratified:
+            draw = rng.integers(0, self.G, size=(B, self.G))
+            flat = (draw + offset).ravel()
+            return np.bincount(flat, minlength=B * self.G).reshape(B, self.G).astype(float)
+
+        W = np.zeros(B * self.G)
+        for idx in self.strata:                      # disjoint, so the counts just add
+            k = len(idx)
+            draw = idx[rng.integers(0, k, size=(B, k))]
+            flat = (draw + offset).ravel()
+            W += np.bincount(flat, minlength=B * self.G)
+        return W.reshape(B, self.G).astype(float)
 
     def auc(self, W: np.ndarray) -> np.ndarray:
         wi = W[:, self._g]                               # (B, N) image weights, sorted by score
@@ -107,13 +152,14 @@ def metrics_from_counts(tp, fp, fn, tn) -> Dict[str, np.ndarray]:
 
 
 def run_replicates(units: List[Unit], aggregation: str, B: int,
-                   rng: np.random.Generator) -> Dict[str, np.ndarray]:
+                   rng: np.random.Generator, stratified: bool = True) -> Dict[str, np.ndarray]:
     """B cluster-bootstrap values of one run's headline metrics.
 
     ``aggregation``: "weighted" (FL: client metrics weighted by resampled test size),
-    "mean" (local-only: mean over nodes) or "pooled" (centralized: one unit).
+    "mean" (local-only: mean over nodes) or "pooled" (centralized: **one** unit --
+    the caller pools the per-node predictions before constructing it).
     """
-    reps = [u.replicate(u.weights(B, rng)) for u in units]
+    reps = [u.replicate(u.weights(B, rng, stratified)) for u in units]
     if aggregation == "pooled" or len(reps) == 1:
         return {m: reps[0][m] for m in BOOT_METRICS}
     if aggregation == "weighted":
@@ -126,14 +172,14 @@ def run_replicates(units: List[Unit], aggregation: str, B: int,
 
 
 def config_ci(runs: List[List[Unit]], aggregation: str, key: str, B: int = DEFAULT_B,
-              level: float = 0.95) -> Dict[str, Dict[str, float]]:
+              level: float = 0.95, stratified: bool = True) -> Dict[str, Dict[str, float]]:
     """Hierarchical (seed x sequence) bootstrap CI of each metric for one configuration.
 
     ``key`` (the configuration id) seeds the generator, so results are reproducible.
     -> {metric: {"ci_low", "ci_high", "se", "B"}}.
     """
     rng = np.random.default_rng(BASE_SEED + zlib.crc32(key.encode("utf-8")))
-    per_run = [run_replicates(units, aggregation, B, rng) for units in runs]
+    per_run = [run_replicates(units, aggregation, B, rng, stratified) for units in runs]
     S = len(per_run)
     pick = rng.integers(0, S, size=(B, S))
     col = (np.arange(B)[:, None] * S + np.arange(S)[None, :]) % B   # distinct draw per slot

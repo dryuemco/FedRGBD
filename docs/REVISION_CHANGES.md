@@ -649,3 +649,69 @@ validation loss of each round, and all twelve per-image prediction files were bi
 identical. The scope is stated honestly -- FedAvg in that configuration; the fixed aggregation
 order applies to all strategies and the unit tests cover all three, but FedProx and FedBN were
 not separately re-run twice on hardware. The smoke-test runs are not committed to `results/`.
+
+## The cluster bootstrap is stratified by class composition (2026-09-22)
+
+The Dirichlet 0.1 local-only balanced accuracy sat at the very edge of its own interval
+(mean 0.5622, CI [0.553, 0.809]) -- the same symptom as the pooled bug, and the same kind of
+cause.
+
+**Diagnosis.** `Unit.weights` resampled sequences uniformly, so a resample could contain no
+sequence carrying one of the classes, and `metrics_from_counts` computes
+
+    bal = (rec1 * has1 + rec0 * has0) / (has1 + has0)
+
+which silently reports balanced accuracy as the recall of the *surviving* class when one is
+missing -- biasing replicates upward. Measured fraction of resamples that dropped a class:
+
+| run | unit | sequences | minority-class sequences | dropped a class |
+|---|---|---|---|---|
+| dirichlet0.1 local seed42 | node_c | 30 | **1** (211 no-fire images) | **37.8 %** |
+| dirichlet0.1 local seed42 | node_b | 31 | 2 (55 no-fire images) | 14.4 % |
+| iid local seed42 | node_a | 22 | 2 (1011 no-fire images) | 13.5 % |
+
+Not a Dirichlet-only problem: the IID partition has a node with 1011 no-fire images in two
+sequences.
+
+**Fix.** Sequences are split into three strata by class *composition* -- only class 0, only
+class 1, both -- and each stratum is resampled with replacement to its own size. A mixed
+sequence carries both classes by construction, so if a class occurs anywhere in a unit it
+occurs in every resample; measured dropout is now 0.0 % everywhere.
+
+Stratifying by a sequence's **majority** class would not have worked, and this is worth
+recording: FLAME sequences are videos in which the fire appears and disappears, so a node's
+entire minority class can live inside sequences that are majority the other class. Two of the
+three nodes above have *no* no-fire-dominant sequence at all, so the minority stratum would
+have been empty exactly where it was needed.
+
+**Which rows moved** (360 bootstrap rows): 179 moved by more than 0.01, 32 by more than 0.05,
+15 by more than 0.10; no row is unchanged. The movement is concentrated in the local-only rows,
+whose per-node units are small enough to lose a class; centralized rows, which bootstrap one
+pooled unit, barely move.
+
+| partition | kind | median move (balanced accuracy) |
+|---|---|---|
+| dirichlet_0.1 | local | 0.1174 |
+| iid_sub0.01 | local | 0.0329 |
+| iid_sub0.05 | local | 0.0298 |
+| iid | local | 0.0212 |
+| non_iid_label | centralized | 0.0022 |
+
+The row that prompted this: dirichlet_0.1 local-only balanced accuracy, [0.553, 0.809] ->
+[0.510, 0.682], with the point estimate 0.5622 now properly interior. Across all rows, the
+number whose point estimate sits in the lowest decile of its own interval went 2 -> 0.
+
+**Permanent guards** (`tests/test_predictions.py`), so neither defect can return:
+(a) every CI contains its point estimate, on the skewed shape that produced the symptom, for
+both `mean` and `pooled` aggregation; (b) no resample drops a class the unit contains -- with a
+control asserting the *unstratified* path still can, so the guard cannot pass vacuously;
+(c) `pooled` collapses the per-node units into one while `mean`/`weighted` keep them separate.
+A further test pins the strata to class composition rather than majority class.
+
+`weights(..., stratified=False)` is kept so the effect can be measured, and is documented as
+not for reported intervals.
+
+**Note on the src/ freeze.** This changes `src/evaluation/bootstrap.py` during the Jetson block.
+That module is analysis-only -- it is imported by `scripts/analyze_results.py` and the tests and
+by nothing under `src/fl/` -- so it cannot affect a running federated run. The nodes are
+unaffected regardless, since they do not pull during the block.
