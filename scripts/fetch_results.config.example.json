@@ -11,6 +11,15 @@
   "connect_timeout_s": 15,
   "log_tail_lines": 5,
 
+  "_alerts": "Lines matching these patterns in ~/chain.log or <repo>/logs/run_matrix.log raise an [ALERT] in logs/fetch.log and a desktop pop-up. Each distinct line alerts once, never again. Omit the block to use these defaults. ignore_case=false keeps the all-caps markers from matching ordinary prose.",
+  "alert_log_tail_lines": 400,
+  "alert_patterns": [
+    { "pattern": "STOPPING",          "ignore_case": false },
+    { "pattern": "DURDU",             "ignore_case": false },
+    { "pattern": "BASLAMADI",         "ignore_case": false },
+    { "pattern": "pre-?flight\\s+FAIL", "ignore_case": true }
+  ],
+
   "_python": "Interpreter used for the block report. The CPU venv is the right one; it only runs analyze_results.py and export_latex_tables.py.",
   "python": "C:\\Users\\CORSAIR\\venvs\\fedrgbd\\Scripts\\python.exe"
 }

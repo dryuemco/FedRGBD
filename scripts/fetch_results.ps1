@@ -109,6 +109,142 @@ function Test-Reachable {
 }
 
 # --------------------------------------------------------------------------- #
+# alerting on the node's own logs
+# --------------------------------------------------------------------------- #
+$AlertStateFile = Join-Path $LogDir 'fetch_alerts.state.json'
+$AlertStateCap = 800          # keep the state file bounded; far more than a block emits
+
+function Get-AlertPatterns {
+    if ($cfg.alert_patterns) { return $cfg.alert_patterns }
+    return @(
+        [pscustomobject]@{ pattern = 'STOPPING';            ignore_case = $false },
+        [pscustomobject]@{ pattern = 'DURDU';               ignore_case = $false },
+        [pscustomobject]@{ pattern = 'BASLAMADI';           ignore_case = $false },
+        [pscustomobject]@{ pattern = 'pre-?flight\s+FAIL';  ignore_case = $true  }
+    )
+}
+
+function Get-RegexOptions {
+    <#  Case folding here MUST be culture-invariant.
+
+        This machine runs under tr-TR, where 'I' and 'i' are distinct letters: the
+        capital of 'i' is 'İ' and the lowercase of 'I' is 'ı'. .NET's culture-aware
+        case-insensitive matching therefore refuses to match 'fail' against 'FAIL',
+        and PowerShell's -imatch inherits that. Verified on this machine:
+
+            [regex]::IsMatch('fail','FAIL', IgnoreCase)                  -> False
+            [regex]::IsMatch('fail','FAIL', IgnoreCase|CultureInvariant) -> True
+
+        Every marker we watch for contains an i or an I -- STOPPING, BASLAMADI,
+        "pre-flight FAIL" -- so without CultureInvariant the case-insensitive
+        patterns would silently never fire, and the job would look healthy while
+        missing exactly the events it exists to catch.
+    #>
+    param([bool]$IgnoreCase)
+    $opts = [System.Text.RegularExpressions.RegexOptions]::CultureInvariant
+    if ($IgnoreCase) { $opts = $opts -bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase }
+    return $opts
+}
+
+function Show-Alert {
+    <#  Never blocks. A scheduled pass must not sit waiting for someone to click OK,
+        so msg.exe (which returns immediately) is tried first and the MessageBox
+        fallback is launched as a detached process. #>
+    param([string]$Body)
+    $msgExe = Join-Path $env:SystemRoot 'System32\msg.exe'
+    if (Test-Path $msgExe) {
+        & $msgExe * /TIME:3600 ("FedRGBD testbed: " + $Body) 2>$null
+        if ($LASTEXITCODE -eq 0) { return }
+    }
+    # msg.exe is absent on Home editions; fall back to a detached message box.
+    $safe = $Body -replace "'", "''"
+    $inner = "Add-Type -AssemblyName System.Windows.Forms; " +
+             "[void][System.Windows.Forms.MessageBox]::Show('$safe','FedRGBD testbed alert'," +
+             "[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Warning)"
+    try {
+        Start-Process -FilePath 'powershell.exe' `
+            -ArgumentList '-NoProfile', '-WindowStyle', 'Hidden', '-Command', $inner `
+            -WindowStyle Hidden | Out-Null
+    } catch {
+        Write-Log 'WARN' ("could not raise a desktop alert: {0}" -f $_.Exception.Message)
+    }
+}
+
+function Invoke-AlertScan {
+    <#  Read-only scan of the node's logs for failure markers. Each distinct matching
+        line alerts exactly once: the line text is fingerprinted and remembered in
+        logs/fetch_alerts.state.json, so an hourly pass over the same log is silent.
+        run_matrix.log lines carry timestamps, so a genuinely repeated event is a
+        different line and does alert again. #>
+    $patterns = Get-AlertPatterns
+    $tailLines = if ($cfg.alert_log_tail_lines) { [int]$cfg.alert_log_tail_lines } else { 400 }
+
+    $seen = @{}
+    if (Test-Path $AlertStateFile) {
+        try {
+            foreach ($h in (Get-Content $AlertStateFile -Raw | ConvertFrom-Json).seen) { $seen[$h] = $true }
+        } catch { Write-Log 'WARN' 'alert state file unreadable; treating every match as new' }
+    }
+    $firstRun = ($seen.Count -eq 0) -and (-not (Test-Path $AlertStateFile))
+
+    $sources = @(
+        @{ name = 'chain.log';      path = '~/chain.log' },
+        @{ name = 'run_matrix.log'; path = ("'{0}/logs/run_matrix.log'" -f $RemoteRepo) }
+    )
+
+    $new = @()
+    $order = @()
+    foreach ($src in $sources) {
+        $text = Invoke-Remote ("tail -n {0} {1} 2>/dev/null" -f $tailLines, $src.path)
+        if ($script:LastExit -ne 0 -or -not $text) { continue }
+        foreach ($line in ($text -split "`n")) {
+            $line = $line.TrimEnd()
+            if (-not $line.Trim()) { continue }
+            $hit = $false
+            foreach ($p in $patterns) {
+                $ic = $false
+                if ($null -ne $p.ignore_case) { $ic = [bool]$p.ignore_case }
+                if ([regex]::IsMatch($line, $p.pattern, (Get-RegexOptions $ic))) { $hit = $true; break }
+            }
+            if (-not $hit) { continue }
+            $key = '{0}|{1}' -f $src.name, $line
+            $sha = [System.BitConverter]::ToString(
+                [System.Security.Cryptography.SHA256]::Create().ComputeHash(
+                    [System.Text.Encoding]::UTF8.GetBytes($key))).Replace('-', '').Substring(0, 32)
+            $order += $sha
+            if (-not $seen.ContainsKey($sha)) {
+                $seen[$sha] = $true
+                $new += [pscustomobject]@{ source = $src.name; line = $line; hash = $sha }
+            }
+        }
+    }
+
+    if ($new.Count -gt 0) {
+        if ($firstRun) {
+            # Do not fire a pop-up for history that predates alerting being switched on;
+            # record it as seen and log it quietly instead.
+            foreach ($n in $new) { Write-Log 'INFO' ("pre-existing marker in {0}: {1}" -f $n.source, $n.line) }
+            Write-Log 'INFO' ("alert baseline established from {0} existing marker line(s); future ones will alert" -f $new.Count)
+        } else {
+            foreach ($n in $new) { Write-Log 'ALERT' ("{0}: {1}" -f $n.source, $n.line) }
+            $head = ($new | Select-Object -First 3 | ForEach-Object { "[$($_.source)] $($_.line)" }) -join "`n"
+            if ($new.Count -gt 3) { $head += ("`n... and {0} more (see logs\fetch.log)" -f ($new.Count - 3)) }
+            Show-Alert $head
+        }
+    }
+
+    # Remember exactly the markers still visible in the tail window, bounded. A marker
+    # that has scrolled out cannot match again, so dropping it is safe and keeps the
+    # state file from growing for the whole 6-9 day run.
+    $keep = @($order | Select-Object -Unique | Select-Object -Last $AlertStateCap)
+    $state = [pscustomobject]@{ updated = (Get-Date -Format 'o'); seen = $keep }
+    try { $state | ConvertTo-Json -Depth 3 | Set-Content -Path $AlertStateFile -Encoding utf8 }
+    catch { Write-Log 'WARN' 'could not write the alert state file; markers may alert again next pass' }
+
+    return $new.Count
+}
+
+# --------------------------------------------------------------------------- #
 # main
 # --------------------------------------------------------------------------- #
 Write-Log 'INFO' ("fetch start -> {0}:{1}" -f $Remote, $RemoteRepo)
@@ -241,5 +377,14 @@ if ($fetched -gt 0 -and -not $DryRun) {
 $tail = Invoke-Remote ("tail -n {0} '{1}/logs/run_matrix.log' 2>/dev/null" -f ([int]($cfg.log_tail_lines | ForEach-Object { if ($_) { $_ } else { 5 } })), $RemoteRepo)
 if ($script:LastExit -eq 0 -and $tail) {
     foreach ($l in ($tail -split "`n")) { if ($l.Trim()) { Write-Log 'NODE' $l.Trim() } }
+}
+
+# Failure markers in the node's own logs. Read-only, and each distinct line alerts once.
+try {
+    $alerts = Invoke-AlertScan
+    if ($alerts -gt 0) { Write-Log 'INFO' ("{0} new alert line(s) this pass" -f $alerts) }
+} catch {
+    # An alerting fault must never fail the fetch: the runs are the point.
+    Write-Log 'WARN' ("alert scan failed: {0}" -f $_.Exception.Message)
 }
 exit 0

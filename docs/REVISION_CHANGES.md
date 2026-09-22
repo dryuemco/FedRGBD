@@ -1087,3 +1087,43 @@ whenever a change would touch frozen paths or risk perturbing a running block.
       `tests/test_paper_numbers.py` will name any hand-typed cell that went stale.
 - [ ] **Decide the fate of the hourly fetch task.** `scripts/uninstall_fetch_task.ps1`
       removes it; the local config and `logs/fetch.log` are kept deliberately.
+
+### Fetch job: alerting on the node's failure markers (2026-09-22)
+
+The hourly fetch now also reads `~/chain.log` and `<repo>/logs/run_matrix.log` on Node A
+(still read-only, still only `tail`) and raises an alert on `STOPPING`, `DURDU`,
+`BASLAMADI` or `pre-flight FAIL`.
+
+* An `[ALERT]` line goes to `logs/fetch.log` and a desktop pop-up appears -- `msg.exe`
+  first, falling back to a **detached** message box, because a scheduled pass must never
+  block waiting for someone to click OK.
+* **Once per event.** Each matching line is fingerprinted (source + full line text) into
+  `logs/fetch_alerts.state.json`, so an hourly pass over the same log is silent. Log lines
+  carry timestamps, so a genuinely repeated event is a different line and alerts again.
+  The state keeps only fingerprints still inside the tail window, so it stays bounded
+  across the 6-9 day run.
+* On the very first pass the state file does not exist, so pre-existing markers are
+  recorded and logged at `INFO` instead of firing a pop-up for history.
+* An alerting fault can never fail the fetch: the scan is wrapped, and a failure is a
+  `WARN`. Fetching the runs is the job that matters.
+
+**Trap worth knowing about: this machine runs under `tr-TR`, where case-insensitive
+matching is broken for any word containing `i` or `I`.** In Turkish the capital of `i` is
+`İ` and the lowercase of `I` is `ı`, so .NET's culture-aware folding treats `I` and `i` as
+different letters. Verified here:
+
+    [regex]::IsMatch('fail','FAIL', IgnoreCase)                  -> False
+    [regex]::IsMatch('fail','FAIL', IgnoreCase|CultureInvariant) -> True
+
+PowerShell's `-imatch` inherits this. **Every** marker above contains an `i` or an `I` --
+`STOPPING`, `BASLAMADI`, `pre-flight FAIL` -- so the case-insensitive pattern would have
+silently never fired while the job looked perfectly healthy. `Get-RegexOptions` in
+`fetch_results.ps1` therefore always sets `CultureInvariant`. Any future case-insensitive
+matching in this repository's PowerShell needs the same flag; `-imatch` alone is not safe
+on this machine.
+
+The all-caps markers are matched case-sensitively on purpose, so ordinary prose such as
+"stopping the server cleanly" stays quiet.
+
+Verified end to end: a temporary pattern matching an existing `chain.log` line produced
+one `[ALERT]` and a pop-up on the first pass and nothing on the second.
