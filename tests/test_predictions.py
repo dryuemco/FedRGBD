@@ -254,3 +254,84 @@ def test_analysis_clean_subset_and_bootstrap_on_real_partition_paths(tmp_path, m
     assert clean.ci_method == "cluster_bootstrap_B50"
     other = summary[summary.metric == "selected_round"].iloc[0]
     assert other.ci_method == "t_seeds"
+
+
+def test_static_format_doc_stays_in_sync_with_the_generated_readme():
+    """docs/PREDICTIONS_FORMAT.md is the committed copy of README_TEXT.
+
+    The generated README is written into each run's predictions/ directory and is
+    gitignored, so the static doc is the only description of the format that is in
+    git before a run exists.  It is an expanded version rather than a copy, so what
+    is pinned here is the part that describes the on-disk layout: the format
+    version, the file-name patterns and the four arrays with their dtypes.  If
+    README_TEXT gains or renames an array, this fails.
+    """
+    from src.evaluation.predictions import FORMAT_VERSION, README_TEXT
+
+    doc_path = os.path.join(_REPO, "docs", "PREDICTIONS_FORMAT.md")
+    assert os.path.isfile(doc_path), "docs/PREDICTIONS_FORMAT.md is missing"
+    doc = open(doc_path, encoding="utf-8").read()
+
+    assert "format v%d" % FORMAT_VERSION in doc.lower() or \
+           "(v%d)" % FORMAT_VERSION in doc, \
+        "the static doc does not name format version %d" % FORMAT_VERSION
+
+    for pattern in ("r<round>_<node>_<split>.npz", "selected_<node>_<split>.npz"):
+        assert pattern in doc, "file pattern %r missing from the static doc" % pattern
+
+    # every array row of the generated README must appear verbatim in the static doc
+    rows = [line.strip() for line in README_TEXT.splitlines()
+            if line.startswith("| `") and "dtype" not in line]
+    assert len(rows) == 4, "expected 4 array rows in README_TEXT, found %d" % len(rows)
+    for row in rows:
+        assert row in doc, "array row not in the static doc:\n  %s" % row
+
+
+def test_pooled_bootstrap_uses_every_node_not_just_the_first():
+    """A centralized run's CI must cover the pooled held-out set.
+
+    ``run_replicates`` implements "pooled" as ``reps[0]``, i.e. it assumes a single
+    unit. Handing it one unit per node file bootstrapped node_a alone while the
+    point estimate pooled all three, which produced CIs that did not contain their
+    own point estimate (e.g. mean 0.9471 with CI [0.953, 0.998]).
+    """
+    from scripts.analyze_results import _aggregate_point, _units_for
+    from src.evaluation.bootstrap import config_ci
+
+    rng = np.random.default_rng(0)
+    raw = []
+    for node, (n, shift) in enumerate([(300, 3.0), (300, 0.2), (300, -0.5)]):
+        label = (rng.random(n) < 0.5).astype(np.int64)
+        # each node has a very different margin scale -> a different balanced accuracy
+        margin = (label * 2 - 1) * rng.normal(shift, 1.0, n)
+        gid = np.array(["n%d_g%d" % (node, i // 25) for i in range(n)])
+        raw.append({"label": label, "margin": margin, "group": gid})
+
+    units = _units_for(raw, "pooled")
+    assert len(units) == 1, "pooled aggregation must bootstrap a single pooled unit"
+    assert len(units[0].label) == 900
+
+    point = _aggregate_point(raw, "pooled")
+    cis = config_ci([units], "pooled", "pooled-test", B=400)
+    for metric in ("accuracy", "balanced_accuracy"):
+        lo, hi = cis[metric]["ci_low"], cis[metric]["ci_high"]
+        assert lo <= point[metric] <= hi, (
+            "%s: pooled point estimate %.4f outside its own CI [%.4f, %.4f]"
+            % (metric, point[metric], lo, hi))
+
+    # and it must differ from bootstrapping only the first node
+    first_only = config_ci([[Unit(raw[0]["label"], raw[0]["margin"], raw[0]["group"])]],
+                           "pooled", "pooled-test", B=400)
+    assert abs(first_only["balanced_accuracy"]["ci_low"]
+               - cis["balanced_accuracy"]["ci_low"]) > 1e-6
+
+
+def test_mean_and_weighted_aggregations_keep_one_unit_per_node():
+    """Only "pooled" collapses the nodes; local-only and FL must not."""
+    from scripts.analyze_results import _units_for
+
+    raw = [{"label": np.array([0, 1]), "margin": np.array([-1.0, 1.0]),
+            "group": np.array(["g1", "g2"])} for _ in range(3)]
+    assert len(_units_for(raw, "mean")) == 3
+    assert len(_units_for(raw, "weighted")) == 3
+    assert len(_units_for(raw, "pooled")) == 1

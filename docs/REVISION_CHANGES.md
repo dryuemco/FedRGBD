@@ -565,3 +565,87 @@ strategy class name; it asserts the base class and the mixin instead.
 The paper's reproducibility sentence is written but the measured outcome of the
 fixed-seed repeat test on the testbed is still open; it carries a `\todo` in
 `paper/main.tex` and lands with that result.
+
+## Declared primary metric, bootstrap CIs for the references, predictions format (2026-09-22)
+
+### Balanced accuracy is the declared primary metric
+
+Fixed 2026-09-22, **after** the reference results existed and **before any federated run of
+the revision**. This is deliberately *not* called a pre-registration -- the clean-subset rule
+(hard rule 7) was fixed before any metric of its kind existed; this one was prompted by a
+result. The paper says so in the new methodology subsection "Declared Primary Metric", and so
+does the response letter.
+
+* Balanced accuracy leads for every partition and method, MCC second, accuracy reported but
+  never ranking methods on its own. CLAUDE.md hard rule 8.
+* **Why:** under label and Dirichlet skew each node's test split inherits that node's class
+  proportions, so accuracy rewards majority-class prediction -- the failure federation should
+  fix. The references demonstrate it: local-only beats centralized on accuracy (95.5 vs
+  94.3 %) and loses on balanced accuracy (88.6 vs 94.7 %), so the two rankings disagree.
+* Column order: `FULL_METRIC_ORDER` and `DEFAULT_METRICS` in `scripts/export_latex_tables.py`;
+  `tab:fullmetrics` in the paper reordered to Bal.\ acc. / MCC / Acc. / ...; the abstract now
+  leads with balanced accuracy and states the inversion. `tests/test_paper_numbers.py` maps
+  column position to metric, so it also pins the new order.
+* The gap-dependent narrative is untouched and still carries its `\todo` markers.
+
+### Reference CIs now use the same cluster bootstrap as the federated runs
+
+`scripts/predict_from_checkpoint.py` regenerated per-image predictions for all 62
+selection-rule baselines from their `model_selected.pt`; every run reproduced its logged
+selected-epoch metrics exactly. `analyze_results.py` then switches a configuration to the
+sequence-level bootstrap automatically once every run in it has predictions, so no code change
+was needed for that part. **No table mixes CI methods**: the selected-test tables are
+uniformly `cluster_bootstrap_B1000`, and the `t_seeds` tables (`final_*`, `total_time_s`,
+`v1_*`) contain only protocols that have no predictions by construction.
+
+Effect on balanced accuracy (t-interval over seeds -> cluster bootstrap):
+
+| partition | kind | mean | t-interval | cluster bootstrap | width |
+|---|---|---|---|---|---|
+| IID | centralized | 0.9374 | [0.920, 0.954] | [0.894, 0.958] | x1.90 |
+| IID | local-only | 0.8449 | [0.826, 0.864] | [0.781, 0.879] | x2.57 |
+| label skew | centralized | 0.9471 | [0.936, 0.958] | [0.920, 0.969] | x2.18 |
+| label skew | local-only | 0.8864 | [0.864, 0.908] | [0.835, 0.919] | x1.91 |
+| Dir. 0.1 | local-only | 0.5622 | [0.392, 0.732] | [0.553, 0.809] | x0.75 |
+| Dir. 1 | centralized | 0.8903 | [0.741, **1.040**] | [0.822, 0.968] | x0.49 |
+
+At five seeds the bootstrap is about twice as wide -- the understatement it exists to correct.
+At three seeds it is often narrower, because the $t$ interval is dominated by
+$t_{0.975,2}=4.30$ and can leave the unit interval entirely, as at Dirichlet 1.
+
+### Bug found and fixed: the pooled bootstrap used only the first node
+
+Checking the before/after exposed CIs that **did not contain their own point estimate** (label
+skew, centralized: mean 0.9471, CI [0.953, 0.998]).
+
+`run_replicates` implements `aggregation="pooled"` as `reps[0]` and documents it as
+"centralized: one unit", but `_bootstrap_cis` handed it **one unit per node prediction file**.
+Every centralized CI was therefore bootstrapped from `node_a` alone while its point estimate
+pooled all three nodes; under label skew node_a is 80 % fire, which is why the interval sat
+above the mean.
+
+Fixed in `scripts/analyze_results.py` (`_units_for`), **not** in `src/evaluation/bootstrap.py`:
+the caller was violating the callee's documented contract, and `src/` is frozen for the Jetson
+block. The per-node units are concatenated into one, exactly as `_aggregate_point` already does
+for the point estimate; near-duplicate groups never span nodes, so concatenation cannot merge
+two sequences. After the fix all 360 bootstrap rows contain their point estimate, none is NaN,
+and no rate metric leaves [0, 1].
+
+Only `"pooled"` was affected: `"mean"` (local-only) and `"weighted"` (FL) already used every
+unit, so federated runs were never mis-estimated.
+
+### Predictions format documented in git
+
+`docs/PREDICTIONS_FORMAT.md` is the committed counterpart of the README that
+`src/evaluation/predictions.py` writes into each `predictions/` directory (now gitignored, like
+the `.npz` files). `tests/test_predictions.py` pins the doc's format version, file-name
+patterns and all four array rows to `README_TEXT`, so the two cannot drift apart.
+
+### Reproducibility paragraph
+
+The measured outcome of the fixed-seed repeat test is now in the paper (Section III-I): on the
+testbed at commit e85945d two FedAvg runs agreed to all printed digits on the aggregated
+validation loss of each round, and all twelve per-image prediction files were bitwise
+identical. The scope is stated honestly -- FedAvg in that configuration; the fixed aggregation
+order applies to all strategies and the unit tests cover all three, but FedProx and FedBN were
+not separately re-run twice on hardware. The smoke-test runs are not committed to `results/`.

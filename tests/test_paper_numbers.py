@@ -26,15 +26,17 @@ pytestmark = pytest.mark.skipif(
     not (os.path.isfile(MAIN_TEX) and os.path.isfile(SUMMARY)),
     reason="paper/main.tex and analysis/summary_table.csv are both needed")
 
-# metric column of tab:fullmetrics -> metric name in summary_table.csv.
-# The table prints percentages for everything except MCC.
+# metric column of tab:fullmetrics -> metric name in summary_table.csv, in the table's
+# column order.  The table prints percentages for everything except MCC.
+# Balanced accuracy and MCC lead: they are the declared primary metric and the second
+# summary statistic (CLAUDE.md hard rule 8).  Keep this list in the table's order.
 FULLMETRICS_COLUMNS = [
-    ("selected_test_accuracy", 100.0),
     ("selected_test_balanced_accuracy", 100.0),
+    ("selected_test_mcc", 1.0),
+    ("selected_test_accuracy", 100.0),
     ("selected_test_recall", 100.0),
     ("selected_test_specificity", 100.0),
     ("selected_test_macro_f1", 100.0),
-    ("selected_test_mcc", 1.0),
     ("selected_test_roc_auc", 100.0),
 ]
 

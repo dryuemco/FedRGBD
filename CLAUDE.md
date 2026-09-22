@@ -65,6 +65,18 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
    images and on the clean subset. Never change the thresholds, hashes or lists after seeing
    results; `python scripts/clean_subset.py --check` must report "identical". If the rule ever
    has to change, disclose it in the paper and the response letter.
+8. **Balanced accuracy is the declared primary metric; accuracy is secondary.** Fixed
+   2026-09-22, after the baseline references existed but **before any federated run of the
+   revision** (say it that way — it is not a pre-registration like rule 7, and the paper states
+   the difference in §"Declared Primary Metric"). For every partition and method: balanced
+   accuracy leads, MCC is the second summary statistic, accuracy is reported alongside but
+   never ranks methods on its own. **Why:** under label and Dirichlet skew each node's test
+   split inherits that node's class proportions, so accuracy rewards majority-class
+   prediction — the very failure federation should fix. The references prove it, not
+   hypothetically: local-only beats centralized on accuracy (95.5 vs 94.3 %) and loses on
+   balanced accuracy (88.6 vs 94.7 %), so the two rankings disagree. Column order lives in
+   `FULL_METRIC_ORDER` / `DEFAULT_METRICS` in `scripts/export_latex_tables.py`; do not reorder
+   accuracy back to the front.
 
 ## Model selection (declared rule — use this wording, do not paraphrase it)
 

@@ -1363,6 +1363,24 @@ def attach_prediction_metrics(runs: Sequence[Dict[str, Any]], warn: bool = True)
                                              for u, c in zip(units, clean)))
 
 
+def _units_for(raw: Sequence[Dict[str, Any]], aggregation: str) -> List[Unit]:
+    """Bootstrap units of one run, in the shape ``run_replicates`` expects.
+
+    ``"pooled"`` (centralized) means *one* unit covering the pooled held-out set:
+    ``run_replicates`` takes ``reps[0]`` for it, so handing it one unit per node
+    file would silently bootstrap the first node alone while the point estimate
+    still pooled all three -- CIs that do not contain their own point estimate.
+    The per-node files are therefore concatenated here, which is exactly what
+    ``_aggregate_point`` does for the point estimate. Near-duplicate groups never
+    span nodes, so concatenating cannot merge two different sequences.
+    """
+    if aggregation == "pooled" and len(raw) > 1:
+        return [Unit(np.concatenate([u["label"] for u in raw]),
+                     np.concatenate([u["margin"] for u in raw]),
+                     np.concatenate([np.asarray(u["group"]).astype(str) for u in raw]))]
+    return [Unit(u["label"], u["margin"], u["group"]) for u in raw]
+
+
 def _bootstrap_cis(group: Sequence[Dict[str, Any]], config_id: str,
                    B: int) -> Dict[str, Dict[str, float]]:
     """Cluster (sequence) bootstrap CIs of the selected-test metrics of one configuration,
@@ -1373,7 +1391,7 @@ def _bootstrap_cis(group: Sequence[Dict[str, Any]], config_id: str,
     out: Dict[str, Dict[str, float]] = {}
     aggregation = runs[0]["pred_aggregation"]
     for suffix, key in (("", "pred_units"), ("clean_", "pred_units_clean")):
-        units = [[Unit(u["label"], u["margin"], u["group"]) for u in r[key]] for r in runs]
+        units = [_units_for(r[key], aggregation) for r in runs]
         if any(not u for u in units):
             continue
         cis = config_ci(units, aggregation, "%s|%s" % (config_id, suffix), B=B)

@@ -53,21 +53,28 @@ INPUT_FILES = {
     "friedman": "friedman.csv",
 }
 
-#: summary metrics exported by default (those actually present are used)
-DEFAULT_METRICS = ("final_accuracy", "final_loss", "total_time_s",
-                   "selected_test_accuracy", "v1_final_round_accuracy")
+#: summary metrics exported by default (those actually present are used).  The declared
+#: primary metric (balanced accuracy at the selected round) comes first so that its table
+#: is the one the paper leads with; accuracy stays, as the secondary metric.
+DEFAULT_METRICS = ("selected_test_balanced_accuracy", "selected_test_mcc",
+                   "selected_test_accuracy", "final_accuracy", "final_loss", "total_time_s",
+                   "v1_final_round_accuracy")
 
-#: column order of full_metrics_<dist>.tex
+#: column order of full_metrics_<dist>.tex.  Balanced accuracy leads because it is the
+#: declared primary metric (Section "Primary Metric" of the paper, CLAUDE.md hard rule 8);
+#: plain accuracy follows it as a secondary metric.  Do not reorder these two back.
 FULL_METRIC_ORDER = (
-    "final_accuracy", "final_balanced_accuracy", "final_precision", "final_recall",
+    "final_balanced_accuracy", "final_mcc", "final_accuracy", "final_precision", "final_recall",
     "final_specificity", "final_f1", "final_macro_f1", "final_macro_precision",
-    "final_macro_recall", "final_macro_specificity", "final_mcc", "final_roc_auc",
+    "final_macro_recall", "final_macro_specificity", "final_roc_auc",
     "final_loss",
 )
 
 METRIC_LABELS = {
     "final_accuracy": "Accuracy",
     "selected_test_accuracy": "Test accuracy (selected round)",
+    "selected_test_balanced_accuracy": "Test balanced accuracy (selected round)",
+    "selected_test_mcc": "Test MCC (selected round)",
     "selected_round": "Selected round",
     "selected_val_loss": "Validation loss (selected round)",
     "v1_final_round_accuracy": "v1 final-round accuracy (validation)",

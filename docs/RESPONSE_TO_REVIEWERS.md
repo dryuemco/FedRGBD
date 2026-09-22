@@ -333,6 +333,30 @@ the manuscript tables are pinned to `analysis/summary_table.csv` by
 protocol: it is the honest size of the band in which federation has to show its value, and it
 is measured under a rule fixed before the federated runs.
 
+**Note on the primary metric (raised by us).** Following the reviewers' criticism of
+accuracy-only reporting, we have **declared balanced accuracy the primary metric** of the study
+for every partition and every method, with MCC as the second summary statistic; plain accuracy
+is reported alongside but never ranks methods on its own. The manuscript states this in a new
+methodology subsection ("Declared Primary Metric"), and the tables and the abstract now lead
+with balanced accuracy.
+
+The reason is a property of the partitions, not a preference: under label and Dirichlet skew
+each node's test split inherits that node's class proportions, so accuracy rewards a model that
+simply predicts its own node's majority class — the very failure mode that heterogeneous
+federation is meant to fix. Our own reference conditions demonstrate it rather than merely
+suggesting it: under label skew the local-only models reach a *higher* accuracy than the
+centralized model (95.5 vs. 94.3 %) while their balanced accuracy is more than six points
+*lower* (88.6 vs. 94.7 %) and their specificity twelve points lower (83.8 vs. 96.4 %). A ranking
+by accuracy and a ranking by balanced accuracy disagree on which method is better.
+
+We state the timing plainly, because this is **not** a pre-registration in the sense of the
+clean-subset rule. It was fixed on 22 September 2026, *after* the centralized and local-only
+reference results existed — the accuracy inversion above is what prompted it — and *before* any
+federated run of the revision had been executed, so no federated result could have influenced
+the choice. It is recorded as a hard rule in the repository (`CLAUDE.md`) and applies unchanged
+to every federated result we will report. The clean-subset rule, by contrast, was fixed before
+any clean-subset metric of any kind had been computed.
+
 ### R3.5 — "Report balanced accuracy, macro-F1, sensitivity, specificity, and per-client confusion matrices."
 
 **Response — DONE (code), DONE (manuscript), PENDING EXPERIMENT.** A new methodology subsection
