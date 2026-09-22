@@ -760,3 +760,16 @@ footage. That limit is now counted, stated and marked.
   worked around: `assert_valid_latex` treated `\ref{...}` keys as typeset text and so rejected
   a legitimate underscore in a cross-reference, and the `tab:fullmetrics` row matcher in
   `tests/test_paper_numbers.py` did not tolerate a marker on the method name.
+
+## Scarce minority classes also bias model selection (2026-09-22)
+
+Added to Limitations, next to the dagger explanation: the scarce cells matter for the
+*selection rule*, not only for the confidence intervals, and asymmetrically. Under
+Dirichlet 0.1 node_c's validation split holds **5 no-fire images in one sequence** against
+1,387 fire images, so its local-only model is selected almost entirely on fire-class loss,
+while a federated run selects on the validation loss aggregated across all three clients and
+so sees node_a's 2,347 no-fire validation images -- **89 % of that partition's no-fire
+validation data**. In the most skewed partition the selection rule is therefore better
+informed for FL than for local-only. Stated as a caveat on that comparison, not as a property
+of either method. No new analysis: the counts come from
+`analysis/leakage/heldout_dominance.csv`.
