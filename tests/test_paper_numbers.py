@@ -61,7 +61,8 @@ def _row(tex, table_label, method, distribution_block):
     halves = block.split(r"\multirow")
     half = halves[1] if distribution_block == "iid" else halves[2]
     for line in half.splitlines():
-        if re.search(r"&\s*%s\s*&" % re.escape(method), line):
+        # the method cell may carry a scarce-minority marker, e.g. "Local-only$^{\dagger}$"
+        if re.search(r"&\s*%s\s*(\$\^\{\\dagger\}\$)?\s*&" % re.escape(method), line):
             return line
     raise AssertionError("no %r row in %s (%s)" % (method, table_label, distribution_block))
 

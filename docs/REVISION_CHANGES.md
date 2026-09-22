@@ -715,3 +715,48 @@ not for reported intervals.
 That module is analysis-only -- it is imported by `scripts/analyze_results.py` and the tests and
 by nothing under `src/fl/` -- so it cannot affect a running federated run. The nodes are
 unaffected regardless, since they do not pull during the block.
+
+## Sequence counts per class, and a dagger on the intervals that rest on one or two videos (2026-09-22)
+
+The stratified bootstrap keeps every class present in every replicate, but it cannot create
+information the partition does not hold. When a node's minority class is carried by one or two
+held-out sequences there is no between-sequence variance for that class to estimate, so the
+interval is conditional on those particular videos and is too narrow as a statement about new
+footage. That limit is now counted, stated and marked.
+
+* **Methodology** (Section III-J) now names the estimator precisely: a hierarchical
+  sequence-level (cluster) bootstrap *percentile* interval, B = 1000, with the sequences
+  resampled stratified by class composition into the three strata *fire-only*,
+  *no-fire-only* and *mixed*, each resampled to its own size -- with the one-line reason that a
+  class confined to few sequences would otherwise vanish from some resamples and balanced
+  accuracy would silently become the recall of the surviving class.
+* **`scripts/heldout_dominance.py`** now also writes, from the committed manifests alone:
+  `analysis/leakage/heldout_sequences.tex` (sequences per class, per partition and node,
+  `tab:heldout_sequences`) and `analysis/leakage/scarce_minority.csv` (which
+  `(partition, kind)` configurations rest on <= 2 minority-class sequences).
+  `export_latex_tables.py` copies the table into `paper/tables/` and reads the flags.
+* **Five of the thirty held-out cells** of the five main partitions have a minority class of at
+  most two sequences. The count is invisible in the image counts, which is the point:
+
+  | partition | node | split | minority class | images | sequences |
+  |---|---|---|---|---|---|
+  | dirichlet_0.1 | node_c | test | No_Fire | 211 | **1** |
+  | dirichlet_0.1 | node_c | val | No_Fire | 5 | **1** |
+  | dirichlet_0.1 | node_b | test | No_Fire | 55 | **2** |
+  | dirichlet_0.1 | node_b | val | No_Fire | 274 | **2** |
+  | iid | node_a | test | No_Fire | **1011** | **2** |
+
+* **Flagging.** Every generated summary table marks the affected cells with `$^{\dagger}$`
+  next to the CI, and the footnote explains it; `tab:fullmetrics` marks the IID local-only row.
+  Only per-client configurations (`local`, `fl`) are ever flagged -- the centralized rows
+  evaluate one pooled split, whose sequences come from all three nodes, and are never scarce.
+* **Limitations** states what the flag means: the interval describes uncertainty about which
+  frames of that footage were held out, not about a new fire from a new flight, and widening it
+  is a matter of more footage rather than more seeds -- with 265 sequences in FLAME and whole
+  sequences as the unit of assignment, a three-way split cannot give every node many sequences
+  of its minority class.
+* **Tests.** A flagged configuration must carry the dagger and an unflagged one must not, and
+  the footnote must explain it. Two pre-existing test gaps surfaced and were fixed rather than
+  worked around: `assert_valid_latex` treated `\ref{...}` keys as typeset text and so rejected
+  a legitimate underscore in a cross-reference, and the `tab:fullmetrics` row matcher in
+  `tests/test_paper_numbers.py` did not tolerate a marker on the method name.

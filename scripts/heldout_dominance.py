@@ -1,9 +1,23 @@
 #!/usr/bin/env python3
-"""FedRGBD -- how much of each held-out cell is a single sequence (partition property).
+"""FedRGBD -- how much of each held-out cell is a single sequence, and how many
+sequences carry each class (both are properties of the partition, not of a method).
 
-For every partition in data/splits and every (node, split, class) validation/test
-cell: number of images, number of sequences (group_id), and the share of the cell
-taken by its largest sequence.  Writes analysis/leakage/heldout_dominance.csv.
+For every partition in ``data/splits`` and every (node, split, class) validation /
+test cell: number of images, number of sequences (``group_id``), and the share of
+the cell taken by its largest sequence.
+
+The **sequence count per class** is the one that limits what a confidence interval
+can say. The sequence-level bootstrap resamples sequences, so a class carried by
+one or two of them has no between-sequence variance to estimate: the interval is
+conditional on those particular videos. Under Dirichlet 0.1 one node holds all 211
+of its no-fire test images in a *single* sequence, and even the IID partition has a
+node whose 1011 no-fire test images are two sequences -- a count that is invisible
+if one only looks at the number of images.
+
+Writes:
+    analysis/leakage/heldout_dominance.csv    per-cell images / sequences / dominance
+    analysis/leakage/heldout_sequences.tex    per-partition, per-node sequence counts
+    analysis/leakage/scarce_minority.csv      (partition, kind) -> flag for the result tables
 
     python scripts/heldout_dominance.py
 """
@@ -14,10 +28,24 @@ import pandas as pd
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SPLITS = os.path.join(REPO, "data", "splits")
-OUT = os.path.join(REPO, "analysis", "leakage", "heldout_dominance.csv")
+OUT_DIR = os.path.join(REPO, "analysis", "leakage")
+OUT = os.path.join(OUT_DIR, "heldout_dominance.csv")
+OUT_TEX = os.path.join(OUT_DIR, "heldout_sequences.tex")
+OUT_FLAGS = os.path.join(OUT_DIR, "scarce_minority.csv")
+
+#: a class carried by at most this many sequences has no between-sequence variance
+SCARCE = 2
+
+#: partitions shown in the paper table (the _sub variants subsample only the
+#: training split, so their held-out cells are identical to the base partition)
+MAIN = ("iid", "non_iid_label", "dirichlet_0.1", "dirichlet_0.5", "dirichlet_1")
+
+PART_LABEL = {"iid": "IID", "non_iid_label": "Label skew",
+              "dirichlet_0.1": r"Dir.\ $\alpha{=}0.1$", "dirichlet_0.5": r"Dir.\ $\alpha{=}0.5$",
+              "dirichlet_1": r"Dir.\ $\alpha{=}1$"}
 
 
-def main():
+def cells() -> pd.DataFrame:
     rows = []
     for name in sorted(os.listdir(SPLITS)):
         if not name.endswith(".csv.gz"):
@@ -29,10 +57,105 @@ def main():
             rows.append(dict(partition=part, node=node, split=split, label=label, n=len(cell),
                              sequences=len(sizes), largest_group=sizes.index[0],
                              largest_share=round(sizes.iloc[0] / len(cell), 4)))
-    df = pd.DataFrame(rows)
+    return pd.DataFrame(rows)
+
+
+def _minority(df: pd.DataFrame, partition: str, node: str, split: str):
+    """(minority label, its image count, its sequence count) of one held-out cell."""
+    sel = df[(df.partition == partition) & (df.node == node) & (df.split == split)]
+    if sel.empty:
+        return None
+    row = sel.sort_values("n").iloc[0]
+    return str(row.label), int(row.n), int(row.sequences)
+
+
+def flags(df: pd.DataFrame) -> pd.DataFrame:
+    """Per (partition, kind): does any evaluation unit rest on <= SCARCE sequences?
+
+    ``local`` and ``fl`` evaluate each client on its own split, so any node with a
+    scarce minority class flags the configuration. ``centralized`` evaluates one
+    pooled split, so the sequences of all nodes count together.
+    """
+    rows = []
+    for partition in sorted(df.partition.unique()):
+        nodes = sorted(df[df.partition == partition].node.unique())
+        worst, where = None, ""
+        for node in nodes:                                   # per-client units
+            got = _minority(df, partition, node, "test")
+            if got and (worst is None or got[2] < worst):
+                worst, where = got[2], "%s %s (%d images)" % (node, got[0], got[1])
+        for kind in ("local", "fl"):
+            rows.append(dict(partition=partition, kind=kind, min_sequences=worst,
+                             flagged=int(worst is not None and worst <= SCARCE), detail=where))
+
+        pooled = df[(df.partition == partition) & (df.split == "test")]
+        per_class = pooled.groupby("label").sequences.sum()
+        pooled_min = int(per_class.min()) if len(per_class) else None
+        rows.append(dict(partition=partition, kind="centralized", min_sequences=pooled_min,
+                         flagged=int(pooled_min is not None and pooled_min <= SCARCE),
+                         detail="pooled %s" % per_class.idxmin() if len(per_class) else ""))
+    return pd.DataFrame(rows)
+
+
+def latex(df: pd.DataFrame) -> str:
+    lines = [
+        "% generated by scripts/heldout_dominance.py -- do not edit by hand",
+        r"\begin{table}[t]", r"\centering",
+        r"\caption{Held-Out Sequences per Class (Validation / Test), by Partition and Node. "
+        r"A Class Carried by One or Two Sequences Has No Between-Sequence Variance for the "
+        r"Bootstrap to Estimate}",
+        r"\label{tab:heldout_sequences}", r"\small",
+        r"\begin{tabular}{@{}llrrrr@{}}", r"\toprule",
+        r"\textbf{Partition} & \textbf{Node} & \multicolumn{2}{c}{\textbf{Fire}} "
+        r"& \multicolumn{2}{c}{\textbf{No-fire}} \\",
+        r"\cmidrule(lr){3-4} \cmidrule(lr){5-6}",
+        r" & & val & test & val & test \\", r"\midrule",
+    ]
+    for partition in MAIN:
+        sub = df[df.partition == partition]
+        if sub.empty:
+            continue
+        for i, node in enumerate(sorted(sub.node.unique())):
+            def seq(label, split):
+                cell = sub[(sub.node == node) & (sub.label == label) & (sub.split == split)]
+                if cell.empty:
+                    return "--"
+                s = int(cell.sequences.iloc[0])
+                return (r"\textbf{%d}$^{\dagger}$" % s) if s <= SCARCE else "%d" % s
+            lines.append(r"%s & %s & %s & %s & %s & %s \\" % (
+                PART_LABEL.get(partition, partition) if i == 0 else "",
+                node.replace("_", r"\_"), seq("Fire", "val"), seq("Fire", "test"),
+                seq("No_Fire", "val"), seq("No_Fire", "test")))
+        lines.append(r"\addlinespace")
+    lines += [
+        r"\bottomrule", r"\end{tabular}", r"\par\smallskip",
+        r"\footnotesize Number of distinct near-duplicate groups (sequences) contributing to "
+        r"each held-out class set. $^{\dagger}$ marks a class carried by at most %d sequences: "
+        r"the sequence-level bootstrap can then no longer estimate between-sequence variance "
+        r"for that class, so the interval is conditional on those particular videos and "
+        r"understates uncertainty about new footage. The count matters independently of the "
+        r"number of images -- in the IID partition node~A's 1{,}011 no-fire test images are "
+        r"two sequences. The low-data variants subsample only the training split and have the "
+        r"same held-out cells. Produced by \texttt{scripts/heldout\_dominance.py}." % SCARCE,
+        r"\end{table}", "",
+    ]
+    return "\n".join(lines)
+
+
+def main():
+    df = cells()
+    os.makedirs(OUT_DIR, exist_ok=True)
     df.to_csv(OUT, index=False, lineterminator="\n")
-    print("wrote %s (%d cells)" % (OUT, len(df)))
-    print(df[(df.partition == "iid") & (df.node == "node_c")].to_string(index=False))
+    with open(OUT_TEX, "w", newline="\n") as fh:
+        fh.write(latex(df))
+    fl = flags(df)
+    fl.to_csv(OUT_FLAGS, index=False, lineterminator="\n")
+    print("wrote %s (%d cells), %s, %s" % (OUT, len(df), OUT_TEX, OUT_FLAGS))
+    scarce = df[df.sequences <= SCARCE]
+    print("\nclass sets carried by <= %d sequences (%d):" % (SCARCE, len(scarce)))
+    print(scarce.to_string(index=False))
+    print("\nflagged configurations:")
+    print(fl[fl.flagged == 1].to_string(index=False))
 
 
 if __name__ == "__main__":

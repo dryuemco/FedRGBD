@@ -153,9 +153,11 @@ def assert_valid_latex(text):
     assert text.count("\\toprule") == 1
     assert text.count("\\bottomrule") == 1
     assert "\\caption{" in text and "\\label{tab:" in text
-    # no stray unescaped special outside comments, \label{}s and math mode
+    # no stray unescaped special outside comments, cross-reference keys and math mode.
+    # \label{} and \ref{} arguments are keys, not typeset text, so underscores in them
+    # are legitimate and must not be escaped.
     typeset = "\n".join(l for l in text.splitlines() if not l.startswith("%"))
-    typeset = re.sub(r"\\label\{[^}]*\}", "", typeset)
+    typeset = re.sub(r"\\(label|ref|eqref|autoref)\{[^}]*\}", "", typeset)
     typeset = re.sub(r"\$[^$]*\$", "", typeset)
     for escaped in ("\\_", "\\%", "\\&", "\\#"):
         typeset = typeset.replace(escaped, "")
@@ -461,3 +463,48 @@ def test_time_table_absent_without_revision_runs(analysis_dir, tmp_path):
     out = str(tmp_path / "tables")
     written = [os.path.basename(p) for p in export(analysis_dir, out, warn=False)]
     assert "time.tex" not in written
+
+
+def test_scarce_minority_configurations_are_daggered(tmp_path):
+    """Intervals resting on <= 2 minority-class sequences must be marked.
+
+    A reader cannot otherwise tell that a per-client interval is conditional on one
+    or two videos rather than on the dataset.
+    """
+    leakage = tmp_path / "leakage"
+    leakage.mkdir()
+    (leakage / "scarce_minority.csv").write_text(
+        "partition,kind,min_sequences,flagged,detail\n"
+        "iid,local,2,1,node_a No_Fire (1011 images)\n"
+        "iid,centralized,21,0,pooled No_Fire\n", encoding="utf-8")
+
+    from scripts.export_latex_tables import load_scarce_minority
+
+    scarce = load_scarce_minority(str(tmp_path))
+    assert scarce == {("iid", "local")}
+
+    rows = []
+    for kind, label in (("local", "Local-only (group-level)"),
+                        ("centralized", "Centralized (group-level)")):
+        rows.append({"metric": "selected_test_balanced_accuracy", "distribution": "iid",
+                     "kind": kind, "label": label, "mean": 0.84, "std": 0.01,
+                     "ci_low": 0.78, "ci_high": 0.88, "n_seeds": 5,
+                     "ci_method": "cluster_bootstrap_B1000"})
+    tex = summary_tex(pd.DataFrame(rows), "selected_test_balanced_accuracy",
+                      scarce=scarce)
+
+    local_line = next(l for l in tex.splitlines() if "Local-only" in l)
+    central_line = next(l for l in tex.splitlines() if "Centralized" in l)
+    assert r"$^{\dagger}$" in local_line, "the scarce-minority row is not marked"
+    assert r"$^{\dagger}$" not in central_line, "the pooled row must not be marked"
+    assert r"$^{\dagger}$" in tex.split(r"\bottomrule")[-1], "the footnote must explain it"
+
+
+def test_no_dagger_when_no_configuration_is_scarce():
+    rows = [{"metric": "selected_test_balanced_accuracy", "distribution": "iid",
+             "kind": "local", "label": "Local-only (group-level)", "mean": 0.84, "std": 0.01,
+             "ci_low": 0.78, "ci_high": 0.88, "n_seeds": 5,
+             "ci_method": "cluster_bootstrap_B1000"}]
+    tex = summary_tex(pd.DataFrame(rows), "selected_test_balanced_accuracy", scarce=set())
+    body = tex.split(r"\midrule")[-1].split(r"\bottomrule")[0]
+    assert r"\dagger" not in body
