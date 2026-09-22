@@ -146,10 +146,19 @@ def test_build_results_keeps_v2_keys_and_is_json_serialisable(tmp_path):
 
 
 def test_strategy_factory_wires_recorder_and_configs():
+    from flwr.server.strategy import FedAvg, FedProx
+
+    from src.fl.aggregation_order import DeterministicClientOrder
+
     rec = fl_server.RoundRecorder()
+    base_of = {"FedAvg": FedAvg, "FedProx": FedProx, "FedBN": fl_server.FedBN}
     for name, cls_name, mu in (("fedavg", "FedAvg", 0.0), ("fedprox_0.05", "FedProx", 0.05), ("fedbn", "FedBN", 0.0)):
         strat = fl_server.get_strategy(name, min_clients=2, recorder=rec)
-        assert type(strat).__name__ == cls_name
+        # the factory returns the deterministic-order variant of each strategy, so
+        # assert the base class and the mixin rather than the exact class name
+        assert isinstance(strat, base_of[cls_name])
+        assert isinstance(strat, DeterministicClientOrder), \
+            "%s must aggregate in a deterministic client order" % name
         assert strat.evaluate_metrics_aggregation_fn == rec.evaluate_aggregation
         assert strat.fit_metrics_aggregation_fn == rec.fit_aggregation
         assert strat.on_fit_config_fn(4)["server_round"] == 4

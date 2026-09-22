@@ -23,9 +23,16 @@ from flwr.common import (
 from flwr.server.client_proxy import ClientProxy
 from flwr.server.strategy import FedAvg
 
+import os
 import sys
 sys.path.insert(0, ".")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from src.models.mobilenetv3_multimodal import create_model
+
+try:  # imported as a package (tests, analysis)
+    from src.fl.aggregation_order import DeterministicClientOrder, sorted_results
+except ImportError:  # imported as a top-level module (server.py's sys.path hack)
+    from aggregation_order import DeterministicClientOrder, sorted_results
 
 
 def get_bn_indices_from_model():
@@ -57,11 +64,15 @@ def get_bn_indices_from_model():
     return bn_indices, len(state_dict_keys)
 
 
-class FedBN(FedAvg):
+class FedBN(DeterministicClientOrder, FedAvg):
     """Federated Learning with Local Batch Normalization (FedBN).
 
     Excludes BatchNorm parameters from aggregation. BN indices are determined
     once at initialization using the actual model architecture.
+
+    The mixin orders ``aggregate_evaluate``; ``aggregate_fit`` below overrides
+    Flower's and therefore sorts the results itself (see
+    ``src/fl/aggregation_order.py`` for why the order matters).
     """
 
     def __init__(self, **kwargs):
@@ -81,6 +92,11 @@ class FedBN(FedAvg):
 
         if not results:
             return None, {}
+
+        # Deterministic client order: float addition below is not associative, so
+        # aggregating in arrival order makes the global model depend on which node
+        # reported first (src/fl/aggregation_order.py).
+        results = sorted_results(results)
 
         # Extract parameters from all clients
         weights_results = [

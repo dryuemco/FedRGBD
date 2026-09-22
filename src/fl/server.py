@@ -47,6 +47,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # FedBN strategy (local import)
 from fedbn_strategy import FedBN  # noqa: E402
+
+try:  # imported as a package (tests, analysis)
+    from src.fl.aggregation_order import DeterministicClientOrder, sorted_metrics
+except ImportError:  # imported as a top-level module
+    from aggregation_order import DeterministicClientOrder, sorted_metrics
 from src.evaluation.metrics import (  # noqa: E402
     METRIC_KEYS,
     confusion_matrix_from_flat,
@@ -99,7 +104,13 @@ def set_seed(seed):
 
 
 def weighted_average(metrics):
-    """Aggregate accuracy across clients (v2 behaviour, kept for reference/tests)."""
+    """Aggregate accuracy across clients (v2 behaviour, kept for reference/tests).
+
+    The float sum below is order-dependent, so this is deliberately left
+    unchanged to keep v2 parity: every call path now hands it metrics already
+    sorted by node name (``RoundRecorder`` sorts on entry, and the strategies
+    sort the results Flower passes to the aggregation functions).
+    """
     accuracies = [num * m["accuracy"] for num, m in metrics]
     totals = [num for num, _ in metrics]
     return {"accuracy": sum(accuracies) / sum(totals)}
@@ -276,6 +287,9 @@ class RoundRecorder:
     # -- Flower callbacks ------------------------------------------------- #
     def fit_aggregation(self, metrics: List[Tuple[int, Metrics]]) -> Dict[str, float]:
         self._fit_calls += 1
+        # node-name order: fixes the weighted sums in aggregate() and the order of
+        # the per-client rows written to results.json
+        metrics = sorted_metrics(metrics)
         rnd = self._round_of(metrics, self._fit_calls)
         clients = {}
         round_bytes = 0
@@ -332,6 +346,9 @@ class RoundRecorder:
 
     def evaluate_aggregation(self, metrics: List[Tuple[int, Metrics]]) -> Dict[str, float]:
         self._eval_calls += 1
+        # node-name order: fixes round_val_loss (the model-selection input), the
+        # weighted sums in aggregate(), and the per-client row order in results.json
+        metrics = sorted_metrics(metrics)
         preds = self.pop_predictions(metrics)          # before any other use of the metrics
         rnd = self._round_of(metrics, self._eval_calls)
         clients = {}
@@ -407,8 +424,21 @@ def parse_mu(name: str) -> float:
     return 0.0
 
 
+class FedAvgOrdered(DeterministicClientOrder, FedAvg):
+    """FedAvg that aggregates clients in node-name order (see aggregation_order)."""
+
+
+class FedProxOrdered(DeterministicClientOrder, FedProx):
+    """FedProx that aggregates clients in node-name order (see aggregation_order)."""
+
+
 def get_strategy(name, min_clients=3, recorder: Optional[RoundRecorder] = None, **kwargs):
-    """Create FL strategy by name."""
+    """Create FL strategy by name.
+
+    Every strategy aggregates in a deterministic client order; without it the
+    global model depends on which node reports first (see
+    ``src/fl/aggregation_order.py``).
+    """
     common = dict(
         min_fit_clients=min_clients,
         min_evaluate_clients=min_clients,
@@ -421,13 +451,13 @@ def get_strategy(name, min_clients=3, recorder: Optional[RoundRecorder] = None, 
     common.update(kwargs)
 
     if name == "fedavg":
-        return FedAvg(**common)
+        return FedAvgOrdered(**common)
     elif name.startswith("fedprox"):
-        return FedProx(proximal_mu=parse_mu(name), **common)
+        return FedProxOrdered(proximal_mu=parse_mu(name), **common)
     elif name == "fedbn":
         return FedBN(**common)
     else:
-        return FedAvg(**common)
+        return FedAvgOrdered(**common)
 
 
 # --------------------------------------------------------------------------- #

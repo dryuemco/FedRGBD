@@ -506,3 +506,62 @@ final-epoch number.
   statistics are noisy at batch size 8 (verified: all 124 baseline `results.json` use
   `batch_size` 8) and drift between epochs, is stated explicitly as untested and is *not*
   connected to the round-1 label-skew result or to FedBN; neither link has been tested.
+
+## Federated runs are reproducible at a fixed seed (2026-09-22)
+
+Two Jetson runs of the same commit (e6c7ef7) at the same seed (42, `iid_sub0.01`,
+FedAvg, 2 rounds) trained **identically on every client** -- same `train_loss`
+(0.11324341938775163), same per-client val/test accuracy -- and still diverged at the
+server:
+
+| | run A | run B |
+|---|---|---|
+| round 1 aggregated val loss | 4.4800187735908255 | 4.480026002017449 |
+| round 2 aggregated val loss | 0.7300890427681955 | 0.6840349276794742 |
+
+**Cause.** Flower hands `aggregate_fit` / `aggregate_evaluate` the client results in
+*arrival* order, and both of its helpers fold in list order:
+
+    aggregate():         reduce(np.add, layer_updates) / num_examples_total
+    weighted_loss_avg(): sum(num_examples * loss for ...) / total
+
+Floating-point addition is not associative, so whichever Jetson reported first changed
+the global model at ~1e-7 in round 1; the perturbed model changes every client's next
+local optimum, and by round 2 the difference is 6 %.
+
+**Fix** (`src/fl/aggregation_order.py`, new): sort the results by a stable client
+identifier before aggregating.
+
+* The key is the **node name** the client already echoes in its fit and evaluate
+  metrics (`src/fl/client.py`), *not* Flower's `cid`, which is assigned per connection
+  and differs between runs -- sorting on `cid` would fix nothing.
+* `DeterministicClientOrder` mixin applied to `FedAvgOrdered` / `FedProxOrdered`
+  (`src/fl/server.py`) and to `FedBN`; FedBN overrides `aggregate_fit`, so it sorts
+  inside it and takes only `aggregate_evaluate` from the mixin.
+* `RoundRecorder.fit_aggregation` / `evaluate_aggregation` sort on entry, which covers
+  the weighted means in `aggregate()`, `round_val_loss` (the model-selection input) and
+  the order of the per-client rows written to `results.json`.
+* Audited for other arrival-order dependencies: the pooled confusion matrices are
+  integer sums (order-independent); `pop_predictions` keys files by client and split and
+  now receives sorted metrics; `weighted_average` is order-dependent in isolation but is
+  left unchanged for v2 parity because every call path now feeds it sorted metrics.
+
+**Deliberately not done:** `cudnn.deterministic` / `use_deterministic_algorithms`. They
+can slow training, and per-round wall-clock is a reported result of this paper.
+
+**`results.json` is unchanged**: it records `"strategy": args.strategy`, i.e. the CLI
+name (`fedavg` / `fedprox_<mu>` / `fedbn`), never the new class names, so
+`analyze_results.py` groups new runs with the old ones. Pinned by
+`tests/test_aggregation_order.py`.
+
+**Tests** (`tests/test_aggregation_order.py`, 16): every strategy aggregates all six
+permutations of three clients to **bitwise-identical** parameters and losses
+(`tobytes()` / `float.hex()`, not approximate equality -- 1e-7 is what became 6 %).
+`test_control_unsorted_aggregation_is_order_dependent` aggregates *unsorted* and asserts
+the order does change the result, so the suite cannot pass vacuously if the fixtures
+stop exercising the bug. `tests/test_fl_server_recorder.py` no longer pins the exact
+strategy class name; it asserts the base class and the mixin instead.
+
+The paper's reproducibility sentence is written but the measured outcome of the
+fixed-seed repeat test on the testbed is still open; it carries a `\todo` in
+`paper/main.tex` and lands with that result.
