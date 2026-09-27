@@ -4,77 +4,100 @@
 \caption{Global accuracy per communication round (mean $\pm$ standard deviation over seeds).}
 \label{tab:per_round_accuracy}
 \small
-\begin{tabular}{lccc}
+\begin{tabular}{lcccccccccc}
 \toprule
- & \multicolumn{3}{c}{Communication round} \\
-\cmidrule(lr){2-4}
-Configuration & 1 & 2 & 3 \\
+ & \multicolumn{10}{c}{Communication round} \\
+\cmidrule(lr){2-11}
+Configuration & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 \\
 \midrule
-\multicolumn{4}{l}{\textit{Dirichlet($\alpha$=0.1)}} \\
-Centralized (group-level) & 0.8410 $\pm$ 0.1373 & 0.8718 $\pm$ 0.0484 & 0.8272 $\pm$ 0.1311 \\
-Centralized (group-level, final epoch) & 0.8410 $\pm$ 0.1373 & 0.8718 $\pm$ 0.0484 & 0.8272 $\pm$ 0.1311 \\
-Local-only (group-level) & 0.9524 $\pm$ 0.0077 & 0.9115 $\pm$ 0.0499 & 0.9505 $\pm$ 0.0003 \\
-Local-only (group-level, final epoch) & 0.9524 $\pm$ 0.0077 & 0.9115 $\pm$ 0.0499 & 0.9505 $\pm$ 0.0003 \\
+\multicolumn{11}{l}{\textit{Dirichlet($\alpha$=0.1)}} \\
+FedAvg [3N] (group-level) & 0.3763 $\pm$ 0.0109 & 0.5393 $\pm$ 0.0566 & 0.6560 $\pm$ 0.0081 & -- & -- & -- & -- & -- & -- & -- \\
+FedProx($\mu$=0.01) [3N] (group-level) & 0.7069 $\pm$ 0.1182 & 0.6444 $\pm$ 0.0042 & 0.7406 $\pm$ 0.1186 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (group-level) & 0.8410 $\pm$ 0.1373 & 0.8718 $\pm$ 0.0484 & 0.8272 $\pm$ 0.1311 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (group-level, final epoch) & 0.8410 $\pm$ 0.1373 & 0.8718 $\pm$ 0.0484 & 0.8272 $\pm$ 0.1311 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (group-level) & 0.9524 $\pm$ 0.0077 & 0.9115 $\pm$ 0.0499 & 0.9505 $\pm$ 0.0003 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (group-level, final epoch) & 0.9524 $\pm$ 0.0077 & 0.9115 $\pm$ 0.0499 & 0.9505 $\pm$ 0.0003 & -- & -- & -- & -- & -- & -- & -- \\
 \midrule
-\multicolumn{4}{l}{\textit{Dirichlet($\alpha$=0.5)}} \\
-Centralized (group-level) & 0.9710 $\pm$ 0.0149 & 0.9467 $\pm$ 0.0315 & 0.9719 $\pm$ 0.0114 \\
-Centralized (group-level, final epoch) & 0.9710 $\pm$ 0.0149 & 0.9467 $\pm$ 0.0315 & 0.9719 $\pm$ 0.0114 \\
-Local-only (group-level) & 0.7182 $\pm$ 0.0693 & 0.8118 $\pm$ 0.0267 & 0.8421 $\pm$ 0.1435 \\
-Local-only (group-level, final epoch) & 0.7182 $\pm$ 0.0693 & 0.8118 $\pm$ 0.0267 & 0.8421 $\pm$ 0.1435 \\
+\multicolumn{11}{l}{\textit{Dirichlet($\alpha$=0.5)}} \\
+FedAvg [3N] (group-level) & 0.9358 $\pm$ 0.0080 & 0.9605 $\pm$ 0.0191 & 0.9703 $\pm$ 0.0050 & -- & -- & -- & -- & -- & -- & -- \\
+FedProx($\mu$=0.01) [3N] (group-level) & 0.9328 $\pm$ 0.0176 & 0.9331 $\pm$ 0.0435 & 0.8491 $\pm$ 0.1605 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (group-level) & 0.9710 $\pm$ 0.0149 & 0.9467 $\pm$ 0.0315 & 0.9719 $\pm$ 0.0114 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (group-level, final epoch) & 0.9710 $\pm$ 0.0149 & 0.9467 $\pm$ 0.0315 & 0.9719 $\pm$ 0.0114 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (group-level) & 0.7182 $\pm$ 0.0693 & 0.8118 $\pm$ 0.0267 & 0.8421 $\pm$ 0.1435 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (group-level, final epoch) & 0.7182 $\pm$ 0.0693 & 0.8118 $\pm$ 0.0267 & 0.8421 $\pm$ 0.1435 & -- & -- & -- & -- & -- & -- & -- \\
 \midrule
-\multicolumn{4}{l}{\textit{Dirichlet($\alpha$=1)}} \\
-Centralized (group-level) & 0.9154 $\pm$ 0.0297 & 0.9641 $\pm$ 0.0158 & 0.9355 $\pm$ 0.0143 \\
-Centralized (group-level, final epoch) & 0.9154 $\pm$ 0.0297 & 0.9641 $\pm$ 0.0158 & 0.9355 $\pm$ 0.0143 \\
-Local-only (group-level) & 0.9433 $\pm$ 0.0017 & 0.9151 $\pm$ 0.0357 & 0.8598 $\pm$ 0.1137 \\
-Local-only (group-level, final epoch) & 0.9433 $\pm$ 0.0017 & 0.9151 $\pm$ 0.0357 & 0.8598 $\pm$ 0.1137 \\
+\multicolumn{11}{l}{\textit{Dirichlet($\alpha$=1)}} \\
+FedAvg [3N] (group-level) & 0.3849 $\pm$ 0.0088 & 0.6980 $\pm$ 0.1094 & 0.8716 $\pm$ 0.0239 & -- & -- & -- & -- & -- & -- & -- \\
+FedProx($\mu$=0.01) [3N] (group-level) & 0.8619 $\pm$ 0.0339 & 0.9208 $\pm$ 0.0155 & 0.9166 $\pm$ 0.0414 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (group-level) & 0.9154 $\pm$ 0.0297 & 0.9641 $\pm$ 0.0158 & 0.9355 $\pm$ 0.0143 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (group-level, final epoch) & 0.9154 $\pm$ 0.0297 & 0.9641 $\pm$ 0.0158 & 0.9355 $\pm$ 0.0143 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (group-level) & 0.9433 $\pm$ 0.0017 & 0.9151 $\pm$ 0.0357 & 0.8598 $\pm$ 0.1137 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (group-level, final epoch) & 0.9433 $\pm$ 0.0017 & 0.9151 $\pm$ 0.0357 & 0.8598 $\pm$ 0.1137 & -- & -- & -- & -- & -- & -- & -- \\
 \midrule
-\multicolumn{4}{l}{\textit{IID}} \\
-FedAvg [3N] (image-level) & 0.6823 $\pm$ 0.1693 & 0.9852 $\pm$ 0.0127 & 0.9932 $\pm$ 0.0003 \\
-FedBN [3N] (image-level) & 0.5708 $\pm$ 0.0712 & 0.8648 $\pm$ 0.0768 & 0.9569 $\pm$ 0.0312 \\
-FedProx($\mu$=0.01) [3N] (image-level) & 0.9824 $\pm$ 0.0024 & 0.9890 $\pm$ 0.0020 & 0.9918 $\pm$ 0.0012 \\
-FedProx($\mu$=0.1) [3N] (image-level) & 0.9706 $\pm$ 0.0183 & 0.9781 $\pm$ 0.0020 & 0.9829 $\pm$ 0.0048 \\
-Centralized (group-level) & 0.9202 $\pm$ 0.0244 & 0.8582 $\pm$ 0.0952 & 0.9056 $\pm$ 0.0600 \\
-Centralized (group-level, final epoch) & 0.9202 $\pm$ 0.0244 & 0.8582 $\pm$ 0.0952 & 0.9056 $\pm$ 0.0600 \\
-Centralized (image-level) & 0.9916 $\pm$ 0.0029 & 0.9909 $\pm$ 0.0121 & 0.9965 $\pm$ 0.0009 \\
-Local-only (group-level) & 0.8145 $\pm$ 0.0390 & 0.7979 $\pm$ 0.0730 & 0.7851 $\pm$ 0.0811 \\
-Local-only (group-level, final epoch) & 0.8145 $\pm$ 0.0390 & 0.7979 $\pm$ 0.0730 & 0.7851 $\pm$ 0.0811 \\
-Local-only (image-level) & 0.9936 $\pm$ 0.0006 & 0.9934 $\pm$ 0.0008 & 0.9945 $\pm$ 0.0015 \\
+\multicolumn{11}{l}{\textit{IID}} \\
+FedAvg [3N] (group-level) & 0.3599 $\pm$ 0.0002 & 0.7326 $\pm$ 0.1674 & 0.7525 $\pm$ 0.1628 & -- & -- & -- & -- & -- & -- & -- \\
+FedAvg [3N] (image-level) & 0.6823 $\pm$ 0.1693 & 0.9852 $\pm$ 0.0127 & 0.9932 $\pm$ 0.0003 & -- & -- & -- & -- & -- & -- & -- \\
+FedBN [3N] (image-level) & 0.5708 $\pm$ 0.0712 & 0.8648 $\pm$ 0.0768 & 0.9569 $\pm$ 0.0312 & -- & -- & -- & -- & -- & -- & -- \\
+FedProx($\mu$=0.01) [3N] (group-level) & 0.8550 $\pm$ 0.0474 & 0.9356 $\pm$ 0.0153 & 0.9393 $\pm$ 0.0213 & -- & -- & -- & -- & -- & -- & -- \\
+FedProx($\mu$=0.01) [3N] (image-level) & 0.9824 $\pm$ 0.0024 & 0.9890 $\pm$ 0.0020 & 0.9918 $\pm$ 0.0012 & -- & -- & -- & -- & -- & -- & -- \\
+FedProx($\mu$=0.1) [3N] (image-level) & 0.9706 $\pm$ 0.0183 & 0.9781 $\pm$ 0.0020 & 0.9829 $\pm$ 0.0048 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (group-level) & 0.9202 $\pm$ 0.0244 & 0.8582 $\pm$ 0.0952 & 0.9056 $\pm$ 0.0600 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (group-level, final epoch) & 0.9202 $\pm$ 0.0244 & 0.8582 $\pm$ 0.0952 & 0.9056 $\pm$ 0.0600 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (image-level) & 0.9916 $\pm$ 0.0029 & 0.9909 $\pm$ 0.0121 & 0.9965 $\pm$ 0.0009 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (group-level) & 0.8145 $\pm$ 0.0390 & 0.7979 $\pm$ 0.0730 & 0.7851 $\pm$ 0.0811 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (group-level, final epoch) & 0.8145 $\pm$ 0.0390 & 0.7979 $\pm$ 0.0730 & 0.7851 $\pm$ 0.0811 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (image-level) & 0.9936 $\pm$ 0.0006 & 0.9934 $\pm$ 0.0008 & 0.9945 $\pm$ 0.0015 & -- & -- & -- & -- & -- & -- & -- \\
 \midrule
-\multicolumn{4}{l}{\textit{iid\_sub0.01}} \\
-Centralized (group-level) & 0.7492 $\pm$ 0.0326 & 0.8019 $\pm$ 0.0259 & 0.8548 $\pm$ 0.0446 \\
-Centralized (group-level, final epoch) & 0.7492 $\pm$ 0.0326 & 0.8019 $\pm$ 0.0259 & 0.8548 $\pm$ 0.0446 \\
-Local-only (group-level) & 0.6943 $\pm$ 0.0594 & 0.6802 $\pm$ 0.0635 & 0.7149 $\pm$ 0.0472 \\
-Local-only (group-level, final epoch) & 0.6943 $\pm$ 0.0594 & 0.6802 $\pm$ 0.0635 & 0.7149 $\pm$ 0.0472 \\
+\multicolumn{11}{l}{\textit{iid\_sub0.01}} \\
+FedAvg [3N] (group-level) & 0.7292 $\pm$ 0.0142 & 0.7429 $\pm$ 0.0074 & 0.7477 $\pm$ 0.0204 & -- & -- & -- & -- & -- & -- & -- \\
+FedProx($\mu$=0.01) [3N] (group-level) & 0.7292 $\pm$ 0.0107 & 0.7384 $\pm$ 0.0049 & 0.7444 $\pm$ 0.0097 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (group-level) & 0.7492 $\pm$ 0.0326 & 0.8019 $\pm$ 0.0259 & 0.8548 $\pm$ 0.0446 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (group-level, final epoch) & 0.7492 $\pm$ 0.0326 & 0.8019 $\pm$ 0.0259 & 0.8548 $\pm$ 0.0446 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (group-level) & 0.6943 $\pm$ 0.0594 & 0.6802 $\pm$ 0.0635 & 0.7149 $\pm$ 0.0472 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (group-level, final epoch) & 0.6943 $\pm$ 0.0594 & 0.6802 $\pm$ 0.0635 & 0.7149 $\pm$ 0.0472 & -- & -- & -- & -- & -- & -- & -- \\
 \midrule
-\multicolumn{4}{l}{\textit{iid\_sub0.05}} \\
-Centralized (group-level) & 0.8000 $\pm$ 0.0545 & 0.8433 $\pm$ 0.0875 & 0.8409 $\pm$ 0.0358 \\
-Centralized (group-level, final epoch) & 0.8000 $\pm$ 0.0545 & 0.8433 $\pm$ 0.0875 & 0.8409 $\pm$ 0.0358 \\
-Local-only (group-level) & 0.8269 $\pm$ 0.0294 & 0.8023 $\pm$ 0.0221 & 0.8342 $\pm$ 0.0079 \\
-Local-only (group-level, final epoch) & 0.8269 $\pm$ 0.0294 & 0.8023 $\pm$ 0.0221 & 0.8342 $\pm$ 0.0079 \\
+\multicolumn{11}{l}{\textit{iid\_sub0.05}} \\
+FedAvg [3N] (group-level) & 0.7556 $\pm$ 0.0231 & 0.8356 $\pm$ 0.0685 & 0.8963 $\pm$ 0.0513 & -- & -- & -- & -- & -- & -- & -- \\
+FedProx($\mu$=0.01) [3N] (group-level) & 0.7875 $\pm$ 0.0132 & 0.7753 $\pm$ 0.0273 & 0.8316 $\pm$ 0.1032 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (group-level) & 0.8000 $\pm$ 0.0545 & 0.8433 $\pm$ 0.0875 & 0.8409 $\pm$ 0.0358 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (group-level, final epoch) & 0.8000 $\pm$ 0.0545 & 0.8433 $\pm$ 0.0875 & 0.8409 $\pm$ 0.0358 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (group-level) & 0.8269 $\pm$ 0.0294 & 0.8023 $\pm$ 0.0221 & 0.8342 $\pm$ 0.0079 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (group-level, final epoch) & 0.8269 $\pm$ 0.0294 & 0.8023 $\pm$ 0.0221 & 0.8342 $\pm$ 0.0079 & -- & -- & -- & -- & -- & -- & -- \\
 \midrule
-\multicolumn{4}{l}{\textit{Non-IID (label skew)}} \\
-FedAvg [3N] (image-level) & 0.4979 $\pm$ 0.0980 & 0.9564 $\pm$ 0.0665 & 0.9931 $\pm$ 0.0039 \\
-FedBN [3N] (image-level) & 0.3759 $\pm$ 0.0136 & 0.6358 $\pm$ 0.1407 & 0.7506 $\pm$ 0.0836 \\
-FedProx($\mu$=0.01) [3N] (image-level) & 0.9702 $\pm$ 0.0196 & 0.9907 $\pm$ 0.0030 & 0.9922 $\pm$ 0.0024 \\
-FedProx($\mu$=0.1) [3N] (image-level) & 0.9703 $\pm$ 0.0076 & 0.9802 $\pm$ 0.0019 & 0.9833 $\pm$ 0.0019 \\
-Centralized (group-level) & 0.8913 $\pm$ 0.0799 & 0.8931 $\pm$ 0.0245 & 0.9169 $\pm$ 0.0171 \\
-Centralized (group-level, final epoch) & 0.8913 $\pm$ 0.0799 & 0.8931 $\pm$ 0.0245 & 0.9169 $\pm$ 0.0171 \\
-Centralized (image-level) & 0.9967 $\pm$ 0.0013 & 0.9966 $\pm$ 0.0025 & 0.9979 $\pm$ 0.0006 \\
-Local-only (group-level) & 0.8455 $\pm$ 0.1197 & 0.8823 $\pm$ 0.0561 & 0.9244 $\pm$ 0.0087 \\
-Local-only (group-level, final epoch) & 0.8455 $\pm$ 0.1197 & 0.8823 $\pm$ 0.0561 & 0.9244 $\pm$ 0.0087 \\
-Local-only (image-level) & 0.9938 $\pm$ 0.0012 & 0.9946 $\pm$ 0.0022 & 0.9953 $\pm$ 0.0009 \\
+\multicolumn{11}{l}{\textit{Non-IID (label skew)}} \\
+FedAvg [3N] (group-level) & 0.3936 $\pm$ 0.0297 & 0.7654 $\pm$ 0.1531 & 0.8614 $\pm$ 0.0281 & 0.9157 $\pm$ 0.0102 & 0.9181 $\pm$ 0.0302 & 0.9083 $\pm$ 0.0304 & 0.8797 $\pm$ 0.0327 & 0.8920 $\pm$ 0.0192 & 0.9168 $\pm$ 0.0155 & 0.9001 $\pm$ 0.0219 \\
+FedAvg [3N] (image-level) & 0.4979 $\pm$ 0.0980 & 0.9564 $\pm$ 0.0665 & 0.9931 $\pm$ 0.0039 & -- & -- & -- & -- & -- & -- & -- \\
+FedBN [3N] (group-level) & 0.4182 $\pm$ 0.0240 & 0.5509 $\pm$ 0.0840 & 0.6992 $\pm$ 0.1013 & 0.6993 $\pm$ 0.0922 & 0.7071 $\pm$ 0.1638 & 0.8126 $\pm$ 0.0114 & 0.8433 $\pm$ 0.0529 & 0.7856 $\pm$ 0.1164 & 0.8466 $\pm$ 0.0952 & 0.8156 $\pm$ 0.1315 \\
+FedBN [3N] (image-level) & 0.3759 $\pm$ 0.0136 & 0.6358 $\pm$ 0.1407 & 0.7506 $\pm$ 0.0836 & -- & -- & -- & -- & -- & -- & -- \\
+FedProx($\mu$=0.001) [3N] (group-level) & 0.6435 $\pm$ 0.0940 & 0.8646 $\pm$ 0.0417 & 0.8860 $\pm$ 0.0040 & -- & -- & -- & -- & -- & -- & -- \\
+FedProx($\mu$=0.01) [3N] (group-level) & 0.7884 $\pm$ 0.0557 & 0.8781 $\pm$ 0.0365 & 0.8983 $\pm$ 0.0206 & -- & -- & -- & -- & -- & -- & -- \\
+FedProx($\mu$=0.01) [3N] (image-level) & 0.9702 $\pm$ 0.0196 & 0.9907 $\pm$ 0.0030 & 0.9922 $\pm$ 0.0024 & -- & -- & -- & -- & -- & -- & -- \\
+FedProx($\mu$=0.05) [3N] (group-level) & 0.7639 $\pm$ 0.1231 & 0.8845 $\pm$ 0.0590 & 0.9074 $\pm$ 0.0112 & -- & -- & -- & -- & -- & -- & -- \\
+FedProx($\mu$=0.1) [3N] (group-level) & 0.9125 $\pm$ 0.0286 & 0.9236 $\pm$ 0.0351 & 0.9336 $\pm$ 0.0207 & -- & -- & -- & -- & -- & -- & -- \\
+FedProx($\mu$=0.1) [3N] (image-level) & 0.9703 $\pm$ 0.0076 & 0.9802 $\pm$ 0.0019 & 0.9833 $\pm$ 0.0019 & -- & -- & -- & -- & -- & -- & -- \\
+FedProx($\mu$=0.5) [3N] (group-level) & 0.8846 $\pm$ 0.0250 & 0.8886 $\pm$ 0.0100 & 0.9008 $\pm$ 0.0199 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (group-level) & 0.8913 $\pm$ 0.0799 & 0.8931 $\pm$ 0.0245 & 0.9169 $\pm$ 0.0171 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (group-level, final epoch) & 0.8913 $\pm$ 0.0799 & 0.8931 $\pm$ 0.0245 & 0.9169 $\pm$ 0.0171 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (image-level) & 0.9967 $\pm$ 0.0013 & 0.9966 $\pm$ 0.0025 & 0.9979 $\pm$ 0.0006 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (group-level) & 0.8455 $\pm$ 0.1197 & 0.8823 $\pm$ 0.0561 & 0.9244 $\pm$ 0.0087 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (group-level, final epoch) & 0.8455 $\pm$ 0.1197 & 0.8823 $\pm$ 0.0561 & 0.9244 $\pm$ 0.0087 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (image-level) & 0.9938 $\pm$ 0.0012 & 0.9946 $\pm$ 0.0022 & 0.9953 $\pm$ 0.0009 & -- & -- & -- & -- & -- & -- & -- \\
 \midrule
-\multicolumn{4}{l}{\textit{non\_iid\_label\_sub0.01}} \\
-Centralized (group-level) & 0.8913 $\pm$ 0.0259 & 0.9015 $\pm$ 0.0248 & 0.8987 $\pm$ 0.0220 \\
-Centralized (group-level, final epoch) & 0.8913 $\pm$ 0.0259 & 0.9015 $\pm$ 0.0248 & 0.8987 $\pm$ 0.0220 \\
-Local-only (group-level) & 0.8617 $\pm$ 0.0215 & 0.8460 $\pm$ 0.0033 & 0.8274 $\pm$ 0.0618 \\
-Local-only (group-level, final epoch) & 0.8617 $\pm$ 0.0215 & 0.8460 $\pm$ 0.0033 & 0.8274 $\pm$ 0.0618 \\
+\multicolumn{11}{l}{\textit{non\_iid\_label\_sub0.01}} \\
+FedAvg [3N] (group-level) & 0.8161 $\pm$ 0.0520 & 0.8719 $\pm$ 0.0061 & 0.8920 $\pm$ 0.0049 & -- & -- & -- & -- & -- & -- & -- \\
+FedProx($\mu$=0.01) [3N] (group-level) & 0.8592 $\pm$ 0.0212 & 0.8787 $\pm$ 0.0148 & 0.8870 $\pm$ 0.0149 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (group-level) & 0.8913 $\pm$ 0.0259 & 0.9015 $\pm$ 0.0248 & 0.8987 $\pm$ 0.0220 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (group-level, final epoch) & 0.8913 $\pm$ 0.0259 & 0.9015 $\pm$ 0.0248 & 0.8987 $\pm$ 0.0220 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (group-level) & 0.8617 $\pm$ 0.0215 & 0.8460 $\pm$ 0.0033 & 0.8274 $\pm$ 0.0618 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (group-level, final epoch) & 0.8617 $\pm$ 0.0215 & 0.8460 $\pm$ 0.0033 & 0.8274 $\pm$ 0.0618 & -- & -- & -- & -- & -- & -- & -- \\
 \midrule
-\multicolumn{4}{l}{\textit{non\_iid\_label\_sub0.05}} \\
-Centralized (group-level) & 0.9030 $\pm$ 0.0619 & 0.8968 $\pm$ 0.0032 & 0.9132 $\pm$ 0.0175 \\
-Centralized (group-level, final epoch) & 0.9030 $\pm$ 0.0619 & 0.8968 $\pm$ 0.0032 & 0.9132 $\pm$ 0.0175 \\
-Local-only (group-level) & 0.9104 $\pm$ 0.0098 & 0.9070 $\pm$ 0.0145 & 0.9079 $\pm$ 0.0118 \\
-Local-only (group-level, final epoch) & 0.9104 $\pm$ 0.0098 & 0.9070 $\pm$ 0.0145 & 0.9079 $\pm$ 0.0118 \\
+\multicolumn{11}{l}{\textit{non\_iid\_label\_sub0.05}} \\
+FedAvg [3N] (group-level) & 0.9137 $\pm$ 0.0257 & 0.9277 $\pm$ 0.0377 & 0.9398 $\pm$ 0.0186 & -- & -- & -- & -- & -- & -- & -- \\
+FedProx($\mu$=0.01) [3N] (group-level) & 0.8966 $\pm$ 0.0121 & 0.9255 $\pm$ 0.0357 & 0.8913 $\pm$ 0.0513 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (group-level) & 0.9030 $\pm$ 0.0619 & 0.8968 $\pm$ 0.0032 & 0.9132 $\pm$ 0.0175 & -- & -- & -- & -- & -- & -- & -- \\
+Centralized (group-level, final epoch) & 0.9030 $\pm$ 0.0619 & 0.8968 $\pm$ 0.0032 & 0.9132 $\pm$ 0.0175 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (group-level) & 0.9104 $\pm$ 0.0098 & 0.9070 $\pm$ 0.0145 & 0.9079 $\pm$ 0.0118 & -- & -- & -- & -- & -- & -- & -- \\
+Local-only (group-level, final epoch) & 0.9104 $\pm$ 0.0098 & 0.9070 $\pm$ 0.0145 & 0.9079 $\pm$ 0.0118 & -- & -- & -- & -- & -- & -- & -- \\
 \bottomrule
 \end{tabular}
 \par\smallskip
