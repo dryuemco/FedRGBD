@@ -136,6 +136,24 @@ HEADLINE_NONE = "no_valid_round"
 
 #: confusion counts reported alongside the selected-round test metrics
 COUNT_KEYS = ("tp", "fp", "fn", "tn")
+
+#: How a configuration's held-out metrics are aggregated over the three nodes
+#: (CLAUDE.md hard rule 8), one definition for every row:
+#:   primary   ``selected_test_<m>``            pooled over the union of the held-out
+#:             images of all nodes (FL: the global model on every client's test split;
+#:             local-only: each node's own model on its own split; centralized: its
+#:             pooled test set -- verified to be the same union, check_prediction_unions)
+#:   secondary ``selected_test_clientmean_<m>`` unweighted mean over the clients
+#: Fixed on 2026-09-27, after every federated run of the revision existed and after an
+#: analysis of them had shown that several comparisons depend on it: NOT pre-registered,
+#: which is why both are reported.  The metrics logged by the runs themselves (FL:
+#: test-size-weighted client mean; local-only: client mean) are kept only as
+#: ``selected_test_metrics_logged`` to check the prediction files against.
+AGG_POOLED = "pooled"
+AGG_CLIENTMEAN = "clientmean"
+#: headline metrics came from the run's own log because it has no prediction files;
+#: such a run cannot be put on the declared aggregation and is flagged in the tables
+AGG_LOGGED = "logged_native"
 #: selected-round test metrics copied into runs.csv (all of them are in summary_table.csv)
 SELECTED_RUN_COLUMNS = ("accuracy", "balanced_accuracy", "recall", "specificity",
                         "macro_f1", "mcc", "roc_auc", "loss")
@@ -1371,11 +1389,16 @@ def _run_metric_values(record: Dict[str, Any]) -> Dict[str, float]:
             fval = _as_float(record.get(key))
             if fval is not None:
                 values[key] = fval
-        # pre-registered clean subset (needs per-image predictions)
-        for name, val in (record.get("selected_test_clean_metrics") or {}).items():
-            fval = _as_float(val)
-            if fval is not None:
-                values["selected_test_clean_" + str(name)] = fval
+        # pre-registered clean subset (needs per-image predictions), and the secondary
+        # client-mean aggregation of both
+        for field, prefix in (("selected_test_clean_metrics", "selected_test_clean_"),
+                              ("selected_test_clientmean_metrics", "selected_test_clientmean_"),
+                              ("selected_test_clean_clientmean_metrics",
+                               "selected_test_clean_clientmean_")):
+            for name, val in (record.get(field) or {}).items():
+                fval = _as_float(val)
+                if fval is not None:
+                    values[prefix + str(name)] = fval
     elif source == HEADLINE_FINAL_EPOCH:
         for name, val in (record.get("metrics_final") or {}).items():
             fval = _as_float(val)
@@ -1473,9 +1496,10 @@ def attach_prediction_metrics(runs: Sequence[Dict[str, Any]], warn: bool = True)
         if not files or tables is None:
             continue
         groups, excluded = tables
-        units, clean = [], []
+        units, clean, node_paths = [], [], []
         for path in files:
             d = load_npz(path)
+            node_paths.append(tuple(sorted(str(x) for x in d["path"])))
             keep = np.array([p in groups for p in d["path"]])
             if not keep.all() and warn:
                 print("[warn] %s: %d prediction paths not in the partition manifest"
@@ -1486,18 +1510,59 @@ def attach_prediction_metrics(runs: Sequence[Dict[str, Any]], warn: bool = True)
             clean.append({"label": d["label"][is_clean], "margin": d["logit_margin"][is_clean],
                           "group": gid[is_clean]})
         record["pred_units"], record["pred_units_clean"] = units, clean
-        record["pred_aggregation"] = aggregation
-        full = _aggregate_point(units, aggregation)
+        record["pred_aggregation"] = aggregation          # how the run logged its metrics
+        record["pred_paths"] = node_paths
+        native = _aggregate_point(units, aggregation)
         logged = record.get("selected_test_metrics") or {}
-        diffs = [abs(full[m] - logged[m]) for m in ("accuracy", "balanced_accuracy", "mcc")
-                 if m in full and _as_float(logged.get(m)) is not None]
+        diffs = [abs(native[m] - logged[m]) for m in ("accuracy", "balanced_accuracy", "mcc")
+                 if m in native and _as_float(logged.get(m)) is not None]
         record["pred_check_max_diff"] = max(diffs) if diffs else None
         if warn and diffs and max(diffs) > 1e-5:
             print("[warn] %s: metrics recomputed from predictions differ from the logged ones "
                   "by %.2e" % (record["run_name"], max(diffs)))
-        record["selected_test_clean_metrics"] = _aggregate_point(clean, aggregation)
+        # the declared aggregations (see AGG_POOLED): one definition for every row
+        record["selected_test_metrics_logged"] = dict(logged)
+        pooled = _aggregate_point(units, "pooled")
+        label = np.concatenate([u["label"] for u in units]).astype(np.int64)
+        pred = (np.concatenate([u["margin"] for u in units]) > 0).astype(np.int64)
+        pooled.update(tp=int(((pred == 1) & (label == 1)).sum()),
+                      fp=int(((pred == 1) & (label == 0)).sum()),
+                      fn=int(((pred == 0) & (label == 1)).sum()),
+                      tn=int(((pred == 0) & (label == 0)).sum()),
+                      n_examples=int(len(label)))
+        record["selected_test_metrics"] = pooled
+        record["selected_test_clientmean_metrics"] = _aggregate_point(units, "mean")
+        record["selected_test_clean_metrics"] = _aggregate_point(clean, "pooled")
+        record["selected_test_clean_clientmean_metrics"] = _aggregate_point(clean, "mean")
+        record["aggregation"] = AGG_POOLED
         record["clean_excluded_n"] = int(sum(len(u["label"]) - len(c["label"])
                                              for u, c in zip(units, clean)))
+
+
+def check_prediction_unions(runs: Sequence[Dict[str, Any]]) -> Dict[Tuple[str, str], int]:
+    """Every selection-rule run of one (protocol, partition) must be evaluated on exactly
+    the same held-out images, node by node -- FL, local-only and centralized alike.
+
+    That is what makes "pooled over the union of the held-out images" one definition
+    for every row.  -> {(protocol, partition): number of runs checked}; raises
+    ValueError on any difference.
+    """
+    ref: Dict[Tuple[str, str], Tuple[str, List[Tuple[str, ...]]]] = {}
+    count: Dict[Tuple[str, str], int] = {}
+    bad = []
+    for record in runs:
+        paths = record.get("pred_paths")
+        if not paths:
+            continue
+        key = (str(record.get("protocol")), str(record.get("distribution")))
+        count[key] = count.get(key, 0) + 1
+        if key not in ref:
+            ref[key] = (record["run_name"], paths)
+        elif paths != ref[key][1]:
+            bad.append("%s vs %s (%s)" % (record["run_name"], ref[key][0], "/".join(key)))
+    if bad:
+        raise ValueError("held-out image sets differ within a partition: " + "; ".join(bad[:10]))
+    return count
 
 
 def _units_for(raw: Sequence[Dict[str, Any]], aggregation: str) -> List[Unit]:
@@ -1523,17 +1588,23 @@ def _bootstrap_cis(group: Sequence[Dict[str, Any]], config_id: str,
     """Cluster (sequence) bootstrap CIs of the selected-test metrics of one configuration,
     full held-out set and clean subset -- only when every run has per-image predictions."""
     runs = [r for r in group if r.get("headline_source") == HEADLINE_SELECTED]
-    if B <= 0 or not runs or len(runs) != len(group) or not all(r.get("pred_units") for r in runs):
+    if B <= 0 or not runs or not all(r.get("pred_units") for r in runs):
         return {}
     out: Dict[str, Dict[str, float]] = {}
-    aggregation = runs[0]["pred_aggregation"]
     for suffix, key in (("", "pred_units"), ("clean_", "pred_units_clean")):
-        units = [_units_for(r[key], aggregation) for r in runs]
+        # primary: pooled over all nodes, sequences resampled across nodes.  Same key as
+        # before the aggregation was declared, so the centralized intervals (pooled all
+        # along) are unchanged.
+        units = [_units_for(r[key], "pooled") for r in runs]
         if any(not u for u in units):
             continue
-        cis = config_ci(units, aggregation, "%s|%s" % (config_id, suffix), B=B)
-        for metric, ci in cis.items():
+        for metric, ci in config_ci(units, "pooled", "%s|%s" % (config_id, suffix), B=B).items():
             out["selected_test_%s%s" % (suffix, metric)] = ci
+        # secondary: unweighted mean over the clients, sequences resampled per client
+        units = [_units_for(r[key], "mean") for r in runs]
+        for metric, ci in config_ci(units, "mean", "%s|%s|clientmean" % (config_id, suffix),
+                                    B=B).items():
+            out["selected_test_%sclientmean_%s" % (suffix, metric)] = ci
     return out
 
 
@@ -1553,6 +1624,14 @@ def summary_table(runs: Sequence[Dict[str, Any]], bootstrap_B: int = DEFAULT_B) 
             for name, val in _run_metric_values(record).items():
                 per_metric.setdefault(name, []).append(val)
         seeds = sorted({r["seed_label"] for r in group})
+        # only runs that have a selected-round headline take part: a seed whose every
+        # round diverged (HEADLINE_NONE) contributes no metric and no aggregation
+        aggs = sorted({str(r.get("aggregation") or "") for r in group
+                       if r.get("headline_source") == HEADLINE_SELECTED})
+        if len(aggs) > 1:
+            raise ValueError("configuration {} mixes metric aggregations {} (some runs lack "
+                             "prediction files)".format(config_id, aggs))
+        aggregation = (aggs[0] or None) if aggs else None
         boot = _bootstrap_cis(group, config_id, bootstrap_B)
         for name in sorted(per_metric, key=_metric_sort_key):
             stats_dict = describe(per_metric[name])
@@ -1568,6 +1647,7 @@ def summary_table(runs: Sequence[Dict[str, Any]], bootstrap_B: int = DEFAULT_B) 
                 "protocol": first.get("protocol"),
                 "power_config": first.get("power_config"),
                 "variant": first.get("variant"),
+                "aggregation": aggregation,
                 "kind": first["kind"],
                 "strategy": first["strategy"],
                 "mu": first.get("mu"),
@@ -1589,8 +1669,9 @@ def summary_table(runs: Sequence[Dict[str, Any]], bootstrap_B: int = DEFAULT_B) 
                 "max": stats_dict["max"],
             })
     df = pd.DataFrame(rows, columns=[
-        "config_id", "label", "protocol", "power_config", "variant", "kind", "strategy", "mu",
-        "distribution", "n_nodes", "num_rounds", "local_epochs", "lr", "metric", "n_seeds", "seeds", "mean", "std", "ci95",
+        "config_id", "label", "protocol", "power_config", "variant", "aggregation", "kind",
+        "strategy", "mu", "distribution", "n_nodes", "num_rounds", "local_epochs", "lr", "metric",
+        "n_seeds", "seeds", "mean", "std", "ci95",
         "ci_low", "ci_high", "ci_method", "min", "max",
     ])
     if not df.empty:
@@ -1682,6 +1763,13 @@ def summarize(runs: Sequence[Dict[str, Any]],
               bootstrap_B: int = DEFAULT_B) -> Dict[str, pd.DataFrame]:
     """All tables at once: ``runs``, ``summary``, ``per_round`` and ``per_client_selected``."""
     attach_prediction_metrics(runs)
+    check_prediction_unions(runs)
+    for record in runs:
+        if record.get("headline_source") == HEADLINE_SELECTED and not record.get("aggregation"):
+            # no prediction files: the logged metrics are all there is, and they follow
+            # the run's own aggregation, not the declared one -- labelled, never pooled
+            # with runs that do follow it (summary_table refuses mixed configurations)
+            record["aggregation"] = AGG_LOGGED
     return {
         "runs": runs_dataframe(runs),
         "summary": summary_table(runs, bootstrap_B),
@@ -1702,6 +1790,13 @@ def _final_metric(record: Dict[str, Any], metric: str) -> Optional[float]:
     never meet in one test (:func:`_seed_values_by_strategy`).
     """
     source = record.get("headline_source")
+    if metric.startswith("clientmean_"):
+        # the secondary aggregation (CLAUDE.md rule 8); only selection-rule runs with
+        # prediction files have it
+        if source != HEADLINE_SELECTED:
+            return None
+        return _as_float((record.get("selected_test_clientmean_metrics") or {})
+                         .get(metric[len("clientmean_"):]))
     if source == HEADLINE_SELECTED:
         return _as_float((record.get("selected_test_metrics") or {}).get(metric))
     if source == HEADLINE_NONE:
@@ -2006,12 +2101,14 @@ def pairwise_markdown(df: pd.DataFrame, metric: str) -> str:
     powers = df["power_config"].fillna("").astype(str) if "power_config" in df.columns \
         else pd.Series([""] * len(df), index=df.index)
     dists = df["distribution"].astype(str)
-    for protocol, dist, power in sorted(set(zip(protocols, dists, powers))):
-        out.append("## Distribution: `{}`{}{}".format(
-            dist, " — protocol `{}`".format(protocol) if protocol else "",
+    metrics = df["metric"].astype(str)
+    for mname, protocol, dist, power in sorted(set(zip(metrics, protocols, dists, powers))):
+        out.append("## `{}` — distribution `{}`{}{}".format(
+            mname, dist, " — protocol `{}`".format(protocol) if protocol else "",
             " — power `{}`".format(power) if power else ""))
         out.append("")
-        sub = df[(protocols == protocol) & (dists == dist) & (powers == power)]
+        sub = df[(metrics == mname) & (protocols == protocol) & (dists == dist)
+                 & (powers == power)]
         rows = []
         for _, row in sub.iterrows():
             rows.append([
@@ -2398,7 +2495,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--include_test_runs", action="store_true",
                         help="also analyse directories named test_*")
     parser.add_argument("--metric", default="accuracy",
-                        help="metric used for curves and statistical tests (default: accuracy)")
+                        help="metric of the per-round curves (default: accuracy)")
+    parser.add_argument("--stats_metric", default="balanced_accuracy",
+                        help="headline metric of the seed-paired tests and the Friedman test "
+                             "(default: balanced_accuracy, the declared primary metric, "
+                             "CLAUDE.md rule 8)")
     parser.add_argument("--no_plots", action="store_true", help="skip figure generation")
     parser.add_argument("--bootstrap_B", type=int, default=DEFAULT_B,
                         help="cluster-bootstrap replicates for the selected-test CIs "
@@ -2430,8 +2531,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("[warn] no runs found under {}".format(results_dir))
 
     tables = summarize(runs, args.bootstrap_B)
-    pairs = pairwise_tests(runs, metric=args.metric)
-    friedman = friedman_tests(runs, metric=args.metric)
+    # the declared primary metric under both aggregations, plus accuracy for the v1
+    # (image-level) runs, whose only headline is final-round accuracy
+    stats_frames = [(pairwise_tests(runs, metric=m), friedman_tests(runs, metric=m))
+                    for m in (args.stats_metric, "clientmean_" + args.stats_metric)]
+    v1_pairs, v1_friedman = (pairwise_tests(runs, metric="accuracy"),
+                             friedman_tests(runs, metric="accuracy"))
+    stats_frames.append((v1_pairs[v1_pairs["protocol"] == PROTOCOL_IMAGE],
+                         v1_friedman[v1_friedman["protocol"] == PROTOCOL_IMAGE]))
+    pairs = pd.concat([a for a, _ in stats_frames if not a.empty], ignore_index=True) \
+        if any(not a.empty for a, _ in stats_frames) else stats_frames[0][0]
+    friedman = pd.concat([b for _, b in stats_frames if not b.empty], ignore_index=True) \
+        if any(not b.empty for _, b in stats_frames) else stats_frames[0][1]
 
     written: List[str] = []
 
@@ -2452,7 +2563,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     _write_csv(tables["per_round"], "per_round_table.csv")
     _write_csv(tables["per_client_selected"], "per_client_selected.csv")
     _write_csv(pairs, "pairwise_tests.csv")
-    _write_text(pairwise_markdown(pairs, args.metric), "pairwise_tests.md")
+    _write_text(pairwise_markdown(pairs, args.stats_metric), "pairwise_tests.md")
     _write_csv(friedman, "friedman.csv")
 
     if not args.no_plots:
@@ -2461,7 +2572,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         except Exception as exc:  # never let a figure failure lose the tables
             print("[warn] plotting failed: {}".format(exc))
 
-    print_summary(runs, tables, pairs, friedman, args.metric)
+    print_summary(runs, tables, pairs, friedman, args.stats_metric)
     print("  wrote {} files to {}".format(len(written), output_dir))
     for path in written:
         print("    {}".format(os.path.basename(path)))

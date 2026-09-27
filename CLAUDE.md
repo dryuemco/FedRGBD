@@ -72,11 +72,25 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
    accuracy leads, MCC is the second summary statistic, accuracy is reported alongside but
    never ranks methods on its own. **Why:** under label and Dirichlet skew each node's test
    split inherits that node's class proportions, so accuracy rewards majority-class
-   prediction — the very failure federation should fix. The references prove it, not
-   hypothetically: local-only beats centralized on accuracy (95.5 vs 94.3 %) and loses on
-   balanced accuracy (88.6 vs 94.7 %), so the two rankings disagree. Column order lives in
+   prediction — the very failure federation should fix. The original illustration --
+   local-only beats centralized on accuracy (95.5 vs 94.3 %) and loses on balanced accuracy
+   (88.6 vs 94.7 %) -- mixed two aggregations (88.6 is a client mean, 94.7 pooled): under the
+   pooled aggregation below it is 95.3 vs 94.7, under the client mean 88.6 vs 93.8. The
+   paper's narrative about it is pending (`\todo`s). Column order lives in
    `FULL_METRIC_ORDER` / `DEFAULT_METRICS` in `scripts/export_latex_tables.py`; do not reorder
    accuracy back to the front.
+   **Aggregation over the three nodes, one definition for every row.** Fixed 2026-09-27,
+   AFTER all 98 federated runs existed and after an analysis of them showed that several
+   comparisons depend on it -- NOT pre-registered, which is why both are always reported:
+   *primary* = pooled over the union of the held-out images (FL: the global model on every
+   client's test split; local-only: each node's own model on its own split; centralized: its
+   pooled test set -- `check_prediction_unions` verifies it is image for image the same set),
+   `selected_test_<m>` in `analysis/`; *secondary* = unweighted mean over the clients,
+   `selected_test_clientmean_<m>`. Both carry the stratified cluster bootstrap (sequences
+   resampled across nodes for the pooled figure, within each client for the mean).
+   Comparisons whose conclusion flips between them: `scripts/aggregation_sensitivity.py` ->
+   `analysis/aggregation_flips.md`. Never report the test-size-weighted client mean that the
+   FL runs log themselves (kept only as `selected_test_metrics_logged`).
 
 ## Model selection (declared rule — use this wording, do not paraphrase it)
 

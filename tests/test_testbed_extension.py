@@ -504,3 +504,21 @@ def test_the_maxn_block_report_exports_maxn_tables(tmp_path, monkeypatch):
     seen.clear()
     block_report.run_pipeline(_REPO, "low_data", str(tmp_path))
     assert "--power_config" not in seen[1]
+
+
+# --------------------------------------------------------------------------- #
+# aggregation: a seed with no valid round must not break the summary
+# --------------------------------------------------------------------------- #
+def test_a_diverged_seed_does_not_trip_the_mixed_aggregation_check():
+    from scripts.analyze_results import (HEADLINE_NONE, HEADLINE_SELECTED, AGG_POOLED,
+                                         summary_table)
+    base = dict(config_id="group|fl|fedavg|iid|3|5|0.001|3", label="FedAvg iid [3N] {group}",
+                protocol="group", power_config="heterogeneous", variant="FedAvg", kind="fl",
+                strategy="fedavg", mu=None, distribution="iid", n_nodes=3, num_rounds=3,
+                local_epochs=5, lr=0.001)
+    ok = dict(base, seed_label="42", headline_source=HEADLINE_SELECTED, aggregation=AGG_POOLED,
+              selected_test_metrics={"balanced_accuracy": 0.9})
+    diverged = dict(base, seed_label="123", headline_source=HEADLINE_NONE)
+    df = summary_table([ok, diverged], bootstrap_B=0)
+    row = df[df.metric == "selected_test_balanced_accuracy"].iloc[0]
+    assert row["aggregation"] == "pooled" and row["n_seeds"] == 1

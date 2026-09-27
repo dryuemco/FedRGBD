@@ -302,7 +302,12 @@ def test_main_and_export_end_to_end(mixed_results, tmp_path):
     assert "time.tex" in written
     with open(os.path.join(tables, "time.tex"), encoding="utf-8") as fh:
         time_text = fh.read()
-    assert "Test acc." in time_text and "86.00" in time_text      # FedAvg selected-round mean
+    # balanced accuracy under the declared aggregations; these synthetic runs have no
+    # prediction files, so no pooled / client-mean figure exists and "--" is printed
+    # instead of the runs' own logged (test-size-weighted) value
+    assert "Bal.\\ acc." in time_text and "client mean" in time_text
+    fedavg_row = next(l for l in time_text.splitlines() if "FedAvg" in l)
+    assert fedavg_row.rstrip(" \\").endswith("& -- & --")
     assert "excluding the report-only test evaluation" in time_text
     with open(os.path.join(tables, "full_metrics_non_iid_label.tex"), encoding="utf-8") as fh:
         full = fh.read()

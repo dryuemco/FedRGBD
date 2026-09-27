@@ -160,6 +160,11 @@ def run_replicates(units: List[Unit], aggregation: str, B: int,
     the caller pools the per-node predictions before constructing it).
     """
     reps = [u.replicate(u.weights(B, rng, stratified)) for u in units]
+    return _aggregate(reps, aggregation)
+
+
+def _aggregate(reps: List[Dict[str, np.ndarray]], aggregation: str) -> Dict[str, np.ndarray]:
+    """Combine per-unit replicate metrics into the run's headline metrics."""
     if aggregation == "pooled" or len(reps) == 1:
         return {m: reps[0][m] for m in BOOT_METRICS}
     if aggregation == "weighted":
@@ -169,6 +174,55 @@ def run_replicates(units: List[Unit], aggregation: str, B: int,
     if aggregation == "mean":
         return {m: np.nanmean(np.stack([r[m] for r in reps]), axis=0) for m in BOOT_METRICS}
     raise ValueError(aggregation)
+
+
+def paired_diff_ci(runs_a: List[List[Unit]], runs_b: List[List[Unit]], aggregation: str,
+                   key: str, B: int = DEFAULT_B, level: float = 0.95,
+                   stratified: bool = True) -> Dict[str, Dict[str, float]]:
+    """CI of mean(A) - mean(B) for two configurations evaluated on the SAME held-out set.
+
+    Every run of both configurations must carry the same evaluation units with the
+    same sequences (unit j of every run covers the same images; for ``"pooled"`` the
+    caller passes one pooled unit per run).  One replicate draws **one** stratified
+    sequence resample per unit and applies it to every run of both sides -- the test
+    set is shared, so resampling it independently per side would double-count its
+    variance -- and draws the seeds of each side independently with replacement.
+    The point estimate is the difference of the seed means on the full held-out set.
+
+    ``key`` seeds the generator.  -> {metric: {"diff", "ci_low", "ci_high",
+    "p_gt0", "B"}} where ``p_gt0`` is the fraction of replicates with A > B.
+    """
+    if not runs_a or not runs_b:
+        raise ValueError("both sides need at least one run")
+    ref = runs_a[0]
+    for units in list(runs_a) + list(runs_b):
+        if len(units) != len(ref) or not all(np.array_equal(u.gid, v.gid) and u.G == v.G
+                                              for u, v in zip(units, ref)):
+            raise ValueError("the two configurations are not evaluated on the same sequences")
+    rng = np.random.default_rng(BASE_SEED + zlib.crc32(("diff|" + key).encode("utf-8")))
+    W = [u.weights(B, rng, stratified) for u in ref]
+    ones = [np.ones((1, u.G)) for u in ref]
+
+    def side(runs):
+        full = [_aggregate([u.replicate(w) for u, w in zip(units, ones)], aggregation) for units in runs]
+        reps = [_aggregate([u.replicate(w) for u, w in zip(units, W)], aggregation) for units in runs]
+        S = len(runs)
+        pick = rng.integers(0, S, size=(B, S))
+        col = np.broadcast_to(np.arange(B)[:, None], pick.shape)
+        point = {m: float(np.nanmean([f[m][0] for f in full])) for m in BOOT_METRICS}
+        boot = {m: np.nanmean(np.stack([r[m] for r in reps])[pick, col], axis=1) for m in BOOT_METRICS}
+        return point, boot
+
+    pa, ba = side(runs_a)
+    pb, bb = side(runs_b)
+    lo_q, hi_q = 100 * (1 - level) / 2, 100 * (1 + level) / 2
+    out = {}
+    for m in BOOT_METRICS:
+        d = ba[m] - bb[m]
+        out[m] = {"diff": pa[m] - pb[m], "ci_low": float(np.nanpercentile(d, lo_q)),
+                  "ci_high": float(np.nanpercentile(d, hi_q)),
+                  "p_gt0": float(np.nanmean(d > 0)), "B": B}
+    return out
 
 
 def config_ci(runs: List[List[Unit]], aggregation: str, key: str, B: int = DEFAULT_B,
@@ -195,4 +249,4 @@ def config_ci(runs: List[List[Unit]], aggregation: str, key: str, B: int = DEFAU
 
 
 __all__ = ["BOOT_METRICS", "DEFAULT_B", "Unit", "config_ci", "metrics_from_counts",
-           "run_replicates"]
+           "paired_diff_ci", "run_replicates"]

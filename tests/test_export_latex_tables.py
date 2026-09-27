@@ -145,14 +145,20 @@ def analysis_dir(tmp_path):
 # --------------------------------------------------------------------------- #
 # helpers
 # --------------------------------------------------------------------------- #
-def assert_valid_latex(text):
-    """Balanced braces and matching begin/end for the environments we emit."""
+def assert_valid_latex(text, tabular_only=False):
+    """Balanced braces and matching begin/end for the environments we emit.
+
+    ``tabular_only``: the paper's *_tabular.tex files are only the tabular environment;
+    main.tex supplies the float, caption and label around their \\input."""
     assert text.count("{") == text.count("}"), "unbalanced braces"
-    for env in ("table", "tabular"):
+    for env in ("table", "table*", "tabular"):
         assert text.count("\\begin{" + env + "}") == text.count("\\end{" + env + "}")
     assert text.count("\\toprule") == 1
     assert text.count("\\bottomrule") == 1
-    assert "\\caption{" in text and "\\label{tab:" in text
+    if tabular_only:
+        assert "\\caption{" not in text and "\\begin{table" not in text
+    else:
+        assert "\\caption{" in text and "\\label{tab:" in text
     # no stray unescaped special outside comments, cross-reference keys and math mode.
     # \label{} and \ref{} arguments are keys, not typeset text, so underscores in them
     # are legitimate and must not be escaped.
@@ -407,9 +413,10 @@ def test_end_to_end_on_the_real_results(tmp_path):
 
     for path in written:
         text = read(path)
-        assert_valid_latex(text)
+        assert_valid_latex(text, tabular_only=path.endswith("_tabular.tex"))
         # every body row must have the same number of cells as the column spec
-        spec = re.search(r"\\begin\{tabular\}\{([^}]*)\}", text).group(1)
+        spec = re.search(r"\\begin\{tabular\}\{((?:[^{}]|\{[^{}]*\})*)\}", text).group(1)
+        spec = re.sub(r"@\{[^{}]*\}", "", spec)          # @{} column separators
         n_columns = sum(1 for c in spec if c in "lcrS")
         for line in text.splitlines():
             if not line.endswith("\\\\") or "\\multicolumn" in line:
@@ -449,7 +456,7 @@ def test_time_table_uses_revision_runs_only(tmp_path):
     text = time_tex(df)
     assert text is not None
     assert "\label{tab:time}" in text
-    assert "3N Non-IID (label skew) FedAvg" in text and "2N Non-IID (label skew) FedAvg" in text
+    assert "3N Label skew FedAvg" in text and "2N Label skew FedAvg" in text
     assert "50.0 $\pm$ 1.0" in text          # 3000 s -> 50.0 min, std 60 s -> 1.0 min
     assert "110.3" in text and "73.5" in text
     assert "102.4" not in text                # 6146.9 s (v1) -> 102.4 min must not appear
@@ -483,21 +490,27 @@ def test_scarce_minority_configurations_are_daggered(tmp_path):
     scarce = load_scarce_minority(str(tmp_path))
     assert scarce == {("iid", "local")}
 
-    rows = []
-    for kind, label in (("local", "Local-only (group-level)"),
-                        ("centralized", "Centralized (group-level)")):
-        rows.append({"metric": "selected_test_balanced_accuracy", "distribution": "iid",
-                     "kind": kind, "label": label, "mean": 0.84, "std": 0.01,
-                     "ci_low": 0.78, "ci_high": 0.88, "n_seeds": 5,
-                     "ci_method": "cluster_bootstrap_B1000"})
-    tex = summary_tex(pd.DataFrame(rows), "selected_test_balanced_accuracy",
-                      scarce=scarce)
+    def table(metric):
+        rows = []
+        for kind, label in (("local", "Local-only (group-level)"),
+                            ("centralized", "Centralized (group-level)")):
+            rows.append({"metric": metric, "distribution": "iid",
+                         "kind": kind, "label": label, "mean": 0.84, "std": 0.01,
+                         "ci_low": 0.78, "ci_high": 0.88, "n_seeds": 5,
+                         "ci_method": "cluster_bootstrap_B1000"})
+        tex = summary_tex(pd.DataFrame(rows), metric, scarce=scarce)
+        return (next(l for l in tex.splitlines() if "Local-only" in l),
+                next(l for l in tex.splitlines() if "Centralized" in l), tex)
 
-    local_line = next(l for l in tex.splitlines() if "Local-only" in l)
-    central_line = next(l for l in tex.splitlines() if "Centralized" in l)
-    assert r"$^{\dagger}$" in local_line, "the scarce-minority row is not marked"
-    assert r"$^{\dagger}$" not in central_line, "the pooled row must not be marked"
+    # the client mean rests on each client's own split: the per-client flag applies to
+    # every row (the centralized model is evaluated on the same splits)
+    local_line, central_line, tex = table("selected_test_clientmean_balanced_accuracy")
+    assert r"$^{\dagger}$" in local_line, "the scarce-minority client mean is not marked"
+    assert r"$^{\dagger}$" in central_line, "the centralized client mean rests on the same splits"
     assert r"$^{\dagger}$" in tex.split(r"\bottomrule")[-1], "the footnote must explain it"
+    # the pooled figure rests on every held-out sequence: only the pooled flag applies
+    local_line, central_line, _ = table("selected_test_balanced_accuracy")
+    assert r"$^{\dagger}$" not in local_line and r"$^{\dagger}$" not in central_line
 
 
 def test_no_dagger_when_no_configuration_is_scarce():

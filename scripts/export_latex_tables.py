@@ -378,9 +378,15 @@ def summary_tex(df: pd.DataFrame, metric: str, digits: int = 4, seconds_digits: 
             ci = fmt_ci(row.get("ci_low"), row.get("ci_high"), ndigits, siunitx)
             if str(row.get("ci_method", "")).startswith("cluster_bootstrap") and ci != MISSING:
                 ci += "$^{b}$"
-            if scarce and (str(row.get("distribution")), str(row.get("kind"))) in scarce \
-                    and ci != MISSING:
-                ci += "$^{\\dagger}$"
+            if scarce and ci != MISSING:
+                pooled_flag, mean_flag = scarce_cells(scarce, str(row.get("distribution")))
+                per_client = ("clientmean_" in metric) or not metric.startswith("selected_test_")
+                # pooled selected-test metrics rest on every held-out sequence of the
+                # partition; client means and the older final-epoch/v1 metrics are per client
+                flag = (mean_flag if per_client else pooled_flag) if metric.startswith(
+                    "selected_test_") else (str(row.get("distribution")), str(row.get("kind"))) in scarce
+                if flag:
+                    ci += "$^{\\dagger}$"
             n_seeds = _as_float(row.get("n_seeds"))
             row_cells.append("{} ({})".format(ci, int(n_seeds) if n_seeds else 0))
         body.append(_row(row_cells))
@@ -396,9 +402,11 @@ def summary_tex(df: pd.DataFrame, metric: str, digits: int = 4, seconds_digits: 
         note="Produced from \\texttt{summary\\_table.csv}; $\\pm$ and CI are omitted when "
              "only one seed is available. CI: 95\\% $t$-interval of the mean over seeds, or, "
              "marked $^{b}$, the sequence-level (cluster) bootstrap over seeds and held-out "
-             "sequences, stratified by class composition. $^{\\dagger}$ marks a configuration "
-             "in which some evaluated client's minority class is carried by at most two "
-             "held-out sequences (Table~\\ref{tab:heldout_sequences}): the bootstrap cannot "
+             "sequences, stratified by class composition. $^{\\dagger}$ marks an interval "
+             "that rests on a minority class carried by at most two held-out sequences -- for a "
+             "pooled metric, of the pooled held-out set; for a client mean or a per-client "
+             "metric, of some client's own split (Table~\\ref{tab:heldout_sequences}): the "
+             "bootstrap cannot "
              "estimate between-sequence variance for that class, so the interval is "
              "conditional on those particular videos and understates uncertainty about new "
              "footage.",
@@ -502,11 +510,16 @@ def pairwise_tex(df: pd.DataFrame, digits: int = 4, siunitx: bool = False) -> Op
     body: List[str] = []
     n_columns = 8
     protocols = _protocol_column(df)
-    for protocol, dist in sorted(set(zip(protocols, df["distribution"].astype(str)))):
-        block = df[(protocols == protocol) & (df["distribution"].astype(str) == dist)]
+    metrics = df["metric"].astype(str) if "metric" in df.columns else pd.Series(
+        ["accuracy"] * len(df), index=df.index)
+    for metric, protocol, dist in sorted(set(zip(metrics, protocols,
+                                                 df["distribution"].astype(str)))):
+        block = df[(metrics == metric) & (protocols == protocol)
+                   & (df["distribution"].astype(str) == dist)]
         if body:
             body.append("\\midrule")
-        body.append(_group_row(n_columns, dist_label(dist) + _protocol_suffix(protocol)))
+        body.append(_group_row(n_columns, dist_label(dist) + _protocol_suffix(protocol)
+                               + " -- " + escape_latex(metric.replace("_", " "))))
         for _, row in block.iterrows():
             n_seeds = _as_float(row.get("n_seeds"))
             body.append(_row([
@@ -521,14 +534,13 @@ def pairwise_tex(df: pd.DataFrame, digits: int = 4, siunitx: bool = False) -> Op
                 fmt_p(row.get("ttest_p"), digits, siunitx),
             ]))
 
-    metric = str(df["metric"].iloc[0]) if "metric" in df.columns and not df.empty else "accuracy"
     return latex_table(
         column_spec="l" + "c" * 7,
         header_lines=header,
         body_lines=body,
-        caption="Pairwise strategy comparisons on the headline {}, paired by seed within each "
-                "partitioning protocol and data distribution.".format(
-                    escape_latex(metric.replace("_", " "))),
+        caption="Pairwise strategy comparisons, paired by seed within each metric, "
+                "partitioning protocol and data distribution (balanced accuracy pooled and "
+                "as the client mean for the revision runs; accuracy for the v1 runs).",
         label="tab:pairwise_tests",
         note="Headline value per run: test metric of the selected round (revision "
              "federated runs), final-epoch test metric (centralized, local-only), final-round "
@@ -553,7 +565,8 @@ def friedman_tex(df: pd.DataFrame, digits: int = 4, siunitx: bool = False) -> Op
         n_strategies = _as_float(row.get("n_strategies"))
         n_seeds = _as_float(row.get("n_seeds"))
         body.append(_row([
-            dist_label(str(row.get("distribution"))) + _protocol_suffix(protocols[idx]),
+            dist_label(str(row.get("distribution"))) + _protocol_suffix(protocols[idx])
+            + " -- " + escape_latex(str(row.get("metric", "")).replace("_", " ")),
             str(int(n_strategies) if n_strategies else 0),
             str(int(n_seeds) if n_seeds else 0),
             fmt_number(row.get("chi_square"), 3, siunitx),
@@ -692,7 +705,8 @@ def time_tex(df: pd.DataFrame, siunitx: bool = False) -> Optional[str]:
     if not rows:
         return None
 
-    header = [_row(["Configuration", "Time (min)", "Comm.\\ (MB)", "Test acc.\\ (\\%)"])]
+    header = [_row(["Configuration", "Time (min)", "Comm.\\ (MB)", "Bal.\\ acc.\\ (\\%)",
+                    "Bal.\\ acc., client mean (\\%)"])]
     body: List[str] = []
     for (n_nodes, dist, name) in sorted(rows, key=lambda k: (k[0], TIME_TABLE_DISTS.index(k[1]),
                                                               k[2])):
@@ -707,17 +721,22 @@ def time_tex(df: pd.DataFrame, siunitx: bool = False) -> Optional[str]:
             int(n_seeds) if n_seeds else 0).replace(" -- (", " (")
         comm = metrics.get("final_cumulative_mb")
         comm_cell = fmt_number(comm.get("mean"), 1, siunitx) if comm is not None else MISSING
-        acc = metrics.get("selected_test_accuracy")
-        acc_cell = MISSING
-        if acc is not None and _as_float(acc.get("mean")) is not None:
-            std = _as_float(acc.get("std"))
-            acc_cell = fmt_mean_std(100.0 * _as_float(acc.get("mean")),
-                                    100.0 * std if std is not None else None, 2, siunitx)
-        body.append(_row(["{}N {} {}".format(n_nodes, dist_label(dist), name),
-                          time_cell, comm_cell, acc_cell]))
+        # the declared primary metric under both aggregations, with the cluster-bootstrap
+        # interval (CLAUDE.md rule 8)
+        ba_cells = []
+        for metric in (PRIMARY_BA, SECONDARY_BA):
+            row = metrics.get(metric)
+            # a configuration without prediction files has no figure under the declared
+            # aggregation: print "--" rather than its own logged (weighted) number
+            if row is not None and str(row.get("aggregation", "pooled")) != "pooled":
+                row = None
+            ba_cells.append(_pct_ci(row))
+        short = {"iid": "IID", "non_iid_label": "Label skew"}.get(dist, dist_label(dist))
+        body.append(_row(["{}N {} {}".format(n_nodes, short, name),
+                          time_cell, comm_cell] + ba_cells))
 
-    return latex_table(
-        column_spec="lccc",
+    text = latex_table(
+        column_spec="lcccc",
         header_lines=header,
         body_lines=body,
         caption="Measured Total Training Time, Group-Level Split, Wired Gigabit Ethernet "
@@ -726,12 +745,248 @@ def time_tex(df: pd.DataFrame, siunitx: bool = False) -> Optional[str]:
         small=True,
         note="Time: mean $\\pm$ std [95\\% CI] ($n$ seeds) of the server wall-clock time "
              "excluding the report-only test evaluation. "
-             "Communication: measured cumulative payload over the run. Test accuracy: at the "
-             "round selected by the lowest weighted validation loss. Only revision runs "
+             "Communication: measured cumulative payload over the run. Balanced accuracy: "
+             "test set at the round selected by the lowest weighted validation loss, pooled "
+             "over all held-out images and as the unweighted mean over the clients, mean "
+             "[95\\% cluster-bootstrap CI]. Only revision runs "
              "(group-level split, wired Gigabit Ethernet) are included; v1 timings (WiFi, "
              "image-level split) are not comparable and are omitted. Produced from "
              "\\texttt{summary\\_table.csv}.",
     )
+    # five columns do not fit one column of the two-column layout
+    return text.replace("\\begin{table}[t]", "\\begin{table*}[t]").replace(
+        "\\end{table}", "\\end{table*}")
+
+
+# --------------------------------------------------------------------------- #
+# paper tabulars: tab:fullmetrics, tab:dirichlet, tab:lowdata
+# --------------------------------------------------------------------------- #
+# Each file is ONLY the tabular environment: main.tex keeps the float, caption,
+# label and hand-written footnote (with its \todo markers) around an \input, so the
+# reference cells come from analysis/ while the federated rows stay \PHs
+# placeholders until the narrative is decided.  Balanced accuracy appears under
+# both aggregations (CLAUDE.md hard rule 8): pooled over all held-out images of
+# the three nodes (primary) and the unweighted mean over the clients (secondary).
+PRIMARY_BA = "selected_test_balanced_accuracy"
+SECONDARY_BA = "selected_test_clientmean_balanced_accuracy"
+PAPER_PH = r"\PHs"
+#: (summary kind, row label) of the reference rows, in table order
+PAPER_REFERENCES = (("centralized", "Centralized"), ("local", "Local-only"))
+#: federated rows kept as placeholders, in table order
+PAPER_FL_ROWS = (r"\fedavg{}", r"\fedprox{} 0.01", r"\fedbn{}")
+DAGGER = r"$^{\dagger}$"
+_GENERATED = "% generated by scripts/export_latex_tables.py -- do not edit by hand"
+
+
+def reference_row(summary: pd.DataFrame, distribution: str, kind: str, metric: str):
+    """The one selection-rule summary row of a reference, or None."""
+    if summary.empty:
+        return None
+    sel = summary[(_protocol_column(summary) == "group")
+                  & (summary["distribution"].astype(str) == distribution)
+                  & (summary["kind"].astype(str) == kind)
+                  & (summary["metric"].astype(str) == metric)]
+    if len(sel) > 1:
+        raise ValueError("%d summary rows for %s/%s/%s" % (len(sel), distribution, kind, metric))
+    if sel.empty:
+        return None
+    row = sel.iloc[0]
+    check_aggregation(row)
+    return row
+
+
+def check_aggregation(row: Any) -> None:
+    """A selected-test cell printed under the declared aggregation must have been computed
+    under it: a configuration without prediction files carries its own logged figures
+    (``aggregation`` = logged_native), which are neither pooled nor a client mean."""
+    metric = str(row.get("metric", ""))
+    if metric.startswith("selected_test_") and "aggregation" in row.index:
+        agg = str(row.get("aggregation"))
+        if agg != "pooled":
+            raise ValueError("%s of %s is aggregated as %r, not pooled/client-mean from "
+                             "prediction files" % (metric, row.get("config_id"), agg))
+
+
+def _pct_ci(row: Any) -> str:
+    if row is None or _as_float(row.get("mean")) is None:
+        return MISSING
+    lo, hi = _as_float(row.get("ci_low")), _as_float(row.get("ci_high"))
+    text = "%.1f" % (100 * float(row["mean"]))
+    if lo is not None and hi is not None:
+        text += " [%.1f, %.1f]" % (100 * lo, 100 * hi)
+    return text
+
+
+def _pm(row: Any, scale: float, digits: int) -> str:
+    if row is None or _as_float(row.get("mean")) is None:
+        return MISSING
+    std = _as_float(row.get("std"))
+    fmt = "%%.%df" % digits
+    if std is None or not math.isfinite(std):
+        return "$" + fmt % (scale * float(row["mean"])) + "$"
+    return "$" + (fmt + " \\pm " + fmt) % (scale * float(row["mean"]), scale * std) + "$"
+
+
+def scarce_cells(scarce: set, distribution: str) -> Tuple[bool, bool]:
+    """(pooled flagged, client-mean flagged) for one partition.
+
+    The flags of scripts/heldout_dominance.py are per evaluation unit: the pooled
+    held-out set is the centralized unit, the per-client units are those of the
+    federated / local-only rows -- the same splits whichever model is evaluated.
+    """
+    return ((distribution, "centralized") in scarce,
+            (distribution, "fl") in scarce or (distribution, "local") in scarce)
+
+
+FULLMETRICS_PAPER_COLUMNS = (
+    # (summary metric, header, formatter)
+    (PRIMARY_BA, r"\textbf{Bal.\ acc.}", "ci"),
+    (SECONDARY_BA, r"\textbf{Bal.\ acc.,} \textbf{client mean}", "ci"),
+    ("selected_test_mcc", r"\textbf{MCC}", "mcc"),
+    ("selected_test_accuracy", r"\textbf{Acc.}", "pct"),
+    ("selected_test_recall", r"\textbf{Sens.}", "pct"),
+    ("selected_test_specificity", r"\textbf{Spec.}", "pct"),
+    ("selected_test_macro_f1", r"\textbf{Macro-}$F_1$", "pct"),
+    ("selected_test_roc_auc", r"\textbf{ROC-AUC}", "pct"),
+)
+
+
+def fullmetrics_paper_tabular(summary: pd.DataFrame, scarce: set) -> Optional[str]:
+    """tab:fullmetrics: IID and label skew, every headline metric, both BA aggregations."""
+    dists = (("iid", "IID"), ("non_iid_label", "Non-IID"))
+    if all(reference_row(summary, d, "centralized", PRIMARY_BA) is None for d, _ in dists):
+        return None
+    ncol = 2 + len(FULLMETRICS_PAPER_COLUMNS)
+    out = [_GENERATED, r"\begin{tabular}{@{}ll" + "c" * len(FULLMETRICS_PAPER_COLUMNS) + "@{}}",
+           r"\toprule",
+           _row([r"\textbf{Dist.}", r"\textbf{Method}"] + [h for _, h, _ in FULLMETRICS_PAPER_COLUMNS]),
+           r"\midrule"]
+    for i, (dist, label) in enumerate(dists):
+        if i:
+            out.append(r"\midrule")
+        pooled_flag, mean_flag = scarce_cells(scarce, dist)
+        nrows = len(PAPER_REFERENCES) + len(PAPER_FL_ROWS)
+        first = True
+        for kind, name in PAPER_REFERENCES:
+            cells = []
+            for metric, _, fmt in FULLMETRICS_PAPER_COLUMNS:
+                row = reference_row(summary, dist, kind, metric)
+                if fmt == "ci":
+                    text = _pct_ci(row)
+                    flag = mean_flag if metric == SECONDARY_BA else pooled_flag
+                    cells.append(text + (DAGGER if flag and text != MISSING else ""))
+                elif fmt == "mcc":
+                    cells.append(_pm(row, 1.0, 2))
+                else:
+                    cells.append(_pm(row, 100.0, 1))
+            lead = (r"\multirow{%d}{*}{%s}" % (nrows, label)) if first else ""
+            first = False
+            out.append(_row([lead, name] + cells))
+        for name in PAPER_FL_ROWS:
+            out.append(_row(["", name] + [PAPER_PH] * len(FULLMETRICS_PAPER_COLUMNS)))
+    out += [r"\bottomrule", r"\end{tabular}"]
+    del ncol
+    return "\n".join(out) + "\n"
+
+
+def load_partition_skew(analysis_dir: str) -> Dict[str, float]:
+    """{partition: size-weighted mean JSD} from scripts/partition_skew.py."""
+    path = os.path.join(analysis_dir, "partition_skew.csv")
+    if not os.path.isfile(path):
+        return {}
+    df = pd.read_csv(path)
+    df = df[df["node"] == "ALL"]
+    return {str(r.partition): float(r.jsd) for r in df.itertuples()}
+
+
+DIRICHLET_PARTITIONS = (("dirichlet_0.1", r"$\alpha{=}0.1$"), ("dirichlet_0.5", r"$\alpha{=}0.5$"),
+                        ("dirichlet_1", r"$\alpha{=}1.0$"))
+
+
+def _two_aggregation_blocks(summary, columns, scarce, fl_rows, lead_label=None):
+    """Rows for the pooled block then the client-mean block of a partition-column table."""
+    out = []
+    ncol = len(columns) + 1 + (1 if lead_label else 0)
+    for metric, title in ((PRIMARY_BA, "Balanced accuracy pooled over all held-out images (primary)"),
+                          (SECONDARY_BA, "Balanced accuracy, unweighted mean over the three clients (secondary)")):
+        out.append(r"\multicolumn{%d}{l}{\textit{%s}} \\" % (ncol, title))
+        for kind, name in PAPER_REFERENCES:
+            cells = []
+            for dist in columns:
+                pooled_flag, mean_flag = scarce_cells(scarce, dist)
+                flag = mean_flag if metric == SECONDARY_BA else pooled_flag
+                text = _pct_ci(reference_row(summary, dist, kind, metric))
+                cells.append(text + (DAGGER if flag and text != MISSING else ""))
+            out.append(_row(([lead_label] if lead_label else []) + [name] + cells))
+        for name in fl_rows:
+            out.append(_row(([""] if lead_label else []) + [name] + [PAPER_PH] * len(columns)))
+    return out
+
+
+def dirichlet_paper_tabular(summary: pd.DataFrame, scarce: set, skew: Dict[str, float]) -> Optional[str]:
+    """tab:dirichlet: the three Dirichlet draws as distinct partitions, ordered by the
+    measured skew of scripts/partition_skew.py (never by alpha)."""
+    parts = [p for p in DIRICHLET_PARTITIONS if p[0] in skew]
+    if len(parts) != len(DIRICHLET_PARTITIONS):
+        return None
+    if all(reference_row(summary, p, "centralized", PRIMARY_BA) is None for p, _ in parts):
+        return None
+    parts.sort(key=lambda p: skew[p[0]])
+    cols = [p for p, _ in parts]
+    out = [_GENERATED, r"\begin{tabular}{@{}l" + "c" * len(parts) + "@{}}", r"\toprule",
+           r" & \multicolumn{%d}{c}{\textbf{Partition, in order of measured skew}} \\" % len(parts),
+           r"\cmidrule(lr){2-%d}" % (len(parts) + 1),
+           _row([r"\textbf{Method}"] + [label for _, label in parts]),
+           _row([r"{\footnotesize measured skew (JSD)}"]
+                + [r"{\footnotesize %.3f}" % skew[p] for p in cols]),
+           r"\midrule"]
+    # the dirichlet_skew block runs FedAvg and FedProx only; no run can fill a FedBN row
+    fl_rows = PAPER_FL_ROWS[:2]
+    body = _two_aggregation_blocks(summary, cols, scarce, fl_rows)
+    # a \midrule between the two aggregation blocks
+    split = 1 + len(PAPER_REFERENCES) + len(fl_rows)
+    out += body[:split] + [r"\midrule"] + body[split:]
+    out += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(out) + "\n"
+
+
+LOWDATA_COLUMNS = ((None, r"$\rho{=}1.00$"), ("0.05", r"$\rho{=}0.05$"), ("0.01", r"$\rho{=}0.01$"))
+
+
+def lowdata_paper_tabular(summary: pd.DataFrame, scarce: set) -> Optional[str]:
+    """tab:lowdata: IID and label skew at rho = 1, 0.05, 0.01, both aggregations."""
+    dists = (("iid", "IID"), ("non_iid_label", "Non-IID"))
+    fl_rows = PAPER_FL_ROWS[:2]                  # the low-data block runs FedAvg and FedProx only
+    if reference_row(summary, "iid_sub0.01", "centralized", PRIMARY_BA) is None:
+        return None
+    out = [_GENERATED, r"\begin{tabular}{@{}ll" + "c" * len(LOWDATA_COLUMNS) + "@{}}", r"\toprule",
+           _row([r"\textbf{Dist.}", r"\textbf{Method}"] + [label for _, label in LOWDATA_COLUMNS]),
+           r"\midrule"]
+    for metric, title in ((PRIMARY_BA, "Balanced accuracy pooled over all held-out images (primary)"),
+                          (SECONDARY_BA, "Balanced accuracy, unweighted mean over the three clients (secondary)")):
+        if metric == SECONDARY_BA:
+            out.append(r"\midrule")
+        out.append(r"\multicolumn{%d}{l}{\textit{%s}} \\" % (2 + len(LOWDATA_COLUMNS), title))
+        for i, (dist, label) in enumerate(dists):
+            if i:
+                out.append(r"\cmidrule(lr){1-%d}" % (2 + len(LOWDATA_COLUMNS)))
+            cols = [dist if f is None else "%s_sub%s" % (dist, f) for f, _ in LOWDATA_COLUMNS]
+            nrows = len(PAPER_REFERENCES) + len(fl_rows)
+            first = True
+            for kind, name in PAPER_REFERENCES:
+                cells = []
+                for col in cols:
+                    pooled_flag, mean_flag = scarce_cells(scarce, col)
+                    flag = mean_flag if metric == SECONDARY_BA else pooled_flag
+                    text = _pct_ci(reference_row(summary, col, kind, metric))
+                    cells.append(text + (DAGGER if flag and text != MISSING else ""))
+                lead = (r"\multirow{%d}{*}{%s}" % (nrows, label)) if first else ""
+                first = False
+                out.append(_row([lead, name] + cells))
+            for name in fl_rows:
+                out.append(_row(["", name] + [PAPER_PH] * len(cols)))
+    out += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(out) + "\n"
 
 
 # --------------------------------------------------------------------------- #
@@ -813,6 +1068,18 @@ def export(analysis_dir: str, output_dir: str, metrics: Optional[Sequence[str]] 
     if os.path.isfile(gt_table):
         with open(gt_table, encoding="utf-8") as fh:
             _write(fh.read(), "grouping_tradeoff.tex")
+
+    # measured partition skew, generated by scripts/partition_skew.py
+    skew_table = os.path.join(analysis_dir, "partition_skew.tex")
+    if os.path.isfile(skew_table):
+        with open(skew_table, encoding="utf-8") as fh:
+            _write(fh.read(), "partition_skew.tex")
+
+    # the paper's reference tabulars (tab:fullmetrics, tab:dirichlet, tab:lowdata)
+    _write(fullmetrics_paper_tabular(summary, scarce), "fullmetrics_tabular.tex")
+    _write(dirichlet_paper_tabular(summary, scarce, load_partition_skew(analysis_dir)),
+           "dirichlet_tabular.tex")
+    _write(lowdata_paper_tabular(summary, scarce), "lowdata_tabular.tex")
 
     # held-out sequences per class, generated by scripts/heldout_dominance.py
     hs_table = os.path.join(analysis_dir, "leakage", "heldout_sequences.tex")
