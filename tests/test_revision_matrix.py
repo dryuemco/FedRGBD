@@ -252,7 +252,8 @@ def test_cli_text_format_run_count():
 
 def test_cli_block_filter():
     out = subprocess.run(
-        [PYTHON, "scripts/print_revision_commands.py", "--block", "mu_grid", "--format", "text"],
+        [PYTHON, "scripts/print_revision_commands.py", "--block", "mu_grid", "--format", "text",
+         "--no_skip_existing"],
         capture_output=True, text=True, check=True,
     )
     n_dirs = len(re.findall(r"^--- (results/rev_\S+) ---$", out.stdout, flags=re.MULTILINE))
@@ -262,7 +263,8 @@ def test_cli_block_filter():
 
 def test_cli_bash_format_smoke():
     out = subprocess.run(
-        [PYTHON, "scripts/print_revision_commands.py", "--block", "long_horizon_fedbn", "--format", "bash"],
+        [PYTHON, "scripts/print_revision_commands.py", "--block", "long_horizon_fedbn", "--format", "bash",
+         "--no_skip_existing"],
         capture_output=True, text=True, check=True,
     )
     assert out.stdout.startswith("#!/bin/bash")
@@ -301,7 +303,7 @@ def test_no_results_directory_is_launched_twice(revision):
 
 def test_cli_bash_never_repeats_a_server_command():
     out = subprocess.run(
-        [PYTHON, "scripts/print_revision_commands.py", "--format", "bash"],
+        [PYTHON, "scripts/print_revision_commands.py", "--format", "bash", "--no_skip_existing"],
         capture_output=True, text=True, check=True,
     )
     output_dirs = re.findall(r"--output_dir (results/rev_\S+)", out.stdout)
