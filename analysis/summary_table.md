@@ -1173,209 +1173,209 @@
 | Centralized non_iid_label {image} | final_loss | 3 | 0.0101 ± 0.0021 [0.0048, 0.0153] | 0.0076 | 0.0113 |
 | Centralized non_iid_label {image} | round1_accuracy | 3 | 0.9967 ± 0.0013 [0.9934, 0.9999] | 0.9954 | 0.9980 |
 | Centralized non_iid_label {image} | total_time_s | 3 | 15572.2 ± 325.2557 [14764.2, 16380.2] | 15343.0 | 15944.5 |
-| FedAvg non_iid_label [3N] {group} | final_cumulative_mb | 3 | 165.4653 ± 0.0000 [165.4653, 165.4653] | 165.4653 | 165.4653 |
-| FedAvg non_iid_label [3N] {group} | final_cumulative_mb | 3 | 165.4653 ± 0.0000 [165.4653, 165.4653] | 165.4653 | 165.4653 |
-| FedAvg non_iid_label [3N] {group} | final_cumulative_mb | 3 | 165.4653 ± 0.0000 [165.4653, 165.4653] | 165.4653 | 165.4653 |
-| FedAvg non_iid_label [3N] {group} | final_cumulative_mb | 3 | 551.5510 ± 0.0000 [551.5510, 551.5510] | 551.5510 | 551.5510 |
+| FedAvg (E=1) non_iid_label [3N] {group} | final_cumulative_mb | 3 | 165.4653 ± 0.0000 [165.4653, 165.4653] | 165.4653 | 165.4653 |
+| FedAvg (E=1) non_iid_label [3N] {group} | round1_accuracy | 3 | 0.7489 ± 0.1609 [0.3491, 1.1487] | 0.6023 | 0.9211 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_round | 3 | 2.3333 ± 0.5774 [0.8991, 3.7676] | 2.0000 | 3.0000 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_accuracy | 3 | 0.9273 ± 0.0268 [0.8690, 0.9675] | 0.9083 | 0.9579 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_balanced_accuracy | 3 | 0.9007 ± 0.0223 [0.8482, 0.9503] | 0.8750 | 0.9145 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_clean_accuracy | 3 | 0.9239 ± 0.0279 [0.8694, 0.9660] | 0.9041 | 0.9558 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_clean_balanced_accuracy | 3 | 0.8976 ± 0.0209 [0.8531, 0.9490] | 0.8736 | 0.9113 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_clean_f1 | 3 | 0.8933 ± 0.0609 [0.8063, 0.9561] | 0.8305 | 0.9520 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_clean_loss | 3 | 0.1838 ± 0.0813 [0.0819, 0.3233] | 0.0904 | 0.2389 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_clean_macro_f1 | 3 | 0.8632 ± 0.0393 [0.7807, 0.9328] | 0.8272 | 0.9052 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_clean_mcc | 3 | 0.7618 ± 0.0506 [0.6466, 0.8779] | 0.7127 | 0.8137 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_clean_precision | 3 | 0.9924 ± 0.0074 [0.9770, 0.9987] | 0.9839 | 0.9969 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_clean_recall | 3 | 0.8317 ± 0.0888 [0.7215, 0.9314] | 0.7475 | 0.9245 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_clean_roc_auc | 3 | 0.9711 ± 0.0231 [0.9422, 0.9945] | 0.9448 | 0.9881 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_clean_specificity | 3 | 0.9634 ± 0.0625 [0.8715, 0.9998] | 0.8912 | 0.9996 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_f1 | 3 | 0.8958 ± 0.0589 [0.7968, 0.9582] | 0.8351 | 0.9528 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_fn | 3 | 494.3333 ± 238.2485 [-97.5087, 1086.2] | 221.0000 | 658.0000 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_fp | 3 | 29.0000 ± 45.9021 [-85.0271, 143.0271] | 2.0000 | 82.0000 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_loss | 3 | 0.1766 ± 0.0768 [0.0776, 0.3248] | 0.0885 | 0.2288 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_macro_f1 | 3 | 0.8707 ± 0.0390 [0.7866, 0.9367] | 0.8354 | 0.9125 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_macro_precision | 3 | 0.8859 ± 0.0253 [0.8231, 0.9486] | 0.8709 | 0.9150 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_macro_recall | 3 | 0.9007 ± 0.0223 [0.8453, 0.9561] | 0.8750 | 0.9145 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_macro_specificity | 3 | 0.9007 ± 0.0223 [0.8453, 0.9561] | 0.8750 | 0.9145 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_mcc | 3 | 0.7737 ± 0.0523 [0.6498, 0.8831] | 0.7239 | 0.8282 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_n_examples | 3 | 7198.0 ± 0.0000 [7198.0, 7198.0] | 7198.0 | 7198.0 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_precision | 3 | 0.9929 ± 0.0070 [0.9776, 0.9988] | 0.9848 | 0.9970 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_recall | 3 | 0.8337 ± 0.0876 [0.7135, 0.9338] | 0.7503 | 0.9249 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_roc_auc | 3 | 0.9734 ± 0.0220 [0.9419, 0.9951] | 0.9483 | 0.9895 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_specificity | 3 | 0.9678 ± 0.0551 [0.8799, 0.9998] | 0.9041 | 0.9997 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_tn | 3 | 2647.0 ± 45.9021 [2533.0, 2761.0] | 2594.0 | 2674.0 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_test_tp | 3 | 4027.7 ± 238.2485 [3435.8, 4619.5] | 3864.0 | 4301.0 |
+| FedAvg (E=1) non_iid_label [3N] {group} | selected_val_loss | 3 | 0.2493 ± 0.1266 [-0.0651, 0.5637] | 0.1524 | 0.3925 |
+| FedAvg (E=1) non_iid_label [3N] {group} | total_time_s | 3 | 882.4800 ± 2.5742 [876.0852, 888.8748] | 880.5000 | 885.3900 |
+| FedAvg (E=2) non_iid_label [3N] {group} | final_cumulative_mb | 3 | 165.4653 ± 0.0000 [165.4653, 165.4653] | 165.4653 | 165.4653 |
+| FedAvg (E=2) non_iid_label [3N] {group} | round1_accuracy | 3 | 0.5678 ± 0.0852 [0.3562, 0.7794] | 0.4696 | 0.6222 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_round | 3 | 3.0000 ± 0.0000 [3.0000, 3.0000] | 3.0000 | 3.0000 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_accuracy | 3 | 0.9248 ± 0.0373 [0.8597, 0.9673] | 0.8818 | 0.9486 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_balanced_accuracy | 3 | 0.9103 ± 0.0460 [0.8456, 0.9589] | 0.8573 | 0.9407 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_clean_accuracy | 3 | 0.9214 ± 0.0392 [0.8532, 0.9649] | 0.8763 | 0.9463 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_clean_balanced_accuracy | 3 | 0.9091 ± 0.0468 [0.8508, 0.9536] | 0.8552 | 0.9398 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_clean_f1 | 3 | 0.8874 ± 0.0700 [0.7944, 0.9473] | 0.8068 | 0.9326 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_clean_loss | 3 | 0.2187 ± 0.1324 [0.0926, 0.4284] | 0.1332 | 0.3711 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_clean_macro_f1 | 3 | 0.8641 ± 0.0619 [0.7611, 0.9340] | 0.7927 | 0.9037 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_clean_mcc | 3 | 0.7694 ± 0.0940 [0.6243, 0.8812] | 0.6611 | 0.8305 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_clean_precision | 3 | 0.9981 ± 0.0001 [0.9953, 1.0000] | 0.9980 | 0.9981 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_clean_recall | 3 | 0.8184 ± 0.0936 [0.7017, 0.9080] | 0.7106 | 0.8799 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_clean_roc_auc | 3 | 0.9873 ± 0.0047 [0.9739, 0.9966] | 0.9820 | 0.9911 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_clean_specificity | 3 | 0.9997 ± 0.0001 [0.9991, 1.0000] | 0.9996 | 0.9998 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_f1 | 3 | 0.8902 ± 0.0674 [0.7881, 0.9542] | 0.8126 | 0.9339 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_fn | 3 | 539.6667 ± 269.2626 [-129.2186, 1208.6] | 368.0000 | 850.0000 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_fp | 3 | 1.6667 ± 0.5774 [0.2324, 3.1009] | 1.0000 | 2.0000 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_loss | 3 | 0.2097 ± 0.1256 [0.0907, 0.4109] | 0.1285 | 0.3544 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_macro_f1 | 3 | 0.8707 ± 0.0593 [0.7789, 0.9428] | 0.8023 | 0.9089 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_macro_precision | 3 | 0.8838 ± 0.0349 [0.7971, 0.9706] | 0.8436 | 0.9067 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_macro_recall | 3 | 0.9103 ± 0.0460 [0.7959, 1.0247] | 0.8573 | 0.9407 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_macro_specificity | 3 | 0.9103 ± 0.0460 [0.7959, 1.0247] | 0.8573 | 0.9407 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_mcc | 3 | 0.7791 ± 0.0911 [0.6445, 0.8944] | 0.6742 | 0.8386 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_n_examples | 3 | 7198.0 ± 0.0000 [7198.0, 7198.0] | 7198.0 | 7198.0 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_precision | 3 | 0.9982 ± 0.0001 [0.9954, 0.9998] | 0.9981 | 0.9983 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_recall | 3 | 0.8209 ± 0.0922 [0.6915, 0.9183] | 0.7148 | 0.8817 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_roc_auc | 3 | 0.9886 ± 0.0045 [0.9762, 0.9967] | 0.9834 | 0.9921 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_specificity | 3 | 0.9997 ± 0.0001 [0.9991, 1.0000] | 0.9997 | 0.9998 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_tn | 3 | 2674.3 ± 0.5774 [2672.9, 2675.8] | 2674.0 | 2675.0 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_test_tp | 3 | 3982.3 ± 269.2626 [3313.4, 4651.2] | 3672.0 | 4154.0 |
+| FedAvg (E=2) non_iid_label [3N] {group} | selected_val_loss | 3 | 0.3368 ± 0.1720 [-0.0906, 0.7641] | 0.1979 | 0.5292 |
+| FedAvg (E=2) non_iid_label [3N] {group} | total_time_s | 3 | 1687.9 ± 2.6018 [1681.4, 1694.3] | 1685.8 | 1690.8 |
+| FedAvg (R=10) non_iid_label [3N] {group} | final_cumulative_mb | 3 | 551.5510 ± 0.0000 [551.5510, 551.5510] | 551.5510 | 551.5510 |
+| FedAvg (R=10) non_iid_label [3N] {group} | round1_accuracy | 3 | 0.3847 ± 0.0148 [0.3479, 0.4216] | 0.3717 | 0.4009 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_round | 3 | 7.3333 ± 2.0817 [2.1622, 12.5045] | 5.0000 | 9.0000 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_accuracy | 3 | 0.9601 ± 0.0370 [0.9040, 0.9901] | 0.9182 | 0.9882 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_balanced_accuracy | 3 | 0.9548 ± 0.0412 [0.9064, 0.9849] | 0.9073 | 0.9806 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_clean_accuracy | 3 | 0.9582 ± 0.0391 [0.9004, 0.9900] | 0.9139 | 0.9880 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_clean_balanced_accuracy | 3 | 0.9543 ± 0.0420 [0.9039, 0.9852] | 0.9059 | 0.9811 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_clean_f1 | 3 | 0.9476 ± 0.0515 [0.8823, 0.9845] | 0.8882 | 0.9798 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_clean_loss | 3 | 0.1252 ± 0.0914 [0.0443, 0.2744] | 0.0502 | 0.2270 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_clean_macro_f1 | 3 | 0.9270 ± 0.0621 [0.8293, 0.9808] | 0.8575 | 0.9772 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_clean_mcc | 3 | 0.8730 ± 0.1006 [0.7255, 0.9625] | 0.7610 | 0.9557 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_clean_precision | 3 | 0.9973 ± 0.0005 [0.9933, 0.9993] | 0.9968 | 0.9977 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_clean_recall | 3 | 0.9100 ± 0.0848 [0.8084, 0.9723] | 0.8121 | 0.9634 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_clean_roc_auc | 3 | 0.9855 ± 0.0114 [0.9632, 0.9967] | 0.9726 | 0.9941 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_clean_specificity | 3 | 0.9987 ± 0.0009 [0.9964, 0.9996] | 0.9979 | 0.9996 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_f1 | 3 | 0.9484 ± 0.0500 [0.8872, 0.9841] | 0.8907 | 0.9793 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_fn | 3 | 283.3333 ± 267.7879 [-381.8886, 948.5552] | 81.0000 | 587.0000 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_fp | 3 | 3.6667 ± 1.5275 [-0.1279, 7.4612] | 2.0000 | 5.0000 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_loss | 3 | 0.1196 ± 0.0862 [0.0431, 0.2593] | 0.0489 | 0.2157 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_macro_f1 | 3 | 0.9310 ± 0.0588 [0.8465, 0.9794] | 0.8650 | 0.9779 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_macro_precision | 3 | 0.9309 ± 0.0488 [0.8097, 1.0522] | 0.8796 | 0.9768 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_macro_recall | 3 | 0.9548 ± 0.0412 [0.8525, 1.0570] | 0.9073 | 0.9806 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_macro_specificity | 3 | 0.9548 ± 0.0412 [0.8525, 1.0570] | 0.9073 | 0.9806 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_mcc | 3 | 0.8791 ± 0.0961 [0.7492, 0.9601] | 0.7717 | 0.9569 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_n_examples | 3 | 7198.0 ± 0.0000 [7198.0, 7198.0] | 7198.0 | 7198.0 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_precision | 3 | 0.9974 ± 0.0005 [0.9933, 0.9994] | 0.9969 | 0.9978 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_recall | 3 | 0.9107 ± 0.0830 [0.8133, 0.9721] | 0.8150 | 0.9625 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_roc_auc | 3 | 0.9872 ± 0.0100 [0.9681, 0.9969] | 0.9759 | 0.9947 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_specificity | 3 | 0.9988 ± 0.0008 [0.9970, 0.9997] | 0.9981 | 0.9997 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_tn | 3 | 2672.3 ± 1.5275 [2668.5, 2676.1] | 2671.0 | 2674.0 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_test_tp | 3 | 4238.7 ± 267.7879 [3573.4, 4903.9] | 3935.0 | 4441.0 |
+| FedAvg (R=10) non_iid_label [3N] {group} | selected_val_loss | 3 | 0.1825 ± 0.0675 [0.0147, 0.3502] | 0.1085 | 0.2408 |
+| FedAvg (R=10) non_iid_label [3N] {group} | total_time_s | 3 | 13660.9 ± 19.6406 [13612.1, 13709.7] | 13638.9 | 13676.8 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | final_cumulative_mb | 3 | 165.4653 ± 0.0000 [165.4653, 165.4653] | 165.4653 | 165.4653 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | round1_accuracy | 3 | 0.9528 ± 0.0202 [0.9026, 1.0030] | 0.9296 | 0.9661 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_round | 3 | 2.6667 ± 0.5774 [1.2324, 4.1009] | 2.0000 | 3.0000 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_accuracy | 3 | 0.9667 ± 0.0046 [0.9426, 0.9804] | 0.9614 | 0.9697 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_balanced_accuracy | 3 | 0.9206 ± 0.0159 [0.8817, 0.9565] | 0.9040 | 0.9356 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_accuracy | 3 | 0.9651 ± 0.0047 [0.9372, 0.9817] | 0.9597 | 0.9682 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_balanced_accuracy | 3 | 0.9160 ± 0.0166 [0.8748, 0.9553] | 0.8991 | 0.9323 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_f1 | 3 | 0.9304 ± 0.0144 [0.8810, 0.9681] | 0.9161 | 0.9448 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_loss | 3 | 0.1158 ± 0.0268 [0.0570, 0.2174] | 0.0851 | 0.1348 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_macro_f1 | 3 | 0.9303 ± 0.0115 [0.8931, 0.9558] | 0.9174 | 0.9397 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_mcc | 3 | 0.8648 ± 0.0198 [0.8015, 0.9155] | 0.8428 | 0.8812 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_precision | 3 | 0.9670 ± 0.0094 [0.9250, 0.9909] | 0.9565 | 0.9744 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_recall | 3 | 0.9036 ± 0.0237 [0.8373, 0.9698] | 0.8778 | 0.9244 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_roc_auc | 3 | 0.9894 ± 0.0041 [0.9774, 0.9963] | 0.9866 | 0.9941 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_specificity | 3 | 0.9283 ± 0.0245 [0.8671, 0.9759] | 0.9087 | 0.9558 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_f1 | 3 | 0.9321 ± 0.0141 [0.8912, 0.9666] | 0.9178 | 0.9460 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_fn | 3 | 162.6667 ± 38.8373 [66.1895, 259.1438] | 131.0000 | 206.0000 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_fp | 3 | 77.0000 ± 8.6603 [55.4867, 98.5133] | 72.0000 | 87.0000 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_loss | 3 | 0.1103 ± 0.0255 [0.0609, 0.1979] | 0.0812 | 0.1287 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_macro_f1 | 3 | 0.9343 ± 0.0110 [0.9002, 0.9577] | 0.9218 | 0.9428 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_macro_precision | 3 | 0.9533 ± 0.0042 [0.9430, 0.9637] | 0.9499 | 0.9580 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_macro_recall | 3 | 0.9206 ± 0.0159 [0.8811, 0.9601] | 0.9040 | 0.9356 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_macro_specificity | 3 | 0.9206 ± 0.0159 [0.8811, 0.9601] | 0.9040 | 0.9356 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_mcc | 3 | 0.8723 ± 0.0191 [0.8130, 0.9180] | 0.8509 | 0.8872 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_n_examples | 3 | 7198.0 ± 0.0000 [7198.0, 7198.0] | 7198.0 | 7198.0 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_precision | 3 | 0.9687 ± 0.0091 [0.9283, 0.9896] | 0.9585 | 0.9759 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_recall | 3 | 0.9047 ± 0.0239 [0.8452, 0.9671] | 0.8783 | 0.9251 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_roc_auc | 3 | 0.9897 ± 0.0043 [0.9795, 0.9965] | 0.9868 | 0.9946 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_specificity | 3 | 0.9365 ± 0.0215 [0.8792, 0.9772] | 0.9193 | 0.9606 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_tn | 3 | 2599.0 ± 8.6603 [2577.5, 2620.5] | 2589.0 | 2604.0 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_test_tp | 3 | 4359.3 ± 38.8373 [4262.9, 4455.8] | 4316.0 | 4391.0 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | selected_val_loss | 3 | 0.0762 ± 0.0184 [0.0305, 0.1219] | 0.0624 | 0.0971 |
+| FedAvg (lr=0.0001) non_iid_label [3N] {group} | total_time_s | 3 | 4088.1 ± 14.7347 [4051.5, 4124.7] | 4071.1 | 4097.2 |
 | FedAvg non_iid_label [3N] {group} | final_cumulative_mb | 5 | 165.4653 ± 0.0000 [165.4653, 165.4653] | 165.4653 | 165.4653 |
-| FedAvg non_iid_label [3N] {group} | round1_accuracy | 3 | 0.7489 ± 0.1609 [0.3491, 1.1487] | 0.6023 | 0.9211 |
-| FedAvg non_iid_label [3N] {group} | round1_accuracy | 3 | 0.5678 ± 0.0852 [0.3562, 0.7794] | 0.4696 | 0.6222 |
-| FedAvg non_iid_label [3N] {group} | round1_accuracy | 3 | 0.9528 ± 0.0202 [0.9026, 1.0030] | 0.9296 | 0.9661 |
-| FedAvg non_iid_label [3N] {group} | round1_accuracy | 3 | 0.3847 ± 0.0148 [0.3479, 0.4216] | 0.3717 | 0.4009 |
 | FedAvg non_iid_label [3N] {group} | round1_accuracy | 5 | 0.3936 ± 0.0297 [0.3568, 0.4305] | 0.3717 | 0.4423 |
-| FedAvg non_iid_label [3N] {group} | selected_round | 3 | 2.3333 ± 0.5774 [0.8991, 3.7676] | 2.0000 | 3.0000 |
-| FedAvg non_iid_label [3N] {group} | selected_round | 3 | 3.0000 ± 0.0000 [3.0000, 3.0000] | 3.0000 | 3.0000 |
-| FedAvg non_iid_label [3N] {group} | selected_round | 3 | 2.6667 ± 0.5774 [1.2324, 4.1009] | 2.0000 | 3.0000 |
-| FedAvg non_iid_label [3N] {group} | selected_round | 3 | 7.3333 ± 2.0817 [2.1622, 12.5045] | 5.0000 | 9.0000 |
 | FedAvg non_iid_label [3N] {group} | selected_round | 5 | 2.4000 ± 0.5477 [1.7199, 3.0801] | 2.0000 | 3.0000 |
-| FedAvg non_iid_label [3N] {group} | selected_test_accuracy | 3 | 0.9273 ± 0.0268 [0.8690, 0.9675] | 0.9083 | 0.9579 |
-| FedAvg non_iid_label [3N] {group} | selected_test_accuracy | 3 | 0.9248 ± 0.0373 [0.8597, 0.9673] | 0.8818 | 0.9486 |
-| FedAvg non_iid_label [3N] {group} | selected_test_accuracy | 3 | 0.9667 ± 0.0046 [0.9426, 0.9804] | 0.9614 | 0.9697 |
-| FedAvg non_iid_label [3N] {group} | selected_test_accuracy | 3 | 0.9601 ± 0.0370 [0.9040, 0.9901] | 0.9182 | 0.9882 |
 | FedAvg non_iid_label [3N] {group} | selected_test_accuracy | 5 | 0.9047 ± 0.0401 [0.8452, 0.9503] | 0.8450 | 0.9453 |
-| FedAvg non_iid_label [3N] {group} | selected_test_balanced_accuracy | 3 | 0.9007 ± 0.0223 [0.8482, 0.9503] | 0.8750 | 0.9145 |
-| FedAvg non_iid_label [3N] {group} | selected_test_balanced_accuracy | 3 | 0.9103 ± 0.0460 [0.8456, 0.9589] | 0.8573 | 0.9407 |
-| FedAvg non_iid_label [3N] {group} | selected_test_balanced_accuracy | 3 | 0.9206 ± 0.0159 [0.8817, 0.9565] | 0.9040 | 0.9356 |
-| FedAvg non_iid_label [3N] {group} | selected_test_balanced_accuracy | 3 | 0.9548 ± 0.0412 [0.9064, 0.9849] | 0.9073 | 0.9806 |
 | FedAvg non_iid_label [3N] {group} | selected_test_balanced_accuracy | 5 | 0.8940 ± 0.0463 [0.8423, 0.9352] | 0.8309 | 0.9426 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_accuracy | 3 | 0.9239 ± 0.0279 [0.8694, 0.9660] | 0.9041 | 0.9558 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_accuracy | 3 | 0.9214 ± 0.0392 [0.8532, 0.9649] | 0.8763 | 0.9463 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_accuracy | 3 | 0.9651 ± 0.0047 [0.9372, 0.9817] | 0.9597 | 0.9682 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_accuracy | 3 | 0.9582 ± 0.0391 [0.9004, 0.9900] | 0.9139 | 0.9880 |
 | FedAvg non_iid_label [3N] {group} | selected_test_clean_accuracy | 5 | 0.9004 ± 0.0419 [0.8422, 0.9497] | 0.8381 | 0.9426 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_balanced_accuracy | 3 | 0.8976 ± 0.0209 [0.8531, 0.9490] | 0.8736 | 0.9113 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_balanced_accuracy | 3 | 0.9091 ± 0.0468 [0.8508, 0.9536] | 0.8552 | 0.9398 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_balanced_accuracy | 3 | 0.9160 ± 0.0166 [0.8748, 0.9553] | 0.8991 | 0.9323 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_balanced_accuracy | 3 | 0.9543 ± 0.0420 [0.9039, 0.9852] | 0.9059 | 0.9811 |
 | FedAvg non_iid_label [3N] {group} | selected_test_clean_balanced_accuracy | 5 | 0.8925 ± 0.0469 [0.8450, 0.9371] | 0.8286 | 0.9415 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_f1 | 3 | 0.8933 ± 0.0609 [0.8063, 0.9561] | 0.8305 | 0.9520 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_f1 | 3 | 0.8874 ± 0.0700 [0.7944, 0.9473] | 0.8068 | 0.9326 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_f1 | 3 | 0.9304 ± 0.0144 [0.8810, 0.9681] | 0.9161 | 0.9448 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_f1 | 3 | 0.9476 ± 0.0515 [0.8823, 0.9845] | 0.8882 | 0.9798 |
 | FedAvg non_iid_label [3N] {group} | selected_test_clean_f1 | 5 | 0.8646 ± 0.0704 [0.7883, 0.9254] | 0.7652 | 0.9353 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_loss | 3 | 0.1838 ± 0.0813 [0.0819, 0.3233] | 0.0904 | 0.2389 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_loss | 3 | 0.2187 ± 0.1324 [0.0926, 0.4284] | 0.1332 | 0.3711 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_loss | 3 | 0.1158 ± 0.0268 [0.0570, 0.2174] | 0.0851 | 0.1348 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_loss | 3 | 0.1252 ± 0.0914 [0.0443, 0.2744] | 0.0502 | 0.2270 |
 | FedAvg non_iid_label [3N] {group} | selected_test_clean_loss | 5 | 0.2441 ± 0.0867 [0.1430, 0.3561] | 0.1401 | 0.3627 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_macro_f1 | 3 | 0.8632 ± 0.0393 [0.7807, 0.9328] | 0.8272 | 0.9052 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_macro_f1 | 3 | 0.8641 ± 0.0619 [0.7611, 0.9340] | 0.7927 | 0.9037 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_macro_f1 | 3 | 0.9303 ± 0.0115 [0.8931, 0.9558] | 0.9174 | 0.9397 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_macro_f1 | 3 | 0.9270 ± 0.0621 [0.8293, 0.9808] | 0.8575 | 0.9772 |
 | FedAvg non_iid_label [3N] {group} | selected_test_clean_macro_f1 | 5 | 0.8373 ± 0.0596 [0.7603, 0.9067] | 0.7533 | 0.8998 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_mcc | 3 | 0.7618 ± 0.0506 [0.6466, 0.8779] | 0.7127 | 0.8137 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_mcc | 3 | 0.7694 ± 0.0940 [0.6243, 0.8812] | 0.6611 | 0.8305 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_mcc | 3 | 0.8648 ± 0.0198 [0.8015, 0.9155] | 0.8428 | 0.8812 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_mcc | 3 | 0.8730 ± 0.1006 [0.7255, 0.9625] | 0.7610 | 0.9557 |
 | FedAvg non_iid_label [3N] {group} | selected_test_clean_mcc | 5 | 0.7309 ± 0.0871 [0.6223, 0.8384] | 0.6134 | 0.8257 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_precision | 3 | 0.9924 ± 0.0074 [0.9770, 0.9987] | 0.9839 | 0.9969 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_precision | 3 | 0.9981 ± 0.0001 [0.9953, 1.0000] | 0.9980 | 0.9981 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_precision | 3 | 0.9670 ± 0.0094 [0.9250, 0.9909] | 0.9565 | 0.9744 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_precision | 3 | 0.9973 ± 0.0005 [0.9933, 0.9993] | 0.9968 | 0.9977 |
 | FedAvg non_iid_label [3N] {group} | selected_test_clean_precision | 5 | 0.9977 ± 0.0006 [0.9952, 0.9994] | 0.9969 | 0.9982 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_recall | 3 | 0.8317 ± 0.0888 [0.7215, 0.9314] | 0.7475 | 0.9245 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_recall | 3 | 0.8184 ± 0.0936 [0.7017, 0.9080] | 0.7106 | 0.8799 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_recall | 3 | 0.9036 ± 0.0237 [0.8373, 0.9698] | 0.8778 | 0.9244 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_recall | 3 | 0.9100 ± 0.0848 [0.8084, 0.9723] | 0.8121 | 0.9634 |
 | FedAvg non_iid_label [3N] {group} | selected_test_clean_recall | 5 | 0.7853 ± 0.0939 [0.6903, 0.8750] | 0.6573 | 0.8834 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_roc_auc | 3 | 0.9711 ± 0.0231 [0.9422, 0.9945] | 0.9448 | 0.9881 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_roc_auc | 3 | 0.9873 ± 0.0047 [0.9739, 0.9966] | 0.9820 | 0.9911 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_roc_auc | 3 | 0.9894 ± 0.0041 [0.9774, 0.9963] | 0.9866 | 0.9941 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_roc_auc | 3 | 0.9855 ± 0.0114 [0.9632, 0.9967] | 0.9726 | 0.9941 |
 | FedAvg non_iid_label [3N] {group} | selected_test_clean_roc_auc | 5 | 0.9554 ± 0.0488 [0.9086, 0.9871] | 0.8701 | 0.9947 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_specificity | 3 | 0.9634 ± 0.0625 [0.8715, 0.9998] | 0.8912 | 0.9996 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_specificity | 3 | 0.9997 ± 0.0001 [0.9991, 1.0000] | 0.9996 | 0.9998 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_specificity | 3 | 0.9283 ± 0.0245 [0.8671, 0.9759] | 0.9087 | 0.9558 |
-| FedAvg non_iid_label [3N] {group} | selected_test_clean_specificity | 3 | 0.9987 ± 0.0009 [0.9964, 0.9996] | 0.9979 | 0.9996 |
 | FedAvg non_iid_label [3N] {group} | selected_test_clean_specificity | 5 | 0.9997 ± 0.0001 [0.9992, 0.9999] | 0.9996 | 0.9998 |
-| FedAvg non_iid_label [3N] {group} | selected_test_f1 | 3 | 0.8958 ± 0.0589 [0.7968, 0.9582] | 0.8351 | 0.9528 |
-| FedAvg non_iid_label [3N] {group} | selected_test_f1 | 3 | 0.8902 ± 0.0674 [0.7881, 0.9542] | 0.8126 | 0.9339 |
-| FedAvg non_iid_label [3N] {group} | selected_test_f1 | 3 | 0.9321 ± 0.0141 [0.8912, 0.9666] | 0.9178 | 0.9460 |
-| FedAvg non_iid_label [3N] {group} | selected_test_f1 | 3 | 0.9484 ± 0.0500 [0.8872, 0.9841] | 0.8907 | 0.9793 |
 | FedAvg non_iid_label [3N] {group} | selected_test_f1 | 5 | 0.8680 ± 0.0681 [0.7889, 0.9255] | 0.7719 | 0.9367 |
-| FedAvg non_iid_label [3N] {group} | selected_test_fn | 3 | 494.3333 ± 238.2485 [-97.5087, 1086.2] | 221.0000 | 658.0000 |
-| FedAvg non_iid_label [3N] {group} | selected_test_fn | 3 | 539.6667 ± 269.2626 [-129.2186, 1208.6] | 368.0000 | 850.0000 |
-| FedAvg non_iid_label [3N] {group} | selected_test_fn | 3 | 162.6667 ± 38.8373 [66.1895, 259.1438] | 131.0000 | 206.0000 |
-| FedAvg non_iid_label [3N] {group} | selected_test_fn | 3 | 283.3333 ± 267.7879 [-381.8886, 948.5552] | 81.0000 | 587.0000 |
 | FedAvg non_iid_label [3N] {group} | selected_test_fn | 5 | 684.0000 ± 289.1704 [324.9476, 1043.1] | 392.0000 | 1115.0 |
-| FedAvg non_iid_label [3N] {group} | selected_test_fp | 3 | 29.0000 ± 45.9021 [-85.0271, 143.0271] | 2.0000 | 82.0000 |
-| FedAvg non_iid_label [3N] {group} | selected_test_fp | 3 | 1.6667 ± 0.5774 [0.2324, 3.1009] | 1.0000 | 2.0000 |
-| FedAvg non_iid_label [3N] {group} | selected_test_fp | 3 | 77.0000 ± 8.6603 [55.4867, 98.5133] | 72.0000 | 87.0000 |
-| FedAvg non_iid_label [3N] {group} | selected_test_fp | 3 | 3.6667 ± 1.5275 [-0.1279, 7.4612] | 2.0000 | 5.0000 |
 | FedAvg non_iid_label [3N] {group} | selected_test_fp | 5 | 1.8000 ± 0.4472 [1.2447, 2.3553] | 1.0000 | 2.0000 |
-| FedAvg non_iid_label [3N] {group} | selected_test_loss | 3 | 0.1766 ± 0.0768 [0.0776, 0.3248] | 0.0885 | 0.2288 |
-| FedAvg non_iid_label [3N] {group} | selected_test_loss | 3 | 0.2097 ± 0.1256 [0.0907, 0.4109] | 0.1285 | 0.3544 |
-| FedAvg non_iid_label [3N] {group} | selected_test_loss | 3 | 0.1103 ± 0.0255 [0.0609, 0.1979] | 0.0812 | 0.1287 |
-| FedAvg non_iid_label [3N] {group} | selected_test_loss | 3 | 0.1196 ± 0.0862 [0.0431, 0.2593] | 0.0489 | 0.2157 |
 | FedAvg non_iid_label [3N] {group} | selected_test_loss | 5 | 0.2364 ± 0.0839 [0.1394, 0.3536] | 0.1360 | 0.3498 |
-| FedAvg non_iid_label [3N] {group} | selected_test_macro_f1 | 3 | 0.8707 ± 0.0390 [0.7866, 0.9367] | 0.8354 | 0.9125 |
-| FedAvg non_iid_label [3N] {group} | selected_test_macro_f1 | 3 | 0.8707 ± 0.0593 [0.7789, 0.9428] | 0.8023 | 0.9089 |
-| FedAvg non_iid_label [3N] {group} | selected_test_macro_f1 | 3 | 0.9343 ± 0.0110 [0.9002, 0.9577] | 0.9218 | 0.9428 |
-| FedAvg non_iid_label [3N] {group} | selected_test_macro_f1 | 3 | 0.9310 ± 0.0588 [0.8465, 0.9794] | 0.8650 | 0.9779 |
 | FedAvg non_iid_label [3N] {group} | selected_test_macro_f1 | 5 | 0.8450 ± 0.0576 [0.7665, 0.9092] | 0.7636 | 0.9055 |
-| FedAvg non_iid_label [3N] {group} | selected_test_macro_precision | 3 | 0.8859 ± 0.0253 [0.8231, 0.9486] | 0.8709 | 0.9150 |
-| FedAvg non_iid_label [3N] {group} | selected_test_macro_precision | 3 | 0.8838 ± 0.0349 [0.7971, 0.9706] | 0.8436 | 0.9067 |
-| FedAvg non_iid_label [3N] {group} | selected_test_macro_precision | 3 | 0.9533 ± 0.0042 [0.9430, 0.9637] | 0.9499 | 0.9580 |
-| FedAvg non_iid_label [3N] {group} | selected_test_macro_precision | 3 | 0.9309 ± 0.0488 [0.8097, 1.0522] | 0.8796 | 0.9768 |
 | FedAvg non_iid_label [3N] {group} | selected_test_macro_precision | 5 | 0.8660 ± 0.0302 [0.8285, 0.9035] | 0.8265 | 0.9017 |
-| FedAvg non_iid_label [3N] {group} | selected_test_macro_recall | 3 | 0.9007 ± 0.0223 [0.8453, 0.9561] | 0.8750 | 0.9145 |
-| FedAvg non_iid_label [3N] {group} | selected_test_macro_recall | 3 | 0.9103 ± 0.0460 [0.7959, 1.0247] | 0.8573 | 0.9407 |
-| FedAvg non_iid_label [3N] {group} | selected_test_macro_recall | 3 | 0.9206 ± 0.0159 [0.8811, 0.9601] | 0.9040 | 0.9356 |
-| FedAvg non_iid_label [3N] {group} | selected_test_macro_recall | 3 | 0.9548 ± 0.0412 [0.8525, 1.0570] | 0.9073 | 0.9806 |
 | FedAvg non_iid_label [3N] {group} | selected_test_macro_recall | 5 | 0.8940 ± 0.0463 [0.8365, 0.9515] | 0.8309 | 0.9426 |
-| FedAvg non_iid_label [3N] {group} | selected_test_macro_specificity | 3 | 0.9007 ± 0.0223 [0.8453, 0.9561] | 0.8750 | 0.9145 |
-| FedAvg non_iid_label [3N] {group} | selected_test_macro_specificity | 3 | 0.9103 ± 0.0460 [0.7959, 1.0247] | 0.8573 | 0.9407 |
-| FedAvg non_iid_label [3N] {group} | selected_test_macro_specificity | 3 | 0.9206 ± 0.0159 [0.8811, 0.9601] | 0.9040 | 0.9356 |
-| FedAvg non_iid_label [3N] {group} | selected_test_macro_specificity | 3 | 0.9548 ± 0.0412 [0.8525, 1.0570] | 0.9073 | 0.9806 |
 | FedAvg non_iid_label [3N] {group} | selected_test_macro_specificity | 5 | 0.8940 ± 0.0463 [0.8365, 0.9515] | 0.8309 | 0.9426 |
-| FedAvg non_iid_label [3N] {group} | selected_test_mcc | 3 | 0.7737 ± 0.0523 [0.6498, 0.8831] | 0.7239 | 0.8282 |
-| FedAvg non_iid_label [3N] {group} | selected_test_mcc | 3 | 0.7791 ± 0.0911 [0.6445, 0.8944] | 0.6742 | 0.8386 |
-| FedAvg non_iid_label [3N] {group} | selected_test_mcc | 3 | 0.8723 ± 0.0191 [0.8130, 0.9180] | 0.8509 | 0.8872 |
-| FedAvg non_iid_label [3N] {group} | selected_test_mcc | 3 | 0.8791 ± 0.0961 [0.7492, 0.9601] | 0.7717 | 0.9569 |
 | FedAvg non_iid_label [3N] {group} | selected_test_mcc | 5 | 0.7417 ± 0.0852 [0.6303, 0.8418] | 0.6264 | 0.8347 |
-| FedAvg non_iid_label [3N] {group} | selected_test_n_examples | 3 | 7198.0 ± 0.0000 [7198.0, 7198.0] | 7198.0 | 7198.0 |
-| FedAvg non_iid_label [3N] {group} | selected_test_n_examples | 3 | 7198.0 ± 0.0000 [7198.0, 7198.0] | 7198.0 | 7198.0 |
-| FedAvg non_iid_label [3N] {group} | selected_test_n_examples | 3 | 7198.0 ± 0.0000 [7198.0, 7198.0] | 7198.0 | 7198.0 |
-| FedAvg non_iid_label [3N] {group} | selected_test_n_examples | 3 | 7198.0 ± 0.0000 [7198.0, 7198.0] | 7198.0 | 7198.0 |
 | FedAvg non_iid_label [3N] {group} | selected_test_n_examples | 5 | 7198.0 ± 0.0000 [7198.0, 7198.0] | 7198.0 | 7198.0 |
-| FedAvg non_iid_label [3N] {group} | selected_test_precision | 3 | 0.9929 ± 0.0070 [0.9776, 0.9988] | 0.9848 | 0.9970 |
-| FedAvg non_iid_label [3N] {group} | selected_test_precision | 3 | 0.9982 ± 0.0001 [0.9954, 0.9998] | 0.9981 | 0.9983 |
-| FedAvg non_iid_label [3N] {group} | selected_test_precision | 3 | 0.9687 ± 0.0091 [0.9283, 0.9896] | 0.9585 | 0.9759 |
-| FedAvg non_iid_label [3N] {group} | selected_test_precision | 3 | 0.9974 ± 0.0005 [0.9933, 0.9994] | 0.9969 | 0.9978 |
 | FedAvg non_iid_label [3N] {group} | selected_test_precision | 5 | 0.9979 ± 0.0005 [0.9956, 0.9994] | 0.9972 | 0.9983 |
-| FedAvg non_iid_label [3N] {group} | selected_test_recall | 3 | 0.8337 ± 0.0876 [0.7135, 0.9338] | 0.7503 | 0.9249 |
-| FedAvg non_iid_label [3N] {group} | selected_test_recall | 3 | 0.8209 ± 0.0922 [0.6915, 0.9183] | 0.7148 | 0.8817 |
-| FedAvg non_iid_label [3N] {group} | selected_test_recall | 3 | 0.9047 ± 0.0239 [0.8452, 0.9671] | 0.8783 | 0.9251 |
-| FedAvg non_iid_label [3N] {group} | selected_test_recall | 3 | 0.9107 ± 0.0830 [0.8133, 0.9721] | 0.8150 | 0.9625 |
 | FedAvg non_iid_label [3N] {group} | selected_test_recall | 5 | 0.7883 ± 0.0927 [0.6849, 0.8707] | 0.6619 | 0.8855 |
-| FedAvg non_iid_label [3N] {group} | selected_test_roc_auc | 3 | 0.9734 ± 0.0220 [0.9419, 0.9951] | 0.9483 | 0.9895 |
-| FedAvg non_iid_label [3N] {group} | selected_test_roc_auc | 3 | 0.9886 ± 0.0045 [0.9762, 0.9967] | 0.9834 | 0.9921 |
-| FedAvg non_iid_label [3N] {group} | selected_test_roc_auc | 3 | 0.9897 ± 0.0043 [0.9795, 0.9965] | 0.9868 | 0.9946 |
-| FedAvg non_iid_label [3N] {group} | selected_test_roc_auc | 3 | 0.9872 ± 0.0100 [0.9681, 0.9969] | 0.9759 | 0.9947 |
 | FedAvg non_iid_label [3N] {group} | selected_test_roc_auc | 5 | 0.9566 ± 0.0472 [0.9056, 0.9882] | 0.8742 | 0.9952 |
-| FedAvg non_iid_label [3N] {group} | selected_test_specificity | 3 | 0.9678 ± 0.0551 [0.8799, 0.9998] | 0.9041 | 0.9997 |
-| FedAvg non_iid_label [3N] {group} | selected_test_specificity | 3 | 0.9997 ± 0.0001 [0.9991, 1.0000] | 0.9997 | 0.9998 |
-| FedAvg non_iid_label [3N] {group} | selected_test_specificity | 3 | 0.9365 ± 0.0215 [0.8792, 0.9772] | 0.9193 | 0.9606 |
-| FedAvg non_iid_label [3N] {group} | selected_test_specificity | 3 | 0.9988 ± 0.0008 [0.9970, 0.9997] | 0.9981 | 0.9997 |
 | FedAvg non_iid_label [3N] {group} | selected_test_specificity | 5 | 0.9997 ± 0.0001 [0.9992, 0.9999] | 0.9997 | 0.9998 |
-| FedAvg non_iid_label [3N] {group} | selected_test_tn | 3 | 2647.0 ± 45.9021 [2533.0, 2761.0] | 2594.0 | 2674.0 |
-| FedAvg non_iid_label [3N] {group} | selected_test_tn | 3 | 2674.3 ± 0.5774 [2672.9, 2675.8] | 2674.0 | 2675.0 |
-| FedAvg non_iid_label [3N] {group} | selected_test_tn | 3 | 2599.0 ± 8.6603 [2577.5, 2620.5] | 2589.0 | 2604.0 |
-| FedAvg non_iid_label [3N] {group} | selected_test_tn | 3 | 2672.3 ± 1.5275 [2668.5, 2676.1] | 2671.0 | 2674.0 |
 | FedAvg non_iid_label [3N] {group} | selected_test_tn | 5 | 2674.2 ± 0.4472 [2673.6, 2674.8] | 2674.0 | 2675.0 |
-| FedAvg non_iid_label [3N] {group} | selected_test_tp | 3 | 4027.7 ± 238.2485 [3435.8, 4619.5] | 3864.0 | 4301.0 |
-| FedAvg non_iid_label [3N] {group} | selected_test_tp | 3 | 3982.3 ± 269.2626 [3313.4, 4651.2] | 3672.0 | 4154.0 |
-| FedAvg non_iid_label [3N] {group} | selected_test_tp | 3 | 4359.3 ± 38.8373 [4262.9, 4455.8] | 4316.0 | 4391.0 |
-| FedAvg non_iid_label [3N] {group} | selected_test_tp | 3 | 4238.7 ± 267.7879 [3573.4, 4903.9] | 3935.0 | 4441.0 |
 | FedAvg non_iid_label [3N] {group} | selected_test_tp | 5 | 3838.0 ± 289.1704 [3478.9, 4197.1] | 3407.0 | 4130.0 |
-| FedAvg non_iid_label [3N] {group} | selected_val_loss | 3 | 0.2493 ± 0.1266 [-0.0651, 0.5637] | 0.1524 | 0.3925 |
-| FedAvg non_iid_label [3N] {group} | selected_val_loss | 3 | 0.3368 ± 0.1720 [-0.0906, 0.7641] | 0.1979 | 0.5292 |
-| FedAvg non_iid_label [3N] {group} | selected_val_loss | 3 | 0.0762 ± 0.0184 [0.0305, 0.1219] | 0.0624 | 0.0971 |
-| FedAvg non_iid_label [3N] {group} | selected_val_loss | 3 | 0.1825 ± 0.0675 [0.0147, 0.3502] | 0.1085 | 0.2408 |
 | FedAvg non_iid_label [3N] {group} | selected_val_loss | 5 | 0.3743 ± 0.0713 [0.2857, 0.4629] | 0.2791 | 0.4761 |
-| FedAvg non_iid_label [3N] {group} | total_time_s | 3 | 882.4800 ± 2.5742 [876.0852, 888.8748] | 880.5000 | 885.3900 |
-| FedAvg non_iid_label [3N] {group} | total_time_s | 3 | 1687.9 ± 2.6018 [1681.4, 1694.3] | 1685.8 | 1690.8 |
-| FedAvg non_iid_label [3N] {group} | total_time_s | 3 | 4088.1 ± 14.7347 [4051.5, 4124.7] | 4071.1 | 4097.2 |
-| FedAvg non_iid_label [3N] {group} | total_time_s | 3 | 13660.9 ± 19.6406 [13612.1, 13709.7] | 13638.9 | 13676.8 |
 | FedAvg non_iid_label [3N] {group} | total_time_s | 5 | 4110.2 ± 1.5948 [4108.2, 4112.2] | 4107.4 | 4111.2 |
 | FedAvg non_iid_label [3N] {image} | final_cumulative_mb | 3 | 110.3102 ± 0.0000 [110.3102, 110.3102] | 110.3102 | 110.3102 |
 | FedAvg non_iid_label [3N] {image} | round1_accuracy | 3 | 0.4979 ± 0.0980 [0.2546, 0.7413] | 0.3865 | 0.5707 |
 | FedAvg non_iid_label [3N] {image} | total_time_s | 3 | 6146.9 ± 409.6401 [5129.3, 7164.5] | 5720.9 | 6538.0 |
 | FedAvg non_iid_label [3N] {image} | v1_final_round_accuracy | 3 | 0.9931 ± 0.0039 [0.9834, 1.0029] | 0.9908 | 0.9977 |
 | FedAvg non_iid_label [3N] {image} | v1_final_round_loss | 3 | 0.0513 ± 0.0413 [-0.0513, 0.1540] | 0.0155 | 0.0965 |
-| FedBN non_iid_label [3N] {group} | final_cumulative_mb | 3 | 551.5510 ± 0.0000 [551.5510, 551.5510] | 551.5510 | 551.5510 |
-| FedBN non_iid_label [3N] {group} | round1_accuracy | 3 | 0.4182 ± 0.0240 [0.3586, 0.4778] | 0.3909 | 0.4358 |
-| FedBN non_iid_label [3N] {group} | selected_round | 3 | 8.0000 ± 1.0000 [5.5159, 10.4841] | 7.0000 | 9.0000 |
-| FedBN non_iid_label [3N] {group} | selected_test_accuracy | 3 | 0.9308 ± 0.0237 [0.8690, 0.9670] | 0.9126 | 0.9576 |
-| FedBN non_iid_label [3N] {group} | selected_test_balanced_accuracy | 3 | 0.8979 ± 0.0573 [0.8206, 0.9515] | 0.8317 | 0.9321 |
-| FedBN non_iid_label [3N] {group} | selected_test_clean_accuracy | 3 | 0.9281 ± 0.0247 [0.8740, 0.9664] | 0.9089 | 0.9560 |
-| FedBN non_iid_label [3N] {group} | selected_test_clean_balanced_accuracy | 3 | 0.8952 ± 0.0590 [0.8134, 0.9510] | 0.8272 | 0.9310 |
-| FedBN non_iid_label [3N] {group} | selected_test_clean_f1 | 3 | 0.8893 ± 0.0753 [0.7622, 0.9556] | 0.8030 | 0.9418 |
-| FedBN non_iid_label [3N] {group} | selected_test_clean_loss | 3 | 0.1879 ± 0.0884 [0.0788, 0.3355] | 0.0875 | 0.2542 |
-| FedBN non_iid_label [3N] {group} | selected_test_clean_macro_f1 | 3 | 0.8692 ± 0.0415 [0.7765, 0.9315] | 0.8317 | 0.9138 |
-| FedBN non_iid_label [3N] {group} | selected_test_clean_mcc | 3 | 0.7726 ± 0.0632 [0.6379, 0.8720] | 0.7099 | 0.8363 |
-| FedBN non_iid_label [3N] {group} | selected_test_clean_precision | 3 | 0.9919 ± 0.0050 [0.9798, 0.9973] | 0.9867 | 0.9967 |
-| FedBN non_iid_label [3N] {group} | selected_test_clean_recall | 3 | 0.8361 ± 0.0812 [0.6921, 0.9257] | 0.7449 | 0.9005 |
-| FedBN non_iid_label [3N] {group} | selected_test_clean_roc_auc | 3 | 0.9830 ± 0.0060 [0.9663, 0.9928] | 0.9781 | 0.9896 |
-| FedBN non_iid_label [3N] {group} | selected_test_clean_specificity | 3 | 0.9544 ± 0.0449 [0.8811, 0.9993] | 0.9094 | 0.9992 |
-| FedBN non_iid_label [3N] {group} | selected_test_f1 | 3 | 0.8908 ± 0.0737 [0.7678, 0.9577] | 0.8063 | 0.9415 |
-| FedBN non_iid_label [3N] {group} | selected_test_fn | 3 | 463.0000 ± 179.5188 [17.0506, 908.9494] | 270.0000 | 625.0000 |
-| FedBN non_iid_label [3N] {group} | selected_test_fp | 3 | 35.3333 ± 31.5013 [-42.9203, 113.5870] | 4.0000 | 67.0000 |
-| FedBN non_iid_label [3N] {group} | selected_test_loss | 3 | 0.1814 ± 0.0855 [0.0778, 0.3287] | 0.0844 | 0.2460 |
-| FedBN non_iid_label [3N] {group} | selected_test_macro_f1 | 3 | 0.8753 ± 0.0405 [0.7851, 0.9375] | 0.8384 | 0.9186 |
-| FedBN non_iid_label [3N] {group} | selected_test_macro_precision | 3 | 0.8979 ± 0.0307 [0.8216, 0.9742] | 0.8627 | 0.9190 |
-| FedBN non_iid_label [3N] {group} | selected_test_macro_recall | 3 | 0.8979 ± 0.0573 [0.7556, 1.0402] | 0.8317 | 0.9321 |
-| FedBN non_iid_label [3N] {group} | selected_test_macro_specificity | 3 | 0.8979 ± 0.0573 [0.7556, 1.0402] | 0.8317 | 0.9321 |
-| FedBN non_iid_label [3N] {group} | selected_test_mcc | 3 | 0.7823 ± 0.0623 [0.6514, 0.8837] | 0.7205 | 0.8452 |
-| FedBN non_iid_label [3N] {group} | selected_test_n_examples | 3 | 7198.0 ± 0.0000 [7198.0, 7198.0] | 7198.0 | 7198.0 |
-| FedBN non_iid_label [3N] {group} | selected_test_precision | 3 | 0.9924 ± 0.0046 [0.9815, 0.9975] | 0.9876 | 0.9968 |
-| FedBN non_iid_label [3N] {group} | selected_test_recall | 3 | 0.8360 ± 0.0821 [0.7029, 0.9276] | 0.7433 | 0.8997 |
-| FedBN non_iid_label [3N] {group} | selected_test_roc_auc | 3 | 0.9836 ± 0.0065 [0.9654, 0.9939] | 0.9784 | 0.9909 |
-| FedBN non_iid_label [3N] {group} | selected_test_specificity | 3 | 0.9598 ± 0.0396 [0.8952, 0.9992] | 0.9202 | 0.9993 |
-| FedBN non_iid_label [3N] {group} | selected_test_tn | 3 | 2640.7 ± 31.5013 [2562.4, 2718.9] | 2609.0 | 2672.0 |
-| FedBN non_iid_label [3N] {group} | selected_test_tp | 3 | 4059.0 ± 179.5188 [3613.1, 4504.9] | 3897.0 | 4252.0 |
-| FedBN non_iid_label [3N] {group} | selected_val_loss | 3 | 0.2765 ± 0.0458 [0.1628, 0.3902] | 0.2445 | 0.3290 |
-| FedBN non_iid_label [3N] {group} | total_time_s | 3 | 13605.2 ± 49.1062 [13483.2, 13727.1] | 13558.7 | 13656.5 |
+| FedBN (R=10) non_iid_label [3N] {group} | final_cumulative_mb | 3 | 551.5510 ± 0.0000 [551.5510, 551.5510] | 551.5510 | 551.5510 |
+| FedBN (R=10) non_iid_label [3N] {group} | round1_accuracy | 3 | 0.4182 ± 0.0240 [0.3586, 0.4778] | 0.3909 | 0.4358 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_round | 3 | 8.0000 ± 1.0000 [5.5159, 10.4841] | 7.0000 | 9.0000 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_accuracy | 3 | 0.9308 ± 0.0237 [0.8690, 0.9670] | 0.9126 | 0.9576 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_balanced_accuracy | 3 | 0.8979 ± 0.0573 [0.8206, 0.9515] | 0.8317 | 0.9321 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_clean_accuracy | 3 | 0.9281 ± 0.0247 [0.8740, 0.9664] | 0.9089 | 0.9560 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_clean_balanced_accuracy | 3 | 0.8952 ± 0.0590 [0.8134, 0.9510] | 0.8272 | 0.9310 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_clean_f1 | 3 | 0.8893 ± 0.0753 [0.7622, 0.9556] | 0.8030 | 0.9418 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_clean_loss | 3 | 0.1879 ± 0.0884 [0.0788, 0.3355] | 0.0875 | 0.2542 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_clean_macro_f1 | 3 | 0.8692 ± 0.0415 [0.7765, 0.9315] | 0.8317 | 0.9138 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_clean_mcc | 3 | 0.7726 ± 0.0632 [0.6379, 0.8720] | 0.7099 | 0.8363 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_clean_precision | 3 | 0.9919 ± 0.0050 [0.9798, 0.9973] | 0.9867 | 0.9967 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_clean_recall | 3 | 0.8361 ± 0.0812 [0.6921, 0.9257] | 0.7449 | 0.9005 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_clean_roc_auc | 3 | 0.9830 ± 0.0060 [0.9663, 0.9928] | 0.9781 | 0.9896 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_clean_specificity | 3 | 0.9544 ± 0.0449 [0.8811, 0.9993] | 0.9094 | 0.9992 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_f1 | 3 | 0.8908 ± 0.0737 [0.7678, 0.9577] | 0.8063 | 0.9415 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_fn | 3 | 463.0000 ± 179.5188 [17.0506, 908.9494] | 270.0000 | 625.0000 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_fp | 3 | 35.3333 ± 31.5013 [-42.9203, 113.5870] | 4.0000 | 67.0000 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_loss | 3 | 0.1814 ± 0.0855 [0.0778, 0.3287] | 0.0844 | 0.2460 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_macro_f1 | 3 | 0.8753 ± 0.0405 [0.7851, 0.9375] | 0.8384 | 0.9186 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_macro_precision | 3 | 0.8979 ± 0.0307 [0.8216, 0.9742] | 0.8627 | 0.9190 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_macro_recall | 3 | 0.8979 ± 0.0573 [0.7556, 1.0402] | 0.8317 | 0.9321 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_macro_specificity | 3 | 0.8979 ± 0.0573 [0.7556, 1.0402] | 0.8317 | 0.9321 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_mcc | 3 | 0.7823 ± 0.0623 [0.6514, 0.8837] | 0.7205 | 0.8452 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_n_examples | 3 | 7198.0 ± 0.0000 [7198.0, 7198.0] | 7198.0 | 7198.0 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_precision | 3 | 0.9924 ± 0.0046 [0.9815, 0.9975] | 0.9876 | 0.9968 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_recall | 3 | 0.8360 ± 0.0821 [0.7029, 0.9276] | 0.7433 | 0.8997 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_roc_auc | 3 | 0.9836 ± 0.0065 [0.9654, 0.9939] | 0.9784 | 0.9909 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_specificity | 3 | 0.9598 ± 0.0396 [0.8952, 0.9992] | 0.9202 | 0.9993 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_tn | 3 | 2640.7 ± 31.5013 [2562.4, 2718.9] | 2609.0 | 2672.0 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_test_tp | 3 | 4059.0 ± 179.5188 [3613.1, 4504.9] | 3897.0 | 4252.0 |
+| FedBN (R=10) non_iid_label [3N] {group} | selected_val_loss | 3 | 0.2765 ± 0.0458 [0.1628, 0.3902] | 0.2445 | 0.3290 |
+| FedBN (R=10) non_iid_label [3N] {group} | total_time_s | 3 | 13605.2 ± 49.1062 [13483.2, 13727.1] | 13558.7 | 13656.5 |
 | FedBN non_iid_label [3N] {image} | final_cumulative_mb | 3 | 110.3102 ± 0.0000 [110.3102, 110.3102] | 110.3102 | 110.3102 |
 | FedBN non_iid_label [3N] {image} | round1_accuracy | 3 | 0.3759 ± 0.0136 [0.3421, 0.4097] | 0.3671 | 0.3916 |
 | FedBN non_iid_label [3N] {image} | total_time_s | 3 | 6162.8 ± 170.0314 [5740.4, 6585.1] | 6020.9 | 6351.2 |
@@ -1414,137 +1414,137 @@
 | FedProx(mu=0.001) non_iid_label [3N] {group} | selected_test_tp | 3 | 4095.0 ± 35.0428 [4007.9, 4182.1] | 4059.0 | 4129.0 |
 | FedProx(mu=0.001) non_iid_label [3N] {group} | selected_val_loss | 3 | 0.2994 ± 0.0580 [0.1553, 0.4436] | 0.2425 | 0.3585 |
 | FedProx(mu=0.001) non_iid_label [3N] {group} | total_time_s | 3 | 6436.8 ± 67.5122 [6269.1, 6604.5] | 6359.9 | 6486.4 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | final_cumulative_mb | 3 | 165.4653 ± 0.0000 [165.4653, 165.4653] | 165.4653 | 165.4653 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | final_cumulative_mb | 3 | 165.4653 ± 0.0000 [165.4653, 165.4653] | 165.4653 | 165.4653 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | final_cumulative_mb | 3 | 165.4653 ± 0.0000 [165.4653, 165.4653] | 165.4653 | 165.4653 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | final_cumulative_mb | 3 | 165.4653 ± 0.0000 [165.4653, 165.4653] | 165.4653 | 165.4653 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | round1_accuracy | 3 | 0.8816 ± 0.0272 [0.8140, 0.9492] | 0.8586 | 0.9117 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_round | 3 | 2.0000 ± 1.0000 [-0.4841, 4.4841] | 1.0000 | 3.0000 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_accuracy | 3 | 0.9317 ± 0.0437 [0.8604, 0.9805] | 0.8905 | 0.9776 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_balanced_accuracy | 3 | 0.9179 ± 0.0551 [0.8603, 0.9786] | 0.8727 | 0.9792 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_clean_accuracy | 3 | 0.9284 ± 0.0461 [0.8560, 0.9809] | 0.8848 | 0.9767 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_clean_balanced_accuracy | 3 | 0.9160 ± 0.0563 [0.8512, 0.9790] | 0.8704 | 0.9789 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_clean_f1 | 3 | 0.9051 ± 0.0727 [0.8064, 0.9778] | 0.8328 | 0.9782 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_clean_loss | 3 | 0.1880 ± 0.0928 [0.0765, 0.3164] | 0.0809 | 0.2460 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_clean_macro_f1 | 3 | 0.8779 ± 0.0693 [0.7673, 0.9617] | 0.8161 | 0.9528 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_clean_mcc | 3 | 0.7904 ± 0.1086 [0.6268, 0.9282] | 0.7051 | 0.9126 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_clean_precision | 3 | 0.9923 ± 0.0069 [0.9781, 0.9987] | 0.9848 | 0.9985 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_clean_recall | 3 | 0.8491 ± 0.1114 [0.7182, 0.9641] | 0.7411 | 0.9635 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_clean_roc_auc | 3 | 0.9780 ± 0.0150 [0.9536, 0.9956] | 0.9636 | 0.9935 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_clean_specificity | 3 | 0.9829 ± 0.0248 [0.9413, 0.9997] | 0.9545 | 0.9998 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_f1 | 3 | 0.9073 ± 0.0702 [0.8223, 0.9768] | 0.8379 | 0.9783 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_fn | 3 | 473.6667 ± 318.6257 [-317.8434, 1265.2] | 150.0000 | 787.0000 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_fp | 3 | 17.6667 ± 20.8167 [-34.0448, 69.3781] | 1.0000 | 41.0000 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_loss | 3 | 0.1830 ± 0.0894 [0.0792, 0.3073] | 0.0797 | 0.2365 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_macro_f1 | 3 | 0.8843 ± 0.0663 [0.7888, 0.9612] | 0.8252 | 0.9560 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_macro_precision | 3 | 0.8938 ± 0.0418 [0.7899, 0.9978] | 0.8668 | 0.9420 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_macro_recall | 3 | 0.9179 ± 0.0551 [0.7811, 1.0547] | 0.8727 | 0.9792 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_macro_specificity | 3 | 0.9179 ± 0.0551 [0.7811, 1.0547] | 0.8727 | 0.9792 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_mcc | 3 | 0.8002 ± 0.1050 [0.6626, 0.9288] | 0.7169 | 0.9182 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_n_examples | 3 | 7198.0 ± 0.0000 [7198.0, 7198.0] | 7198.0 | 7198.0 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_precision | 3 | 0.9926 ± 0.0066 [0.9798, 0.9989] | 0.9856 | 0.9986 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_recall | 3 | 0.8510 ± 0.1091 [0.7317, 0.9636] | 0.7456 | 0.9635 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_roc_auc | 3 | 0.9795 ± 0.0148 [0.9565, 0.9958] | 0.9646 | 0.9941 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_specificity | 3 | 0.9849 ± 0.0218 [0.9522, 0.9998] | 0.9598 | 0.9998 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_tn | 3 | 2658.3 ± 20.8167 [2606.6, 2710.0] | 2635.0 | 2675.0 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_test_tp | 3 | 4048.3 ± 318.6257 [3256.8, 4839.8] | 3735.0 | 4372.0 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | selected_val_loss | 3 | 0.2062 ± 0.0909 [-0.0198, 0.4321] | 0.1079 | 0.2873 |
+| FedProx(mu=0.01) (E=1) non_iid_label [3N] {group} | total_time_s | 3 | 1337.2 ± 7.4754 [1318.7, 1355.8] | 1329.9 | 1344.9 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | final_cumulative_mb | 3 | 165.4653 ± 0.0000 [165.4653, 165.4653] | 165.4653 | 165.4653 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | round1_accuracy | 3 | 0.8635 ± 0.0185 [0.8176, 0.9094] | 0.8453 | 0.8822 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_round | 3 | 2.3333 ± 1.1547 [-0.5351, 5.2018] | 1.0000 | 3.0000 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_accuracy | 3 | 0.9479 ± 0.0017 [0.9159, 0.9794] | 0.9462 | 0.9497 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_balanced_accuracy | 3 | 0.9474 ± 0.0055 [0.9240, 0.9698] | 0.9417 | 0.9526 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_clean_accuracy | 3 | 0.9455 ± 0.0016 [0.9100, 0.9773] | 0.9439 | 0.9472 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_clean_balanced_accuracy | 3 | 0.9465 ± 0.0052 [0.9215, 0.9714] | 0.9410 | 0.9515 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_clean_f1 | 3 | 0.9408 ± 0.0045 [0.9091, 0.9660] | 0.9358 | 0.9445 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_clean_loss | 3 | 0.1564 ± 0.0401 [0.0787, 0.2371] | 0.1314 | 0.2026 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_clean_macro_f1 | 3 | 0.9044 ± 0.0033 [0.8302, 0.9585] | 0.9010 | 0.9076 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_clean_mcc | 3 | 0.8330 ± 0.0065 [0.7245, 0.9226] | 0.8259 | 0.8386 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_clean_precision | 3 | 0.9943 ± 0.0064 [0.9780, 0.9997] | 0.9869 | 0.9983 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_clean_recall | 3 | 0.8954 ± 0.0114 [0.8443, 0.9445] | 0.8846 | 0.9073 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_clean_roc_auc | 3 | 0.9855 ± 0.0055 [0.9730, 0.9948] | 0.9792 | 0.9889 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_clean_specificity | 3 | 0.9976 ± 0.0020 [0.9932, 0.9997] | 0.9956 | 0.9996 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_f1 | 3 | 0.9418 ± 0.0047 [0.9127, 0.9651] | 0.9366 | 0.9458 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_fn | 3 | 367.3333 ± 19.8578 [318.0038, 416.6629] | 345.0000 | 383.0000 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_fp | 3 | 7.6667 ± 8.1445 [-12.5655, 27.8988] | 2.0000 | 17.0000 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_loss | 3 | 0.1518 ± 0.0421 [0.0768, 0.2307] | 0.1257 | 0.2004 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_macro_f1 | 3 | 0.9098 ± 0.0035 [0.8427, 0.9601] | 0.9062 | 0.9132 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_macro_precision | 3 | 0.9029 ± 0.0014 [0.8995, 0.9063] | 0.9013 | 0.9040 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_macro_recall | 3 | 0.9474 ± 0.0055 [0.9338, 0.9609] | 0.9417 | 0.9526 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_macro_specificity | 3 | 0.9474 ± 0.0055 [0.9338, 0.9609] | 0.9417 | 0.9526 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_mcc | 3 | 0.8413 ± 0.0068 [0.7417, 0.9245] | 0.8340 | 0.8474 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_n_examples | 3 | 7198.0 ± 0.0000 [7198.0, 7198.0] | 7198.0 | 7198.0 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_precision | 3 | 0.9945 ± 0.0062 [0.9779, 0.9996] | 0.9874 | 0.9983 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_recall | 3 | 0.8969 ± 0.0118 [0.8491, 0.9425] | 0.8856 | 0.9092 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_roc_auc | 3 | 0.9863 ± 0.0056 [0.9751, 0.9950] | 0.9799 | 0.9896 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_specificity | 3 | 0.9978 ± 0.0018 [0.9929, 0.9997] | 0.9960 | 0.9997 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_tn | 3 | 2668.3 ± 8.1445 [2648.1, 2688.6] | 2659.0 | 2674.0 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_test_tp | 3 | 4154.7 ± 19.8578 [4105.3, 4204.0] | 4139.0 | 4177.0 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | selected_val_loss | 3 | 0.1887 ± 0.0525 [0.0583, 0.3191] | 0.1469 | 0.2476 |
+| FedProx(mu=0.01) (E=2) non_iid_label [3N] {group} | total_time_s | 3 | 2591.7 ± 2.6252 [2585.2, 2598.3] | 2589.4 | 2594.6 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | final_cumulative_mb | 3 | 165.4653 ± 0.0000 [165.4653, 165.4653] | 165.4653 | 165.4653 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | round1_accuracy | 3 | 0.9429 ± 0.0275 [0.8745, 1.0112] | 0.9111 | 0.9587 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_round | 3 | 2.3333 ± 0.5774 [0.8991, 3.7676] | 2.0000 | 3.0000 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_accuracy | 3 | 0.9613 ± 0.0085 [0.9384, 0.9762] | 0.9517 | 0.9675 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_balanced_accuracy | 3 | 0.9307 ± 0.0033 [0.8998, 0.9558] | 0.9280 | 0.9343 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_accuracy | 3 | 0.9596 ± 0.0089 [0.9348, 0.9759] | 0.9494 | 0.9661 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_balanced_accuracy | 3 | 0.9263 ± 0.0047 [0.8900, 0.9545] | 0.9213 | 0.9306 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_f1 | 3 | 0.9500 ± 0.0146 [0.9225, 0.9705] | 0.9372 | 0.9659 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_loss | 3 | 0.1130 ± 0.0138 [0.0699, 0.1749] | 0.1005 | 0.1278 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_macro_f1 | 3 | 0.9177 ± 0.0134 [0.8579, 0.9516] | 0.9048 | 0.9316 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_mcc | 3 | 0.8405 ± 0.0214 [0.7372, 0.9054] | 0.8234 | 0.8645 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_precision | 3 | 0.9741 ± 0.0119 [0.9398, 0.9916] | 0.9662 | 0.9878 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_recall | 3 | 0.9295 ± 0.0352 [0.8821, 0.9705] | 0.8953 | 0.9656 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_roc_auc | 3 | 0.9832 ± 0.0075 [0.9604, 0.9945] | 0.9746 | 0.9882 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_clean_specificity | 3 | 0.9230 ± 0.0418 [0.8504, 0.9671] | 0.8770 | 0.9586 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_f1 | 3 | 0.9504 ± 0.0141 [0.9224, 0.9712] | 0.9381 | 0.9658 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_fn | 3 | 201.6667 ± 92.6841 [-28.5733, 431.9066] | 138.0000 | 308.0000 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_fp | 3 | 76.6667 ± 37.5278 [-16.5575, 169.8908] | 40.0000 | 115.0000 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_loss | 3 | 0.1080 ± 0.0134 [0.0655, 0.1623] | 0.0956 | 0.1223 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_macro_f1 | 3 | 0.9232 ± 0.0126 [0.8740, 0.9526] | 0.9104 | 0.9356 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_macro_precision | 3 | 0.9224 ± 0.0151 [0.8848, 0.9599] | 0.9090 | 0.9388 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_macro_recall | 3 | 0.9307 ± 0.0033 [0.9226, 0.9388] | 0.9280 | 0.9343 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_macro_specificity | 3 | 0.9307 ± 0.0033 [0.9226, 0.9388] | 0.9280 | 0.9343 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_mcc | 3 | 0.8510 ± 0.0199 [0.7661, 0.9074] | 0.8334 | 0.8725 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_n_examples | 3 | 7198.0 ± 0.0000 [7198.0, 7198.0] | 7198.0 | 7198.0 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_precision | 3 | 0.9747 ± 0.0113 [0.9414, 0.9913] | 0.9668 | 0.9876 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_recall | 3 | 0.9297 ± 0.0341 [0.8827, 0.9719] | 0.8967 | 0.9648 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_roc_auc | 3 | 0.9852 ± 0.0063 [0.9687, 0.9948] | 0.9779 | 0.9893 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_specificity | 3 | 0.9317 ± 0.0368 [0.8651, 0.9716] | 0.8911 | 0.9631 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_tn | 3 | 2599.3 ± 37.5278 [2506.1, 2692.6] | 2561.0 | 2636.0 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_test_tp | 3 | 4320.3 ± 92.6841 [4090.1, 4550.6] | 4214.0 | 4384.0 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | selected_val_loss | 3 | 0.1075 ± 0.0385 [0.0119, 0.2032] | 0.0850 | 0.1520 |
+| FedProx(mu=0.01) (lr=0.0001) non_iid_label [3N] {group} | total_time_s | 3 | 6385.5 ± 45.2738 [6273.1, 6498.0] | 6335.6 | 6423.9 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | final_cumulative_mb | 5 | 165.4653 ± 0.0000 [165.4653, 165.4653] | 165.4653 | 165.4653 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | round1_accuracy | 3 | 0.8816 ± 0.0272 [0.8140, 0.9492] | 0.8586 | 0.9117 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | round1_accuracy | 3 | 0.8635 ± 0.0185 [0.8176, 0.9094] | 0.8453 | 0.8822 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | round1_accuracy | 3 | 0.9429 ± 0.0275 [0.8745, 1.0112] | 0.9111 | 0.9587 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | round1_accuracy | 5 | 0.7884 ± 0.0557 [0.7192, 0.8576] | 0.7383 | 0.8616 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_round | 3 | 2.0000 ± 1.0000 [-0.4841, 4.4841] | 1.0000 | 3.0000 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_round | 3 | 2.3333 ± 1.1547 [-0.5351, 5.2018] | 1.0000 | 3.0000 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_round | 3 | 2.3333 ± 0.5774 [0.8991, 3.7676] | 2.0000 | 3.0000 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_round | 5 | 2.8000 ± 0.4472 [2.2447, 3.3553] | 2.0000 | 3.0000 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_accuracy | 3 | 0.9317 ± 0.0437 [0.8604, 0.9805] | 0.8905 | 0.9776 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_accuracy | 3 | 0.9479 ± 0.0017 [0.9159, 0.9794] | 0.9462 | 0.9497 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_accuracy | 3 | 0.9613 ± 0.0085 [0.9384, 0.9762] | 0.9517 | 0.9675 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_accuracy | 5 | 0.9475 ± 0.0258 [0.9051, 0.9775] | 0.9037 | 0.9665 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_balanced_accuracy | 3 | 0.9179 ± 0.0551 [0.8603, 0.9786] | 0.8727 | 0.9792 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_balanced_accuracy | 3 | 0.9474 ± 0.0055 [0.9240, 0.9698] | 0.9417 | 0.9526 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_balanced_accuracy | 3 | 0.9307 ± 0.0033 [0.8998, 0.9558] | 0.9280 | 0.9343 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_balanced_accuracy | 5 | 0.9493 ± 0.0127 [0.9284, 0.9701] | 0.9296 | 0.9619 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_accuracy | 3 | 0.9284 ± 0.0461 [0.8560, 0.9809] | 0.8848 | 0.9767 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_accuracy | 3 | 0.9455 ± 0.0016 [0.9100, 0.9773] | 0.9439 | 0.9472 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_accuracy | 3 | 0.9596 ± 0.0089 [0.9348, 0.9759] | 0.9494 | 0.9661 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_accuracy | 5 | 0.9450 ± 0.0275 [0.8990, 0.9759] | 0.8983 | 0.9654 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_balanced_accuracy | 3 | 0.9160 ± 0.0563 [0.8512, 0.9790] | 0.8704 | 0.9789 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_balanced_accuracy | 3 | 0.9465 ± 0.0052 [0.9215, 0.9714] | 0.9410 | 0.9515 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_balanced_accuracy | 3 | 0.9263 ± 0.0047 [0.8900, 0.9545] | 0.9213 | 0.9306 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_balanced_accuracy | 5 | 0.9485 ± 0.0135 [0.9240, 0.9690] | 0.9275 | 0.9618 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_f1 | 3 | 0.9051 ± 0.0727 [0.8064, 0.9778] | 0.8328 | 0.9782 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_f1 | 3 | 0.9408 ± 0.0045 [0.9091, 0.9660] | 0.9358 | 0.9445 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_f1 | 3 | 0.9500 ± 0.0146 [0.9225, 0.9705] | 0.9372 | 0.9659 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_f1 | 5 | 0.9428 ± 0.0166 [0.9084, 0.9660] | 0.9165 | 0.9585 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_loss | 3 | 0.1880 ± 0.0928 [0.0765, 0.3164] | 0.0809 | 0.2460 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_loss | 3 | 0.1564 ± 0.0401 [0.0787, 0.2371] | 0.1314 | 0.2026 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_loss | 3 | 0.1130 ± 0.0138 [0.0699, 0.1749] | 0.1005 | 0.1278 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_loss | 5 | 0.1420 ± 0.0571 [0.0755, 0.2420] | 0.0964 | 0.2357 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_macro_f1 | 3 | 0.8779 ± 0.0693 [0.7673, 0.9617] | 0.8161 | 0.9528 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_macro_f1 | 3 | 0.9044 ± 0.0033 [0.8302, 0.9585] | 0.9010 | 0.9076 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_macro_f1 | 3 | 0.9177 ± 0.0134 [0.8579, 0.9516] | 0.9048 | 0.9316 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_macro_f1 | 5 | 0.9086 ± 0.0304 [0.8471, 0.9533] | 0.8593 | 0.9341 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_mcc | 3 | 0.7904 ± 0.1086 [0.6268, 0.9282] | 0.7051 | 0.9126 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_mcc | 3 | 0.8330 ± 0.0065 [0.7245, 0.9226] | 0.8259 | 0.8386 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_mcc | 3 | 0.8405 ± 0.0214 [0.7372, 0.9054] | 0.8234 | 0.8645 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_mcc | 5 | 0.8435 ± 0.0407 [0.7591, 0.9151] | 0.7807 | 0.8806 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_precision | 3 | 0.9923 ± 0.0069 [0.9781, 0.9987] | 0.9848 | 0.9985 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_precision | 3 | 0.9943 ± 0.0064 [0.9780, 0.9997] | 0.9869 | 0.9983 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_precision | 3 | 0.9741 ± 0.0119 [0.9398, 0.9916] | 0.9662 | 0.9878 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_precision | 5 | 0.9981 ± 0.0004 [0.9958, 0.9994] | 0.9975 | 0.9984 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_recall | 3 | 0.8491 ± 0.1114 [0.7182, 0.9641] | 0.7411 | 0.9635 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_recall | 3 | 0.8954 ± 0.0114 [0.8443, 0.9445] | 0.8846 | 0.9073 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_recall | 3 | 0.9295 ± 0.0352 [0.8821, 0.9705] | 0.8953 | 0.9656 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_recall | 5 | 0.8974 ± 0.0271 [0.8484, 0.9387] | 0.8553 | 0.9242 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_roc_auc | 3 | 0.9780 ± 0.0150 [0.9536, 0.9956] | 0.9636 | 0.9935 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_roc_auc | 3 | 0.9855 ± 0.0055 [0.9730, 0.9948] | 0.9792 | 0.9889 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_roc_auc | 3 | 0.9832 ± 0.0075 [0.9604, 0.9945] | 0.9746 | 0.9882 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_roc_auc | 5 | 0.9881 ± 0.0045 [0.9767, 0.9946] | 0.9811 | 0.9920 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_specificity | 3 | 0.9829 ± 0.0248 [0.9413, 0.9997] | 0.9545 | 0.9998 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_specificity | 3 | 0.9976 ± 0.0020 [0.9932, 0.9997] | 0.9956 | 0.9996 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_specificity | 3 | 0.9230 ± 0.0418 [0.8504, 0.9671] | 0.8770 | 0.9586 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_clean_specificity | 5 | 0.9996 ± 0.0001 [0.9990, 0.9998] | 0.9994 | 0.9996 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_f1 | 3 | 0.9073 ± 0.0702 [0.8223, 0.9768] | 0.8379 | 0.9783 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_f1 | 3 | 0.9418 ± 0.0047 [0.9127, 0.9651] | 0.9366 | 0.9458 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_f1 | 3 | 0.9504 ± 0.0141 [0.9224, 0.9712] | 0.9381 | 0.9658 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_f1 | 5 | 0.9439 ± 0.0155 [0.9155, 0.9669] | 0.9194 | 0.9587 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_fn | 3 | 473.6667 ± 318.6257 [-317.8434, 1265.2] | 150.0000 | 787.0000 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_fn | 3 | 367.3333 ± 19.8578 [318.0038, 416.6629] | 345.0000 | 383.0000 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_fn | 3 | 201.6667 ± 92.6841 [-28.5733, 431.9066] | 138.0000 | 308.0000 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_fn | 5 | 376.0000 ± 185.6812 [145.4464, 606.5536] | 238.0000 | 691.0000 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_fp | 3 | 17.6667 ± 20.8167 [-34.0448, 69.3781] | 1.0000 | 41.0000 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_fp | 3 | 7.6667 ± 8.1445 [-12.5655, 27.8988] | 2.0000 | 17.0000 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_fp | 3 | 76.6667 ± 37.5278 [-16.5575, 169.8908] | 40.0000 | 115.0000 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_fp | 5 | 2.2000 ± 0.4472 [1.6447, 2.7553] | 2.0000 | 3.0000 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_loss | 3 | 0.1830 ± 0.0894 [0.0792, 0.3073] | 0.0797 | 0.2365 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_loss | 3 | 0.1518 ± 0.0421 [0.0768, 0.2307] | 0.1257 | 0.2004 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_loss | 3 | 0.1080 ± 0.0134 [0.0655, 0.1623] | 0.0956 | 0.1223 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_loss | 5 | 0.1366 ± 0.0535 [0.0742, 0.2293] | 0.0937 | 0.2243 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_macro_f1 | 3 | 0.8843 ± 0.0663 [0.7888, 0.9612] | 0.8252 | 0.9560 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_macro_f1 | 3 | 0.9098 ± 0.0035 [0.8427, 0.9601] | 0.9062 | 0.9132 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_macro_f1 | 3 | 0.9232 ± 0.0126 [0.8740, 0.9526] | 0.9104 | 0.9356 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_macro_f1 | 5 | 0.9135 ± 0.0287 [0.8537, 0.9572] | 0.8671 | 0.9375 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_macro_precision | 3 | 0.8938 ± 0.0418 [0.7899, 0.9978] | 0.8668 | 0.9420 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_macro_precision | 3 | 0.9029 ± 0.0014 [0.8995, 0.9063] | 0.9013 | 0.9040 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_macro_precision | 3 | 0.9224 ± 0.0151 [0.8848, 0.9599] | 0.9090 | 0.9388 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_macro_precision | 5 | 0.9099 ± 0.0224 [0.8821, 0.9378] | 0.8755 | 0.9299 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_macro_recall | 3 | 0.9179 ± 0.0551 [0.7811, 1.0547] | 0.8727 | 0.9792 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_macro_recall | 3 | 0.9474 ± 0.0055 [0.9338, 0.9609] | 0.9417 | 0.9526 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_macro_recall | 3 | 0.9307 ± 0.0033 [0.9226, 0.9388] | 0.9280 | 0.9343 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_macro_recall | 5 | 0.9493 ± 0.0127 [0.9335, 0.9651] | 0.9296 | 0.9619 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_macro_specificity | 3 | 0.9179 ± 0.0551 [0.7811, 1.0547] | 0.8727 | 0.9792 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_macro_specificity | 3 | 0.9474 ± 0.0055 [0.9338, 0.9609] | 0.9417 | 0.9526 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_macro_specificity | 3 | 0.9307 ± 0.0033 [0.9226, 0.9388] | 0.9280 | 0.9343 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_macro_specificity | 5 | 0.9493 ± 0.0127 [0.9335, 0.9651] | 0.9296 | 0.9619 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_mcc | 3 | 0.8002 ± 0.1050 [0.6626, 0.9288] | 0.7169 | 0.9182 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_mcc | 3 | 0.8413 ± 0.0068 [0.7417, 0.9245] | 0.8340 | 0.8474 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_mcc | 3 | 0.8510 ± 0.0199 [0.7661, 0.9074] | 0.8334 | 0.8725 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_mcc | 5 | 0.8510 ± 0.0388 [0.7675, 0.9213] | 0.7911 | 0.8862 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_n_examples | 3 | 7198.0 ± 0.0000 [7198.0, 7198.0] | 7198.0 | 7198.0 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_n_examples | 3 | 7198.0 ± 0.0000 [7198.0, 7198.0] | 7198.0 | 7198.0 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_n_examples | 3 | 7198.0 ± 0.0000 [7198.0, 7198.0] | 7198.0 | 7198.0 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_n_examples | 5 | 7198.0 ± 0.0000 [7198.0, 7198.0] | 7198.0 | 7198.0 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_precision | 3 | 0.9926 ± 0.0066 [0.9798, 0.9989] | 0.9856 | 0.9986 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_precision | 3 | 0.9945 ± 0.0062 [0.9779, 0.9996] | 0.9874 | 0.9983 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_precision | 3 | 0.9747 ± 0.0113 [0.9414, 0.9913] | 0.9668 | 0.9876 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_precision | 5 | 0.9982 ± 0.0003 [0.9960, 0.9994] | 0.9976 | 0.9984 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_recall | 3 | 0.8510 ± 0.1091 [0.7317, 0.9636] | 0.7456 | 0.9635 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_recall | 3 | 0.8969 ± 0.0118 [0.8491, 0.9425] | 0.8856 | 0.9092 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_recall | 3 | 0.9297 ± 0.0341 [0.8827, 0.9719] | 0.8967 | 0.9648 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_recall | 5 | 0.8989 ± 0.0255 [0.8571, 0.9409] | 0.8596 | 0.9244 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_roc_auc | 3 | 0.9795 ± 0.0148 [0.9565, 0.9958] | 0.9646 | 0.9941 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_roc_auc | 3 | 0.9863 ± 0.0056 [0.9751, 0.9950] | 0.9799 | 0.9896 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_roc_auc | 3 | 0.9852 ± 0.0063 [0.9687, 0.9948] | 0.9779 | 0.9893 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_roc_auc | 5 | 0.9887 ± 0.0037 [0.9797, 0.9950] | 0.9831 | 0.9921 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_specificity | 3 | 0.9849 ± 0.0218 [0.9522, 0.9998] | 0.9598 | 0.9998 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_specificity | 3 | 0.9978 ± 0.0018 [0.9929, 0.9997] | 0.9960 | 0.9997 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_specificity | 3 | 0.9317 ± 0.0368 [0.8651, 0.9716] | 0.8911 | 0.9631 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_specificity | 5 | 0.9996 ± 0.0001 [0.9991, 0.9999] | 0.9995 | 0.9997 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_tn | 3 | 2658.3 ± 20.8167 [2606.6, 2710.0] | 2635.0 | 2675.0 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_tn | 3 | 2668.3 ± 8.1445 [2648.1, 2688.6] | 2659.0 | 2674.0 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_tn | 3 | 2599.3 ± 37.5278 [2506.1, 2692.6] | 2561.0 | 2636.0 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_tn | 5 | 2673.8 ± 0.4472 [2673.2, 2674.4] | 2673.0 | 2674.0 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_tp | 3 | 4048.3 ± 318.6257 [3256.8, 4839.8] | 3735.0 | 4372.0 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_tp | 3 | 4154.7 ± 19.8578 [4105.3, 4204.0] | 4139.0 | 4177.0 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_tp | 3 | 4320.3 ± 92.6841 [4090.1, 4550.6] | 4214.0 | 4384.0 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_test_tp | 5 | 4146.0 ± 185.6812 [3915.4, 4376.6] | 3831.0 | 4284.0 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_val_loss | 3 | 0.2062 ± 0.0909 [-0.0198, 0.4321] | 0.1079 | 0.2873 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_val_loss | 3 | 0.1887 ± 0.0525 [0.0583, 0.3191] | 0.1469 | 0.2476 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | selected_val_loss | 3 | 0.1075 ± 0.0385 [0.0119, 0.2032] | 0.0850 | 0.1520 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | selected_val_loss | 5 | 0.1847 ± 0.0373 [0.1383, 0.2310] | 0.1506 | 0.2387 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | total_time_s | 3 | 1337.2 ± 7.4754 [1318.7, 1355.8] | 1329.9 | 1344.9 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | total_time_s | 3 | 2591.7 ± 2.6252 [2585.2, 2598.3] | 2589.4 | 2594.6 |
-| FedProx(mu=0.01) non_iid_label [3N] {group} | total_time_s | 3 | 6385.5 ± 45.2738 [6273.1, 6498.0] | 6335.6 | 6423.9 |
 | FedProx(mu=0.01) non_iid_label [3N] {group} | total_time_s | 5 | 6338.6 ± 30.2223 [6301.1, 6376.1] | 6312.4 | 6378.7 |
 | FedProx(mu=0.01) non_iid_label [3N] {image} | final_cumulative_mb | 3 | 110.3102 ± 0.0000 [110.3102, 110.3102] | 110.3102 | 110.3102 |
 | FedProx(mu=0.01) non_iid_label [3N] {image} | round1_accuracy | 3 | 0.9702 ± 0.0196 [0.9214, 1.0189] | 0.9479 | 0.9851 |
