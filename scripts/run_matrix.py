@@ -9,9 +9,11 @@ same generated script and drives the whole block:
     for each run:
         pre-flight  : nodes reachable, repo at the same commit, RAM/disk free,
                       port 8080 clear, no stale python processes, GUI off
-                      (multi-user.target) on every node, and every split the
+                      (multi-user.target) on every node, every split the
                       run reads has the manifest md5 of
-                      analysis/leakage/P0_SUMMARY.md on every node
+                      analysis/leakage/P0_SUMMARY.md on every node, and every
+                      node's `nvpmodel -q` power mode is the one declared for
+                      --power_config in testbed.local.yaml
         start       : the server on node_a; once node_a:8080 accepts TCP
                       connections, the clients (node_b / node_c over SSH,
                       node_a locally).  Clients must not start earlier: the
@@ -20,7 +22,11 @@ same generated script and drives the whole block:
         wait        : until the server exits; a client exiting non-zero
                       before that ends the run at once
         check       : results/<run>/results.json exists and parses, and the
-                      model_selection block is present
+                      model_selection block is present; the power modes are
+                      read again and written into results.json ("power"). A
+                      mode that changed during the run invalidates it: the
+                      run directory is moved to logs/invalid_runs/ so it is
+                      neither analysed nor skipped as done
         on failure  : ONE retry with identical parameters, then stop the block
 
 Deliberately NOT adaptive.  It never changes a batch size, never skips a seed,
@@ -30,12 +36,19 @@ stops and waits for a human.  Experiment comparability depends on that.
 Run it on Node A, inside tmux:
 
     tmux new -s fedrgbd
-    python3 scripts/run_matrix.py --block seed_extension
+    python3 scripts/run_matrix.py --block seed_extension --power_config maxn
     # detach with Ctrl-b d ; reattach with: tmux attach -t fedrgbd
 
 Requires passwordless SSH from Node A to Node B and Node C (see --check_only), and
-configs/testbed.local.yaml with your nodes' hosts, users and paths: copy
+configs/testbed.local.yaml with your nodes' hosts, users and paths and the
+expected power mode of every node per power configuration: copy
 configs/testbed.example.yaml and fill it in (the copy is gitignored).
+
+Power configurations.  ``--power_config`` is required.  ``heterogeneous`` is
+the main matrix (results/rev_*); any other configuration writes to its own
+namespace, results/pc_<name>/rev_* (print_revision_commands.py
+--power_config), so its runs are never skipped because a run of another
+configuration exists, and analyze_results.py never pools across them.
 """
 
 import argparse
@@ -64,6 +77,19 @@ MIN_FREE_MB = 4000      # refuse to start a run with less available RAM than thi
 MIN_FREE_DISK_MB = 2000
 
 LOG_DIR = 'logs'
+#: where a run invalidated after the fact (power mode changed mid-run) is moved:
+#: outside results/, so it is neither analysed nor counted as done
+INVALID_DIR = os.path.join(LOG_DIR, 'invalid_runs')
+
+#: must equal print_revision_commands.POWER_CONFIGS / DEFAULT_POWER_CONFIG
+#: (pinned by tests/test_run_matrix.py; this script does not import the generator)
+POWER_CONFIGS = ('heterogeneous', 'maxn')
+DEFAULT_POWER_CONFIG = 'heterogeneous'
+
+
+def power_root(power_config):
+    """results for the main matrix, results/pc_<name> for any other configuration."""
+    return 'results' if power_config == DEFAULT_POWER_CONFIG else 'results/pc_%s' % power_config
 
 
 def load_testbed(path=TESTBED_LOCAL):
@@ -102,6 +128,40 @@ def load_testbed(path=TESTBED_LOCAL):
         raise SystemExit('invalid testbed config %s:\n  - %s' % (path, '\n  - '.join(problems)))
     return ({n: {k: nodes[n][k] for k in NODE_FIELDS} for n in NODE_NAMES},
             int(cfg.get('server_port', 8080)))
+
+
+def load_power_modes(path, power_config):
+    """{node: expected nvpmodel mode name} of ``power_config`` from the testbed file.
+
+    The runner refuses to start without it: per-round wall-clock is a reported
+    result, and the main matrix ran with modes nobody had harmonised.
+    """
+    import yaml
+    with open(path, encoding='utf-8') as f:
+        cfg = yaml.safe_load(f) or {}
+    table = cfg.get('power_modes') or {}
+    modes = table.get(power_config) if isinstance(table, dict) else None
+    if not isinstance(modes, dict):
+        raise SystemExit(
+            '%s declares no power_modes.%s -- the expected `nvpmodel -q` mode of every '
+            'node is required; see %s' % (path, power_config, TESTBED_EXAMPLE))
+    problems = []
+    for name in NODE_NAMES:
+        value = modes.get(name)
+        if value is None or not str(value).strip():
+            problems.append('power_modes.%s.%s: missing' % (power_config, name))
+        elif '<' in str(value) or '>' in str(value):
+            problems.append('power_modes.%s.%s: placeholder value not filled in'
+                            % (power_config, name))
+        elif power_config == 'maxn' and not str(value).strip().upper().startswith('MAXN'):
+            problems.append('power_modes.maxn.%s is %r, which is not a MAXN mode'
+                            % (name, value))
+    extra = sorted(set(modes) - set(NODE_NAMES))
+    if extra:
+        problems.append('power_modes.%s: unknown node(s) %s' % (power_config, ', '.join(extra)))
+    if problems:
+        raise SystemExit('invalid power modes in %s:\n  - %s' % (path, '\n  - '.join(problems)))
+    return {n: str(modes[n]).strip() for n in NODE_NAMES}
 
 
 def ts():
@@ -328,13 +388,53 @@ def check_testbed(splits):
     return problems
 
 
+RE_POWER_MODE = re.compile(r'NV Power Mode:\s*(\S+)')
+
+
+def node_power_mode(node):
+    """-> the mode name `nvpmodel -q` reports on ``node``, or None if unreadable."""
+    cmd = 'nvpmodel -q 2>&1 || true'
+    try:
+        if NODES[node]['local']:
+            out = subprocess.run(['bash', '-lc', cmd], stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT, text=True, timeout=60).stdout
+        else:
+            out = ssh(node, cmd).stdout or ''
+    except subprocess.TimeoutExpired:
+        return None
+    m = RE_POWER_MODE.search(out or '')
+    return m.group(1) if m else None
+
+
+def check_power(expected):
+    """-> (problems, {node: measured mode or None}) against ``expected`` {node: mode}."""
+    problems, measured = [], {}
+    for node in NODES:
+        mode = node_power_mode(node)
+        measured[node] = mode
+        if mode is None:
+            problems.append('%s: could not read the power mode (nvpmodel -q)' % node)
+        elif mode != expected.get(node):
+            problems.append('%s: power mode %s, expected %s (testbed.local.yaml)'
+                            % (node, mode, expected.get(node)))
+    return problems, measured
+
+
 def local_commit():
     r = subprocess.run(['git', 'rev-parse', 'HEAD'], stdout=subprocess.PIPE, text=True)
     return r.stdout.strip()
 
 
-def preflight(strict_commit=True, splits=()):
+def preflight(strict_commit=True, splits=(), power=None, measured=None):
+    """-> list of problems.  ``power``: {node: expected mode}; the measured modes are
+    written into the ``measured`` dict when one is passed."""
     problems = check_testbed(list(splits)) if splits else []
+    if power is not None:
+        power_problems, modes = check_power(power)
+        problems.extend(power_problems)
+        if measured is not None:
+            measured.clear()
+            measured.update(modes)
     want = local_commit()
     for node, cfg in NODES.items():
         if cfg['local']:
@@ -415,6 +515,19 @@ def check_server_address(runs):
         raise SystemExit('clients dial %s but node_a is configured as %s (%s); fix '
                          'configs/testbed.local.yaml or the generator'
                          % (', '.join(bad), want, TESTBED_LOCAL))
+def check_namespace(runs, power_config):
+    """Every run must write into the namespace of ``power_config`` -- a script
+    generated for another configuration (--script) would otherwise mix them."""
+    root = power_root(power_config) + '/'
+    bad = [r['out_dir'] for r in runs
+           if not r['out_dir'].startswith(root)
+           or (power_config == DEFAULT_POWER_CONFIG and r['out_dir'].startswith('results/pc_'))]
+    if bad:
+        raise SystemExit('%d run(s) are outside %s, the namespace of power_config %s '
+                         '(first: %s); regenerate the script with --power_config %s'
+                         % (len(bad), root, power_config, bad[0], power_config))
+
+
 def result_ok(out_dir):
     path = os.path.join(out_dir, 'results.json')
     if not os.path.isfile(path):
@@ -428,6 +541,52 @@ def result_ok(out_dir):
     if not ms or ms.get('selected_round') is None:
         return False, 'model_selection missing or empty'
     return True, 'selected_round=%s' % ms.get('selected_round')
+
+
+def record_power(out_dir, power_config, expected, before, after):
+    """Write the power configuration and both measurements into results.json.
+
+    -> (True, why) or (False, why).  If any node's mode after the run differs from
+    the expected one (or cannot be read), the run's wall-clock is not attributable
+    to ``power_config``: the run directory is moved to logs/invalid_runs/, so the
+    block does not count it as done and analyze_results.py never sees it.
+    """
+    changed = sorted(n for n in expected if after.get(n) != expected[n])
+    if changed:
+        why = 'power mode changed during the run: %s' % ', '.join(
+            '%s %s -> %s' % (n, before.get(n), after.get(n)) for n in changed)
+        return False, why + '; ' + quarantine(out_dir)
+    path = os.path.join(out_dir, 'results.json')
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        data['power'] = {
+            'power_config': power_config,
+            'expected': dict(expected),
+            'measured_before': dict(before),
+            'measured_after': dict(after),
+            'source': 'nvpmodel -q, read by scripts/run_matrix.py before and after the run',
+        }
+        tmp = path + '.tmp'
+        with open(tmp, 'w') as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, path)
+    except (OSError, ValueError) as e:
+        return False, 'could not record the power modes (%r); %s' % (e, quarantine(out_dir))
+    return True, 'power modes recorded (%s)' % ', '.join(
+        '%s=%s' % (n, after[n]) for n in sorted(after))
+
+
+def quarantine(out_dir):
+    """Move a run directory out of results/ (see record_power); -> what was done."""
+    if not os.path.isdir(out_dir):
+        return 'nothing to move'
+    os.makedirs(INVALID_DIR, exist_ok=True)
+    parts = [p for p in re.split(r'[\\/]+', os.path.normpath(out_dir)) if p]
+    name = '__'.join(parts[-2:]).replace(':', '')        # e.g. pc_maxn__rev_iid_fedavg_seed42
+    dest = os.path.join(INVALID_DIR, '%s__%s' % (name, datetime.now().strftime('%Y%m%d_%H%M%S')))
+    os.rename(out_dir, dest)
+    return 'run directory moved to %s' % dest
 
 
 def execute_run(run, attempt, ready_timeout, run_timeout, poll=5.0, finish_grace=600):
@@ -504,6 +663,11 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--block', required=False,
                     help='block name passed to print_revision_commands.py')
+    ap.add_argument('--power_config', required=True, choices=POWER_CONFIGS,
+                    help='power modes the block runs under; every node must report the '
+                         'mode declared for it under power_modes in testbed.local.yaml. '
+                         'Runs of any configuration but %s go to results/pc_<name>/'
+                         % DEFAULT_POWER_CONFIG)
     ap.add_argument('--script', help='use an already-generated bash file instead (it must '
                                      'have been generated with --all_seeds)')
     ap.add_argument('--server_ready_timeout', type=int, default=180,
@@ -536,20 +700,23 @@ def main():
     nodes, SERVER_PORT = load_testbed(args.testbed)
     NODES.clear()
     NODES.update(nodes)
+    power = load_power_modes(args.testbed, args.power_config)
     if args.block == 'baselines_extension':
         raise SystemExit('baselines_extension runs on the desktop GPU '
                          '(scripts/make_desktop_lanes.py), not on the testbed')
 
     if args.check_only:
         problems = preflight(strict_commit=not args.allow_commit_mismatch,
-                             splits=sorted(expected_digests()))
+                             splits=sorted(expected_digests()), power=power)
         if problems:
             print('PRE-FLIGHT FAIL')
             for p in problems:
                 print('  -', p)
             sys.exit(1)
         print('PRE-FLIGHT OK -- all three nodes reachable, same commit, resources free, '
-              'GUI off, all %d split manifests match P0_SUMMARY' % len(expected_digests()))
+              'GUI off, all %d split manifests match P0_SUMMARY, power modes %s (%s)'
+              % (len(expected_digests()), args.power_config,
+                 ', '.join('%s=%s' % (n, power[n]) for n in NODE_NAMES)))
         return
 
     if args.script:
@@ -557,16 +724,20 @@ def main():
     else:
         if not args.block:
             raise SystemExit('need --block or --script')
-        script = os.path.join(LOG_DIR, 'block_%s.sh' % args.block)
+        suffix = '' if args.power_config == DEFAULT_POWER_CONFIG else '_pc_%s' % args.power_config
+        script = os.path.join(LOG_DIR, 'block_%s%s.sh' % (args.block, suffix))
         with open(script, 'w') as f:
             subprocess.run(['python3', 'scripts/print_revision_commands.py',
-                            '--all_seeds', '--block', args.block, '--format', 'bash'],
+                            '--all_seeds', '--block', args.block, '--format', 'bash',
+                            '--power_config', args.power_config],
                            stdout=f, check=True)
 
     runs = parse_block(script)
     check_server_address(runs)
+    check_namespace(runs, args.power_config)
     todo = [r for r in runs if not os.path.isfile(os.path.join(r['out_dir'], 'results.json'))]
-    log('block script: %s' % script)
+    log('block script: %s (power_config %s: %s)'
+        % (script, args.power_config, ', '.join('%s=%s' % (n, power[n]) for n in NODE_NAMES)))
     log('%d run(s) defined, %d still to do' % (len(runs), len(todo)))
     for r in todo:
         log('   - %s' % r['out_dir'])
@@ -577,7 +748,8 @@ def main():
         return
 
     splits = block_splits(todo)
-    problems = preflight(strict_commit=not args.allow_commit_mismatch, splits=splits)
+    problems = preflight(strict_commit=not args.allow_commit_mismatch, splits=splits,
+                         power=power)
     if problems:
         log('PRE-FLIGHT FAIL -- not starting:')
         for p in problems:
@@ -596,8 +768,9 @@ def main():
             if attempt == 2:
                 log('    retry with identical parameters')
                 time.sleep(60)
+            before = {}
             problems = preflight(strict_commit=not args.allow_commit_mismatch,
-                                 splits=block_splits([run]))
+                                 splits=block_splits([run]), power=power, measured=before)
             if problems:
                 log('    pre-flight FAIL before this run:')
                 for p in problems:
@@ -609,6 +782,11 @@ def main():
                                     finish_grace=args.finish_grace)
             dt = time.time() - t0
             ok, why = result_ok(run['out_dir'])
+            if ok:
+                _, after = check_power(power)
+                ok, power_why = record_power(run['out_dir'], args.power_config, power,
+                                             before, after)
+                why = '%s; %s' % (why, power_why)
             log('    %s (rc=%s), %.1f min, result: %s (%s)'
                 % (ended, rc, dt / 60.0, 'OK' if ok else 'BAD', why))
             if ok:

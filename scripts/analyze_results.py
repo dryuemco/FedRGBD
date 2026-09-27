@@ -141,7 +141,8 @@ SELECTED_RUN_COLUMNS = ("accuracy", "balanced_accuracy", "recall", "specificity"
                         "macro_f1", "mcc", "roc_auc", "loss")
 
 RECORD_FIELDS = [
-    "run_dir", "run_name", "protocol", "kind", "strategy", "strategy_display", "mu",
+    "run_dir", "run_name", "protocol", "power_config", "kind", "strategy", "strategy_display",
+    "variant", "mu",
     "distribution", "seed", "seed_label", "num_rounds", "local_epochs", "lr",
     "n_nodes", "schema_version", "config_id", "label", "timestamp",
     "time_estimated", "comm_estimated", "n_curve_points",
@@ -376,12 +377,28 @@ def strategy_display(strategy: Optional[str], mu: Optional[float], kind: str) ->
     return (strategy or "unknown").replace("_", " ")
 
 
+def _explicit_power(record: Dict[str, Any]) -> Optional[str]:
+    """The power configuration if it is one of its own (results/pc_<name>/), else None."""
+    power = record.get("power_config")
+    if power in (None, "", POWER_HETEROGENEOUS, POWER_NOT_APPLICABLE, POWER_UNRECORDED):
+        return None
+    return str(power)
+
+
 def make_config_key(record: Dict[str, Any]) -> Tuple:
-    return tuple(record.get(field) for field in CONFIG_KEY_FIELDS)
+    key = tuple(record.get(field) for field in CONFIG_KEY_FIELDS)
+    power = _explicit_power(record)
+    return key + (("power_config", power),) if power else key
 
 
 def config_id_of(record: Dict[str, Any]) -> str:
-    return "|".join("" if v is None else str(v) for v in make_config_key(record))
+    """``|``-joined config key.  The power configuration is appended (``|pc=<name>``)
+    only for runs outside the main matrix, so that every existing id -- which also
+    seeds the cluster bootstrap of its configuration -- stays byte-identical."""
+    config_id = "|".join("" if v is None else str(v)
+                         for v in (record.get(f) for f in CONFIG_KEY_FIELDS))
+    power = _explicit_power(record)
+    return config_id + "|pc=" + power if power else config_id
 
 
 PROTOCOL_GROUP = "group"    # leakage-safe, sequence/group-level split (revision, results/rev_*)
@@ -390,6 +407,70 @@ PROTOCOL_IMAGE = "image"    # random image-level split (paper v1)
 #: test metrics only.  A protocol of their own so they are never pooled, paired or
 #: tabulated together with the rule-following group-level runs.
 PROTOCOL_GROUP_FINAL_EPOCH = "group_final_epoch"
+
+
+#: Jetson power configuration of a federated run (print_revision_commands.py
+#: --power_config).  The main matrix ran with modes nobody had harmonised; other
+#: configurations live in results/pc_<name>/.  Runs of different configurations are
+#: never pooled, paired or tabulated together: it is part of the configuration key.
+POWER_HETEROGENEOUS = "heterogeneous"
+#: centralized / local-only baselines ran on the desktop GPU: no Jetson power mode
+POWER_NOT_APPLICABLE = "desktop_gpu"
+#: v1 (image-level) federated runs: the power modes of the original submission
+#: were not recorded
+POWER_UNRECORDED = "unrecorded"
+_RE_POWER_DIR = re.compile(r"^pc_([A-Za-z0-9][A-Za-z0-9_-]*)$")
+
+
+class PowerConfigError(ValueError):
+    """A run whose power configuration is contradictory.  Never skipped silently:
+    :func:`collect_runs` re-raises it, because dropping or mis-assigning such a run
+    would change which runs a mean is taken over."""
+
+
+def parse_power_config(run_dir: str, data: Dict[str, Any], kind: str, protocol: str) -> str:
+    """Which Jetson power configuration produced a run.
+
+    The directory decides (``results/pc_<name>/rev_*`` -> ``<name>``; the main matrix,
+    ``results/rev_*``, is ``heterogeneous``).  A ``power`` block written by
+    ``scripts/run_matrix.py`` must agree with the directory, and its measured modes
+    must equal the expected ones before and after the run; anything else raises
+    :class:`PowerConfigError`.
+    """
+    segments = [seg for seg in _path_segments(os.path.abspath(run_dir))]
+    from_path = [m.group(1) for m in (_RE_POWER_DIR.match(seg) for seg in segments) if m]
+    if len(from_path) > 1:
+        raise PowerConfigError("{}: nested power-config directories {}".format(
+            run_dir, from_path))
+    block = data.get("power") if isinstance(data.get("power"), dict) else None
+    recorded = block.get("power_config") if block else None
+    name = os.path.basename(os.path.normpath(run_dir))
+    if kind != "fl":
+        if from_path or recorded:
+            raise PowerConfigError("{}: a {} baseline carries a Jetson power configuration "
+                                   "({}); baselines run on the desktop GPU".format(
+                                       name, kind, from_path or recorded))
+        return POWER_NOT_APPLICABLE
+    path_config = from_path[0] if from_path else None
+    if recorded is not None:
+        expected_dir = path_config or POWER_HETEROGENEOUS
+        if recorded != expected_dir:
+            raise PowerConfigError(
+                "{}: results.json records power_config {!r} but the run sits in the "
+                "namespace of {!r}; it would be pooled with the wrong runs".format(
+                    name, recorded, expected_dir))
+        expected = block.get("expected") or {}
+        for when in ("measured_before", "measured_after"):
+            measured = block.get(when) or {}
+            off = sorted(n for n in expected if measured.get(n) != expected[n])
+            if off:
+                raise PowerConfigError("{}: power {} differs from the expected modes on "
+                                       "{}".format(name, when, ", ".join(off)))
+    if path_config:
+        return path_config
+    if recorded:
+        return recorded
+    return POWER_HETEROGENEOUS if str(protocol).startswith(PROTOCOL_GROUP) else POWER_UNRECORDED
 
 
 def parse_protocol(data: Dict[str, Any], run_name: str) -> str:
@@ -415,8 +496,36 @@ def parse_protocol(data: Dict[str, Any], run_name: str) -> str:
     return PROTOCOL_GROUP if str(run_name).startswith("rev_") else PROTOCOL_IMAGE
 
 
+#: the default operating point of the revision matrix; a federated run that differs
+#: from it in any of these is a sweep variant and is named after the difference
+DEFAULT_OPERATING_POINT = (("num_rounds", "R", 3), ("local_epochs", "E", 5), ("lr", "lr", 0.001))
+
+
+def variant_display(record: Dict[str, Any]) -> str:
+    """``strategy_display`` plus every hyper-parameter that differs from the default
+    operating point, e.g. ``FedAvg (E=1)``, ``FedBN (R=10)``.
+
+    This is the name under which runs are paired and tabulated.  Without it the
+    local-epoch, learning-rate and long-horizon variants share a strategy name with
+    the default-point runs, and seed-paired statistics silently averaged them.
+    Missing values (v1 runs record no local epochs or learning rate) are not a
+    difference.
+    """
+    base = record.get("strategy_display") or record.get("strategy") or "unknown"
+    if record.get("kind") != "fl":
+        return base
+    diffs = []
+    for field, short, default in DEFAULT_OPERATING_POINT:
+        value = _as_float(record.get(field))
+        if value is not None and not math.isclose(value, default, rel_tol=1e-9, abs_tol=1e-12):
+            text = "{:g}".format(value)
+            diffs.append("{}={}".format(short, text))
+    return "{} ({})".format(base, ", ".join(diffs)) if diffs else base
+
+
 def make_label(record: Dict[str, Any]) -> str:
-    parts = [record.get("strategy_display") or "", record.get("distribution") or ""]
+    parts = [record.get("variant") or record.get("strategy_display") or "",
+             record.get("distribution") or ""]
     label = " ".join(p for p in parts if p).strip()
     n_nodes = record.get("n_nodes")
     if record.get("kind") == "fl" and n_nodes:
@@ -424,6 +533,9 @@ def make_label(record: Dict[str, Any]) -> str:
     protocol = record.get("protocol")
     if protocol:
         label = "{} {{{}}}".format(label, protocol)
+    power = _explicit_power(record)
+    if power:
+        label = "{} [pc:{}]".format(label, power)
     return label or "run"
 
 
@@ -564,10 +676,12 @@ def _new_record(
     except (TypeError, ValueError):
         local_epochs = None
 
+    protocol = parse_protocol(data, run_name)
     record: Dict[str, Any] = {
         "run_dir": os.path.abspath(run_dir),
         "run_name": run_name,
-        "protocol": parse_protocol(data, run_name),
+        "protocol": protocol,
+        "power_config": parse_power_config(run_dir, data, kind, protocol),
         "kind": kind,
         "strategy": strategy,
         "mu": mu,
@@ -638,6 +752,7 @@ def _finalize(record: Dict[str, Any]) -> Dict[str, Any]:
         record["v1_final_round_accuracy"] = record.get("final_accuracy")
         record["v1_final_round_loss"] = record.get("final_loss")
 
+    record["variant"] = variant_display(record)
     record["config_key"] = make_config_key(record)
     record["config_id"] = config_id_of(record)
     record["label"] = make_label(record)
@@ -1153,6 +1268,8 @@ def collect_runs(
             runs.append(
                 load_run(run_dir, payload_bytes, local_epochs_equiv, missing_seed, warn)
             )
+        except PowerConfigError:
+            raise                  # never analyse around a contradictory power configuration
         except Exception as exc:  # keep going on a single bad run
             if warn:
                 print("[warn] skipping {}: {}".format(run_dir, exc))
@@ -1201,6 +1318,11 @@ def _group_by_config(runs: Sequence[Dict[str, Any]]) -> "Dict[str, List[Dict[str
     groups: Dict[str, List[Dict[str, Any]]] = {}
     for record in runs:
         groups.setdefault(record["config_id"], []).append(record)
+    for config_id, group in groups.items():
+        powers = sorted({str(r.get("power_config")) for r in group})
+        if len(powers) > 1:     # cannot happen through config_id_of; refuse if it ever does
+            raise PowerConfigError("configuration {} would pool power configurations {}".format(
+                config_id, powers))
     return groups
 
 
@@ -1429,6 +1551,8 @@ def summary_table(runs: Sequence[Dict[str, Any]], bootstrap_B: int = DEFAULT_B) 
                 "config_id": config_id,
                 "label": first["label"],
                 "protocol": first.get("protocol"),
+                "power_config": first.get("power_config"),
+                "variant": first.get("variant"),
                 "kind": first["kind"],
                 "strategy": first["strategy"],
                 "mu": first.get("mu"),
@@ -1450,8 +1574,8 @@ def summary_table(runs: Sequence[Dict[str, Any]], bootstrap_B: int = DEFAULT_B) 
                 "max": stats_dict["max"],
             })
     df = pd.DataFrame(rows, columns=[
-        "config_id", "label", "protocol", "kind", "strategy", "mu", "distribution", "n_nodes",
-        "num_rounds", "local_epochs", "lr", "metric", "n_seeds", "seeds", "mean", "std", "ci95",
+        "config_id", "label", "protocol", "power_config", "variant", "kind", "strategy", "mu",
+        "distribution", "n_nodes", "num_rounds", "local_epochs", "lr", "metric", "n_seeds", "seeds", "mean", "std", "ci95",
         "ci_low", "ci_high", "ci_method", "min", "max",
     ])
     if not df.empty:
@@ -1480,6 +1604,7 @@ def per_round_table(runs: Sequence[Dict[str, Any]]) -> pd.DataFrame:
             rows.append({
                 "config_id": config_id,
                 "label": first["label"],
+                "power_config": first.get("power_config"),
                 "kind": first["kind"],
                 "strategy": first["strategy"],
                 "distribution": first["distribution"],
@@ -1524,7 +1649,8 @@ def per_client_selected_table(runs: Sequence[Dict[str, Any]]) -> pd.DataFrame:
                 stats_dict = describe(per_node[node][name])
                 rows.append({
                     "config_id": config_id, "label": first["label"],
-                    "protocol": first.get("protocol"), "kind": first["kind"],
+                    "protocol": first.get("protocol"),
+                    "power_config": first.get("power_config"), "kind": first["kind"],
                     "strategy": first["strategy"], "distribution": first["distribution"],
                     "node": node, "metric": "selected_test_" + name,
                     "n_seeds": stats_dict["n"], "mean": stats_dict["mean"],
@@ -1532,7 +1658,7 @@ def per_client_selected_table(runs: Sequence[Dict[str, Any]]) -> pd.DataFrame:
                     "ci_high": stats_dict["ci_high"],
                 })
     return pd.DataFrame(rows, columns=[
-        "config_id", "label", "protocol", "kind", "strategy", "distribution", "node",
+        "config_id", "label", "protocol", "power_config", "kind", "strategy", "distribution", "node",
         "metric", "n_seeds", "mean", "std", "ci_low", "ci_high",
     ])
 
@@ -1584,15 +1710,28 @@ def _final_metric(record: Dict[str, Any], metric: str) -> Optional[float]:
 
 def _seed_values_by_strategy(
     runs: Sequence[Dict[str, Any]], metric: str
-) -> Dict[Tuple[str, str], Dict[str, Dict[int, float]]]:
-    """{(protocol, distribution): {strategy: {seed: metric}}} — seeds without a value
-    are dropped.
+) -> Dict[Tuple[str, str, str], Dict[str, Dict[int, float]]]:
+    """{(protocol, distribution, power_config): {variant: {seed: metric}}} — seeds
+    without a value are dropped.
 
-    Keyed by protocol as well: a v1 (image-level) run and a revision (group-level)
-    run of the same strategy, distribution and seed are different experiments on
-    different partitions and must never be averaged or paired with each other.
+    Keyed by protocol: a v1 (image-level) run and a revision (group-level) run of the
+    same strategy, distribution and seed are different experiments on different
+    partitions and must never be averaged or paired with each other.  Keyed by the
+    Jetson power configuration for the same reason.  The desktop baselines have no
+    power configuration; they join every federated power group of their protocol and
+    distribution as references (and form a group of their own when there is none).
+
+    Named by :func:`variant_display`, so runs of different hyper-parameters are never
+    averaged into one value per seed.  Two runs that land on the same (key, variant,
+    seed) are a duplicate configuration and raise instead of being averaged.
     """
-    out: Dict[Tuple[str, str], Dict[str, Dict[int, List[float]]]] = {}
+    fl_powers: Dict[Tuple[str, str], set] = {}
+    for record in runs:
+        if record.get("kind") == "fl":
+            base = (record.get("protocol") or "", record.get("distribution") or "unknown")
+            fl_powers.setdefault(base, set()).add(record.get("power_config") or "")
+    out: Dict[Tuple[str, str, str], Dict[str, Dict[int, float]]] = {}
+    origin: Dict[Tuple[Tuple[str, str, str], str, int], str] = {}
     for record in runs:
         seed = record.get("seed")
         if seed is None:
@@ -1600,15 +1739,23 @@ def _seed_values_by_strategy(
         value = _final_metric(record, metric)
         if value is None:
             continue
-        key = (record.get("protocol") or "", record.get("distribution") or "unknown")
-        strategy = record.get("strategy_display") or record.get("strategy") or "unknown"
-        out.setdefault(key, {}).setdefault(strategy, {}).setdefault(int(seed), []).append(value)
-    collapsed: Dict[Tuple[str, str], Dict[str, Dict[int, float]]] = {}
-    for dist, strategies in out.items():
-        for strategy, seeds in strategies.items():
-            for seed, values in seeds.items():
-                collapsed.setdefault(dist, {}).setdefault(strategy, {})[seed] = float(np.mean(values))
-    return collapsed
+        base = (record.get("protocol") or "", record.get("distribution") or "unknown")
+        if record.get("kind") == "fl":
+            powers = [record.get("power_config") or ""]
+        else:
+            powers = sorted(fl_powers.get(base) or {record.get("power_config") or ""})
+        name = record.get("variant") or record.get("strategy_display") \
+            or record.get("strategy") or "unknown"
+        for power in powers:
+            key = base + (power,)
+            slot = (key, name, int(seed))
+            if slot in origin:
+                raise ValueError("two runs for {} seed {} in {}: {} and {} -- a configuration "
+                                 "is duplicated or two configurations share a name".format(
+                                     name, seed, key, origin[slot], record.get("run_dir")))
+            origin[slot] = record.get("run_dir")
+            out.setdefault(key, {}).setdefault(name, {})[int(seed)] = float(value)
+    return out
 
 
 def cohens_d_paired(a: np.ndarray, b: np.ndarray) -> float:
@@ -1640,7 +1787,7 @@ def pairwise_tests(runs: Sequence[Dict[str, Any]], metric: str = "accuracy") -> 
     rows = []
     by_dist = _seed_values_by_strategy(runs, metric)
     for key in sorted(by_dist):
-        protocol, dist = key
+        protocol, dist, power = key
         strategies = sorted(by_dist[key])
         for i in range(len(strategies)):
             for j in range(i + 1, len(strategies)):
@@ -1692,6 +1839,7 @@ def pairwise_tests(runs: Sequence[Dict[str, Any]], metric: str = "accuracy") -> 
 
                 rows.append({
                     "protocol": protocol,
+                    "power_config": power,
                     "distribution": dist,
                     "metric": metric,
                     "strategy_a": name_a,
@@ -1712,7 +1860,8 @@ def pairwise_tests(runs: Sequence[Dict[str, Any]], metric: str = "accuracy") -> 
                     "note": "; ".join(notes),
                 })
     return pd.DataFrame(rows, columns=[
-        "protocol", "distribution", "metric", "strategy_a", "strategy_b", "n_seeds", "seeds",
+        "protocol", "power_config", "distribution", "metric", "strategy_a", "strategy_b",
+        "n_seeds", "seeds",
         "mean_a", "mean_b", "mean_diff", "cohen_d_paired", "cohen_d_unpaired",
         "wilcoxon_stat", "wilcoxon_p", "ttest_t", "ttest_p", "pg_cohen_d_av",
         "pg_wilcoxon_p", "note",
@@ -1724,7 +1873,7 @@ def friedman_tests(runs: Sequence[Dict[str, Any]], metric: str = "accuracy") -> 
     rows = []
     by_dist = _seed_values_by_strategy(runs, metric)
     for key in sorted(by_dist):
-        protocol, dist = key
+        protocol, dist, power = key
         strategies = sorted(by_dist[key])
         # drop the strategy with the fewest seeds until the shared seed set is usable
         while len(strategies) >= 3:
@@ -1762,6 +1911,7 @@ def friedman_tests(runs: Sequence[Dict[str, Any]], metric: str = "accuracy") -> 
             note = (note + "; " if note else "") + "pingouin not installed"
         rows.append({
             "protocol": protocol,
+            "power_config": power,
             "distribution": dist,
             "metric": metric,
             "n_strategies": len(strategies),
@@ -1775,7 +1925,8 @@ def friedman_tests(runs: Sequence[Dict[str, Any]], metric: str = "accuracy") -> 
             "note": note,
         })
     return pd.DataFrame(rows, columns=[
-        "protocol", "distribution", "metric", "n_strategies", "strategies", "n_seeds", "seeds",
+        "protocol", "power_config", "distribution", "metric", "n_strategies", "strategies",
+        "n_seeds", "seeds",
         "chi_square", "p_value", "pg_chi_square", "pg_p_value", "note",
     ])
 
@@ -1837,11 +1988,15 @@ def pairwise_markdown(df: pd.DataFrame, metric: str) -> str:
         return "\n".join(out)
     protocols = df["protocol"].fillna("").astype(str) if "protocol" in df.columns \
         else pd.Series([""] * len(df), index=df.index)
-    for protocol, dist in sorted(set(zip(protocols, df["distribution"].astype(str)))):
-        out.append("## Distribution: `{}`{}".format(
-            dist, " — protocol `{}`".format(protocol) if protocol else ""))
+    powers = df["power_config"].fillna("").astype(str) if "power_config" in df.columns \
+        else pd.Series([""] * len(df), index=df.index)
+    dists = df["distribution"].astype(str)
+    for protocol, dist, power in sorted(set(zip(protocols, dists, powers))):
+        out.append("## Distribution: `{}`{}{}".format(
+            dist, " — protocol `{}`".format(protocol) if protocol else "",
+            " — power `{}`".format(power) if power else ""))
         out.append("")
-        sub = df[(protocols == protocol) & (df["distribution"].astype(str) == dist)]
+        sub = df[(protocols == protocol) & (dists == dist) & (powers == power)]
         rows = []
         for _, row in sub.iterrows():
             rows.append([

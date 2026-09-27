@@ -1127,3 +1127,58 @@ The all-caps markers are matched case-sensitively on purpose, so ordinary prose 
 
 Verified end to end: a temporary pattern matching an existing `chain.log` line produced
 one `[ALERT]` and a pop-up on the first pass and nothing on the second.
+
+## Power configurations: a namespace, a pre-flight lock, and no pooling (2026-09-27)
+
+The 98-run matrix ran with Jetson power modes that were never harmonised: `nvpmodel -q`
+on 2026-09-24 reported **node_a 15W, node_b MAXN_SUPER, node_c 7W** (re-read on
+2026-09-27, unchanged). Per-round wall-clock is a reported result and the slowest node
+sets the round time, so the timing of the whole matrix belongs to that configuration.
+`seed_extension` is being rerun with all three nodes at MAXN_SUPER. The two sets must never
+be mixed.
+
+* **Namespace.** `print_revision_commands.py --power_config {heterogeneous,maxn}`.
+  `heterogeneous` (default) is the main matrix and keeps `results/rev_*`; any other
+  configuration writes its federated runs to `results/pc_<name>/rev_*`. The experiment is
+  otherwise identical (same server and client commands, only `--output_dir` differs), a
+  MAXN run is never skipped because the heterogeneous run of the cell exists, and baselines
+  (desktop GPU) are never moved.
+* **Lock.** `run_matrix.py --power_config` is required. `configs/testbed.local.yaml` must
+  declare `power_modes.<config>.<node>` (the example ships placeholders; `maxn` must
+  declare a MAXN mode on every node). Before every run the pre-flight reads `nvpmodel -q`
+  on all three nodes and refuses to start on any mismatch or unreadable node. A `--script`
+  whose runs sit outside the configuration's namespace is refused.
+* **Recording.** After a run the modes are read again and written into `results.json` as
+  `power: {power_config, expected, measured_before, measured_after, source}`. If any node's
+  mode changed during the run, the run directory is moved to `logs/invalid_runs/`: it is
+  then neither counted as done (the retry reruns it) nor seen by the analysis.
+* **Analysis.** `analyze_results.py` derives `power_config` from the directory
+  (`heterogeneous` for the main matrix, `desktop_gpu` for the baselines, `unrecorded` for
+  v1), cross-checks it against a recorded `power` block, and raises `PowerConfigError`
+  (not the usual warn-and-skip) on a contradiction or on drifted modes. It is part of the
+  configuration: `config_id` gains `|pc=<name>` for non-main configurations only, so every
+  existing id, which also seeds that configuration's cluster bootstrap, is byte-identical
+  and no existing number or CI moved. Pairwise and Friedman tests are grouped by
+  (protocol, distribution, power configuration); the desktop baselines join every group
+  as references. `export_latex_tables.py --power_config` (default `heterogeneous`) exports
+  one configuration at a time.
+
+### Fix found on the way: sweep variants were averaged into the default point
+
+`_seed_values_by_strategy` keyed runs by `strategy_display` within (protocol,
+distribution), and averaged several values per seed. The local-epoch, learning-rate and
+10-round variants share both with the default-point runs, so under label skew the
+seed-paired "FedAvg" value of seeds 42/123/456 was the mean of the E=1, E=2, lr=1e-4,
+R=10 and default runs (pairwise mean 0.9195 against the default point's 0.9047), and FedBN
+(10 rounds) was paired with 3-round runs. Affected: `analysis/pairwise_tests.*`,
+`analysis/friedman.csv`, `paper/tables/pairwise_tests.tex`, `paper/tables/friedman.tex`.
+None of these was `\input` by `main.tex`. Runs are now named by `variant_display`
+(`FedAvg (E=1)`, `FedBN (R=10)`, ...; only values that differ from R=3, E=5, lr=1e-3
+are named), and two runs that land on the same (group, name, seed) raise.
+
+The same collision made the exporter's per-label tables drop rows: all five FedAvg
+label-skew configurations rendered as `FedAvg [3N] (group-level)` and later rows
+overwrote earlier ones. The default-point rows happened to sort last, so every committed
+default-point cell was correct and only the variant rows were missing (verified: with the
+variant rows removed, the regenerated summary tables are byte-identical to the committed
+ones). `claim_cell` now raises when two configurations would render into one cell.

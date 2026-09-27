@@ -125,5 +125,11 @@ python scripts/analyze_results.py --results_dir results --output_dir analysis
 python scripts/export_latex_tables.py --analysis_dir analysis --output_dir paper/tables
 ```
 
+On the testbed use `scripts/run_matrix.py --block <b> --power_config <heterogeneous|maxn>`
+(required). The main matrix ran with unharmonised power modes (node_a 15W, node_b MAXN_SUPER,
+node_c 7W) and is `heterogeneous`, `results/rev_*`; any other configuration writes to
+`results/pc_<name>/rev_*` and is never pooled with it (`docs/REVISION_CHANGES.md`, "Power
+configurations").
+
 Block order and cost: `docs/REVISION_PLAN_TR.md` §6.2. After each block, update the matching
 table listed in §6.3 and commit.

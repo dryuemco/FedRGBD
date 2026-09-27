@@ -53,6 +53,36 @@ INPUT_FILES = {
     "friedman": "friedman.csv",
 }
 
+#: Jetson power configuration written into the tables (analyze_results.py
+#: ``power_config``).  One export never mixes two: rows of other configurations are
+#: dropped before any table is built.  The desktop baselines (``desktop_gpu``) and the
+#: v1 runs (``unrecorded``) carry no Jetson configuration and appear in every export.
+DEFAULT_POWER_CONFIG = "heterogeneous"
+POWER_SHARED = ("desktop_gpu", "unrecorded")
+
+
+def select_power_config(df: pd.DataFrame, power_config: str) -> pd.DataFrame:
+    """Rows of ``power_config`` plus the rows that have none (see ``POWER_SHARED``)."""
+    if df.empty or "power_config" not in df.columns:
+        return df
+    power = df["power_config"].fillna("").astype(str)
+    return df[(power == power_config) | power.isin(POWER_SHARED) | (power == "")]
+
+
+def claim_cell(seen: Dict[Any, str], key: Any, row: Any) -> None:
+    """Refuse to let two configurations render into the same table cell.
+
+    Tables are keyed by display name; if two configurations ever share one (a sweep
+    variant without its suffix, two power configurations in one export), the later
+    row would silently overwrite the earlier one.
+    """
+    config_id = str(row.get("config_id")) if hasattr(row, "get") else str(row)
+    previous = seen.setdefault(key, config_id)
+    if previous != config_id:
+        raise ValueError("two configurations render into the same table cell {!r}: {} and {}"
+                         .format(key, previous, config_id))
+
+
 #: summary metrics exported by default (those actually present are used).  The declared
 #: primary metric (balanced accuracy at the selected round) comes first so that its table
 #: is the one the paper leads with; accuracy stays, as the secondary metric.
@@ -244,6 +274,7 @@ def config_name(label: Any, distribution: Any) -> str:
     text = str(label or "")
     text = text.replace("{group_final_epoch}", "(group-level, final epoch)")
     text = text.replace("{group}", "(group-level)").replace("{image}", "(image-level)")
+    text = re.sub(r"\s*\[pc:[^\]]+\]", "", text)      # one power configuration per export
     dist = str(distribution or "")
     if dist and dist in text:
         text = text.replace(dist, " ")
@@ -321,8 +352,10 @@ def summary_tex(df: pd.DataFrame, metric: str, digits: int = 4, seconds_digits: 
 
     cells: Dict[Tuple[str, str], Dict[str, Any]] = {}
     order: Dict[str, Tuple[int, str]] = {}
+    seen: Dict[Any, str] = {}
     for _, row in sub.iterrows():
         name = config_name(row.get("label"), row.get("distribution"))
+        claim_cell(seen, (name, str(row["distribution"])), row)
         cells[(name, str(row["distribution"]))] = row
         order.setdefault(name, _config_sort_key(row.get("kind"), name))
     names = sorted(order, key=lambda n: order[n])
@@ -410,8 +443,10 @@ def per_round_tex(df: pd.DataFrame, metric: str = "accuracy", digits: int = 4,
         body.append(_group_row(n_columns, dist_label(dist)))
         entries: Dict[str, Dict[int, Any]] = {}
         order: Dict[str, Tuple[int, str]] = {}
+        seen: Dict[Any, str] = {}
         for _, row in block.iterrows():
             name = config_name(row.get("label"), dist)
+            claim_cell(seen, (name, int(row["round"])), row)
             entries.setdefault(name, {})[int(row["round"])] = row
             order.setdefault(name, _config_sort_key(row.get("kind"), name))
         for name in sorted(order, key=lambda n: order[n]):
@@ -567,8 +602,10 @@ def full_metrics_tex(df: pd.DataFrame, distribution: str, metrics: Sequence[str]
 
     entries: Dict[str, Dict[str, Any]] = {}
     order: Dict[str, Tuple[int, str]] = {}
+    seen: Dict[Any, str] = {}
     for _, row in sub.iterrows():
         name = config_name(row.get("label"), distribution)
+        claim_cell(seen, (name, str(row["metric"])), row)
         entries.setdefault(name, {})[str(row["metric"])] = row
         order.setdefault(name, _config_sort_key(row.get("kind"), name))
 
@@ -636,6 +673,7 @@ def time_tex(df: pd.DataFrame, siunitx: bool = False) -> Optional[str]:
     if df.empty or "metric" not in df.columns:
         return None
     rows: Dict[Tuple[int, str, str], Dict[str, Any]] = {}
+    seen: Dict[Any, str] = {}
     for _, row in df.iterrows():
         if str(row.get("kind")) != "fl" or _protocol_of(row) != "group":
             continue
@@ -648,6 +686,7 @@ def time_tex(df: pd.DataFrame, siunitx: bool = False) -> Optional[str]:
         name = config_name(row.get("label"), dist).replace(" (group-level)", "")
         name = re.sub(r"\s*\[\d+N\]", "", name).strip()
         key = (int(n_nodes) if n_nodes else 0, dist, name)
+        claim_cell(seen, key + (str(row["metric"]),), row)
         rows.setdefault(key, {})[str(row["metric"])] = row
     rows = {k: v for k, v in rows.items() if "total_time_s" in v}
     if not rows:
@@ -732,9 +771,14 @@ def select_metrics(summary: pd.DataFrame, requested: Optional[Sequence[str]]) ->
 def export(analysis_dir: str, output_dir: str, metrics: Optional[Sequence[str]] = None,
            digits: int = 4, seconds_digits: int = 1, max_rounds: int = 10,
            siunitx: bool = False, per_round_metric: str = "accuracy",
-           warn: bool = True) -> List[str]:
-    """Write every table; returns the paths that were written."""
-    tables = load_tables(analysis_dir, warn=warn)
+           warn: bool = True, power_config: str = DEFAULT_POWER_CONFIG) -> List[str]:
+    """Write every table; returns the paths that were written.
+
+    Only runs of ``power_config`` (plus the desktop baselines and v1 runs, which have
+    none) enter the tables; see :func:`select_power_config`.
+    """
+    tables = {key: select_power_config(df, power_config)
+              for key, df in load_tables(analysis_dir, warn=warn).items()}
     os.makedirs(output_dir, exist_ok=True)
     written: List[str] = []
 
@@ -809,6 +853,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="maximum number of round columns before thinning (default: 10)")
     parser.add_argument("--siunitx", action="store_true",
                         help="wrap numbers in \\num{} (requires \\usepackage{siunitx})")
+    parser.add_argument("--power_config", default=DEFAULT_POWER_CONFIG,
+                        help="Jetson power configuration whose federated runs are exported "
+                             "(default: %(default)s, the main matrix); never mixed with another. "
+                             "Write other configurations to another --output_dir")
     return parser
 
 
@@ -817,7 +865,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     written = export(
         args.analysis_dir, args.output_dir, metrics=args.metrics, digits=args.digits,
         seconds_digits=args.seconds_digits, max_rounds=args.max_rounds,
-        siunitx=args.siunitx, per_round_metric=args.per_round_metric)
+        siunitx=args.siunitx, per_round_metric=args.per_round_metric,
+        power_config=args.power_config)
     if not written:
         print("[warn] no table written -- is {} the output_dir of "
               "analyze_results.py?".format(args.analysis_dir))

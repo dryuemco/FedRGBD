@@ -32,3 +32,24 @@ nodes:
     repo: /home/<user-on-node-c>/FedRGBD
     venv: /home/<user-on-node-c>/fedrgbd_venv
     local: false
+
+# Expected power mode of every node, per power configuration, as the first line of
+# `nvpmodel -q` prints it ("NV Power Mode: <name>").  run_matrix.py --power_config
+# <name> reads the mode on all three nodes before every run and refuses to start
+# on any mismatch, reads it again after the run, and records both in results.json.
+# A configuration that is not declared here cannot be run.
+#
+#   heterogeneous : the main matrix (results/rev_*).  Its modes were never
+#                   harmonised; nvpmodel -q on 2026-09-24 reported
+#                   node_a 15W, node_b MAXN_SUPER, node_c 7W.
+#   maxn          : all three nodes at MAXN (results/pc_maxn/rev_*); on the Orin
+#                   Nano 8 GB under JetPack 6.x the mode is called MAXN_SUPER.
+power_modes:
+  heterogeneous:
+    node_a: <nvpmodel-mode-of-node-a>
+    node_b: <nvpmodel-mode-of-node-b>
+    node_c: <nvpmodel-mode-of-node-c>
+  maxn:
+    node_a: <MAXN-mode-name>
+    node_b: <MAXN-mode-name>
+    node_c: <MAXN-mode-name>
