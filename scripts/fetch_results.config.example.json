@@ -17,7 +17,22 @@
     { "pattern": "STOPPING",          "ignore_case": false },
     { "pattern": "DURDU",             "ignore_case": false },
     { "pattern": "BASLAMADI",         "ignore_case": false },
-    { "pattern": "pre-?flight\\s+FAIL", "ignore_case": true }
+    { "pattern": "pre-?flight\\s+FAIL", "ignore_case": true },
+    { "pattern": "IDENTITY GATE FAIL",  "ignore_case": false }
+  ],
+
+  "_min_age_minutes": "A remote results.json is fetched only once it carries run_matrix.py's power record and has not changed for this many minutes (default 15, longer than run_matrix's 10-minute finish grace).",
+  "min_age_minutes": 15,
+
+  "_milestones": "Optional. When scripts/block_report.py reports <block> newly complete with exactly <runs> runs, the pop-up shows <message> and fetch.log gets <commands> -- but only if the node's run_matrix.log matches require_log_regex (a clean end); otherwise the pop-up says it did NOT end cleanly. Every other newly complete block raises a generic pop-up.",
+  "milestones": [
+    {
+      "block": "<block name>",
+      "runs": 0,
+      "require_log_regex": "block finished: <N> ok, 0 failed, 0 not attempted",
+      "message": "<what the pop-up says>",
+      "commands": ["<exact command for the operator>"]
+    }
   ],
 
   "_python": "Interpreter used for the block report. The CPU venv is the right one; it only runs analyze_results.py and export_latex_tables.py.",

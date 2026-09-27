@@ -8,6 +8,7 @@ testbed block, cell by cell.
 """
 
 import os
+import re
 import sys
 
 import pytest
@@ -46,7 +47,7 @@ def _expected_runs(block):
 def test_every_testbed_block_is_covered():
     assert set(FL_BLOCKS) == {"seed_extension", "dirichlet_skew", "low_data",
                               "long_horizon_fedbn", "mu_grid", "local_epochs",
-                              "learning_rate"}
+                              "learning_rate", "maxn_long_horizon"}
 
 
 @pytest.mark.parametrize("block", FL_BLOCKS)
@@ -65,8 +66,10 @@ def test_parse_block_matches_the_generator_cell_by_cell(block, tmp_path, capsys)
         for node, cmd in got["clients"].items():
             assert "/{} ".format(node) in cmd + " "
             assert "--server 192.168.1.10:8080" in cmd
-        # CLAUDE.md rule 5: new runs only ever go to results/rev_*
-        assert got["out_dir"].startswith("results/rev_")
+        # CLAUDE.md rule 5: new runs only ever go to results/rev_* -- or, for a block
+        # that declares a power configuration, to results/pc_<name>/rev_*
+        assert re.match(r"^results/(pc_[a-z0-9_]+/)?rev_", got["out_dir"]), got["out_dir"]
+        assert got["gates"] == want.identity
 
 
 @pytest.mark.parametrize("block", FL_BLOCKS)

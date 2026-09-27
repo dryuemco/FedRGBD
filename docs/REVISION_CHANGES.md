@@ -1182,3 +1182,51 @@ overwrote earlier ones. The default-point rows happened to sort last, so every c
 default-point cell was correct and only the variant rows were missing (verified: with the
 variant rows removed, the regenerated summary tables are byte-identical to the committed
 ones). `claim_cell` now raises when two configurations would render into one cell.
+
+## New runs after the matrix: low_data seeds, MAXN ten-round block, identity gates (2026-09-28)
+
+Decisions of 2026-09-27 (5a-5d):
+
+* **5a, `low_data` seeds 789 and 1011** (16 runs), in the *heterogeneous* power
+  configuration and the same `results/rev_*` namespace as seeds 42/123/456, so the five
+  seeds pool; they run before any power-mode change.
+* **5b, `maxn_long_horizon`** (30 runs): IID and label skew x FedAvg, FedProx(0.01),
+  FedBN x 5 seeds, 10 rounds, all three nodes at MAXN_SUPER. The block *declares*
+  `power_config: maxn`: its runs always live in `results/pc_maxn/`, the generator refuses
+  to emit it for any other configuration, and refuses any other block that would write one
+  of its directories (e.g. `long_horizon_fedbn --power_config maxn`).
+* **Identity gates (hard).** Rounds 1-3 of every FedAvg/FedProx run must be bitwise
+  identical to the matrix's 3-round run of the same strategy, partition and seed; label-skew
+  FedAvg/FedBN seeds 42/123/456 must be bitwise identical to `long_horizon_fedbn` over all
+  ten rounds. "Identical" = every client's val and test prediction file (`path`, `label`,
+  `logit_margin`, `p_fire`, raw bytes) and the aggregated validation loss. `run_matrix.py`
+  checks each gated round as soon as its files are complete (a half-written file is
+  "pending", not a failure) and again, completely, when the run ends. On a mismatch it ends
+  the run, writes `IDENTITY_GATE_FAILED.json`, renames `results.json` to
+  `results.gate_failed.json`, and STOPS the block without retry. A relaunch refuses while
+  any marker exists in the block's namespace; `block_report` never counts a marked run;
+  `analyze_results` refuses to run while a marker exists anywhere under `results/`. Before
+  every attempt of a gated run, prediction files left by an earlier attempt are checked
+  (a mismatch there is a gate failure too) and then moved to `logs/invalid_runs/`, so the
+  gate judges only what the current attempt wrote.
+* **Energy (5c), opt-in `run_matrix.py --energy`.** tegrastats (`VDD_IN`, board input
+  power, 1-s interval) on every node for the run, wrapped in `timeout` and stopped by its
+  unique log path; energy = mean power of the in-window samples x (server start to server
+  exit), with coverage as the quality flag; each node's clock offset and time-zone shift
+  are measured so remote stamps land in node_a's time base. Recorded in results.json
+  (`energy`); raw logs are archived with the run and gitignored. `scripts/energy_smoke.py`
+  measures the overhead (ABBA blocks, warm page cache, paired 95 % CI; negligible only if
+  the CI lies within +/-1 % and tegrastats uses <= 1 % of a core -- declared before
+  measuring).
+* **Fetch (5d).** `fetch_results.ps1` also fetches `results/pc_<name>/rev_*`, only once a
+  run carries the runner's `power` record and has been unchanged for 15 minutes. Every
+  pass runs `block_report.py`, which lists every complete block; a pop-up is shown for
+  each (block, run count) not yet notified and recorded only after it was shown (at least
+  once). A configured milestone replaces the text: for `low_data` at 40 runs, and only if
+  the node's `run_matrix.log` shows `block finished: 16 ok, 0 failed, 0 not attempted`,
+  it says "5a done -- switch node_a and node_c to MAXN_SUPER" and writes the exact commands
+  to `logs/fetch.log`. Native stderr no longer aborts a pass under PowerShell 5.1.
+
+All of the above was reviewed adversarially before it ran (five reviewers, two
+skeptics per finding); the sixteen confirmed findings are fixed and covered by
+`tests/test_testbed_extension.py`.

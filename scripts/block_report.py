@@ -23,6 +23,15 @@ results (see ``CLAUDE.md`` and the Jetson-block protocol).
 There is deliberately no interpretation here: the status file reports counts,
 selected rounds and where the tables were written, and stops.
 
+"Newly complete" is keyed to the block's run *set*, recorded in
+``scratch/block_reports/<block>/complete.json``: a block that grows after it was
+reported (low_data went from 24 to 40 runs when seeds 789/1011 were added) is
+reported again when the larger set completes.  For every such block one line
+
+    NEWLY_COMPLETE <block> <n_runs>
+
+is printed, which ``scripts/fetch_results.ps1`` turns into a desktop pop-up.
+
     python scripts/block_report.py --repo . [--block seed_extension] [--force]
 """
 
@@ -67,7 +76,10 @@ def expected_runs(repo: str):
 
 
 def is_finished(run_dir: str) -> bool:
-    """A run counts as finished only if its results.json parses and was selected."""
+    """A run counts as finished only if its results.json parses and was selected, and no
+    identity gate failed on it (scripts/run_matrix.py IDENTITY_GATE_FAILED.json)."""
+    if os.path.isfile(os.path.join(run_dir, "IDENTITY_GATE_FAILED.json")):
+        return False
     path = os.path.join(run_dir, "results.json")
     if not os.path.isfile(path):
         return False
@@ -93,7 +105,14 @@ def block_status(repo: str):
 
 
 def run_pipeline(repo: str, block: str, out_dir: str) -> list:
-    """analyze_results + export_latex_tables into out_dir. Returns log lines."""
+    """analyze_results + export_latex_tables into out_dir. Returns log lines.
+
+    A block that declares a power configuration gets its tables exported for that
+    configuration, not for the main matrix."""
+    sys.path.insert(0, repo)
+    import scripts.print_revision_commands as prc
+    cfg = prc.load_config(os.path.join(repo, "configs", "experiment_matrix.yaml"))
+    power = prc.block_power_config(cfg.get("revision", cfg), block)
     python = sys.executable
     analysis_dir = os.path.join(out_dir, "analysis")
     tables_dir = os.path.join(out_dir, "tables")
@@ -104,7 +123,8 @@ def run_pipeline(repo: str, block: str, out_dir: str) -> list:
         [python, os.path.join(repo, "scripts", "analyze_results.py"),
          "--results_dir", os.path.join(repo, "results"), "--output_dir", analysis_dir],
         [python, os.path.join(repo, "scripts", "export_latex_tables.py"),
-         "--analysis_dir", analysis_dir, "--output_dir", tables_dir],
+         "--analysis_dir", analysis_dir, "--output_dir", tables_dir]
+        + (["--power_config", power] if power else []),
     ):
         proc = subprocess.run(cmd, cwd=repo, capture_output=True, text=True)
         tail = (proc.stdout or "").strip().splitlines()[-3:]
@@ -165,6 +185,47 @@ def write_status(repo: str, block: str, status: dict, out_dir: str, log_lines: l
     return path
 
 
+def _status_md_count(out_dir: str):
+    """Run count recorded in an existing STATUS.md (reports written before complete.json)."""
+    path = os.path.join(out_dir, "STATUS.md")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("- runs expected:"):
+                    return int(line.split("**")[1])
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def reported_for(out_dir: str, runs: list) -> bool:
+    """True if this exact run set has already been reported.
+
+    Reports from before ``complete.json`` existed carry only STATUS.md; one whose
+    recorded count equals the current set's size is adopted (complete.json is
+    written for it) rather than reported again, so upgrading this script does not
+    re-fire every finished block.
+    """
+    marker = os.path.join(out_dir, "complete.json")
+    if os.path.isfile(marker):
+        try:
+            with open(marker, encoding="utf-8") as fh:
+                return sorted(json.load(fh).get("runs", [])) == sorted(runs)
+        except (OSError, ValueError):
+            return False
+    if _status_md_count(out_dir) == len(runs):
+        mark_reported(out_dir, runs)
+        return True
+    return False
+
+
+def mark_reported(out_dir: str, runs: list) -> None:
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, "complete.json"), "w", encoding="utf-8", newline="\n") as fh:
+        json.dump({"runs": sorted(runs), "reported": _dt.datetime.now().isoformat(timespec="seconds")},
+                  fh, indent=1)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--repo", default=REPO_DEFAULT)
@@ -189,6 +250,11 @@ def main(argv=None):
 
     root = os.path.join(repo, "scratch", "block_reports")
     any_run = False
+    # every complete block, every invocation: scripts/fetch_results.ps1 keeps its own
+    # notified state, so a pop-up lost in one pass is delivered on the next
+    for name, st in status.items():
+        if name not in NOT_IN_CHAIN and st["complete"] and not (args.block and name != args.block):
+            print("COMPLETE %s %d" % (name, len(st["done"])))
     for name, st in status.items():
         if args.block and name != args.block:
             continue
@@ -197,14 +263,16 @@ def main(argv=None):
         if not st["complete"]:
             continue
         out_dir = os.path.join(root, name)
-        marker = os.path.join(out_dir, "STATUS.md")
-        if os.path.exists(marker) and not args.force:
-            continue                                  # already reported
+        runs = sorted(st["done"])
+        if reported_for(out_dir, runs) and not args.force:
+            continue                                  # this exact run set was reported
         os.makedirs(out_dir, exist_ok=True)
         print("block %s complete (%d runs); running the pipeline" % (name, st["expected"]))
         lines = run_pipeline(repo, name, out_dir)
         path = write_status(repo, name, st, out_dir, lines)
+        mark_reported(out_dir, runs)
         print("wrote %s" % os.path.relpath(path, repo).replace("\\", "/"))
+        print("NEWLY_COMPLETE %s %d" % (name, len(runs)))
         any_run = True
     if not any_run:
         incomplete = ["%s %d/%d" % (n, len(s["done"]), s["expected"])

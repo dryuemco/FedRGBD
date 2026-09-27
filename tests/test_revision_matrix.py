@@ -63,8 +63,20 @@ def test_low_data_spec(revision):
     assert b["fractions"] == [0.05, 0.01]
     assert set(b["data_distributions"]) == {"iid", "non_iid_label"}
     assert set(b["strategies"]) == {"fedavg", "fedprox_0.01"}
-    assert b["seeds"] == [42, 123, 456]
-    assert b["total_runs"] == 24
+    # 789 / 1011 added 2026-09-27 (heterogeneous configuration, same namespace)
+    assert b["seeds"] == [42, 123, 456, 789, 1011]
+    assert b["total_runs"] == 40
+
+
+def test_maxn_long_horizon_spec(revision):
+    b = revision["maxn_long_horizon"]
+    assert b["power_config"] == "maxn"
+    assert set(b["strategies"]) == {"fedavg", "fedprox_0.01", "fedbn"}
+    assert set(b["data_distributions"]) == {"iid", "non_iid_label"}
+    assert b["seeds"] == [42, 123, 456, 789, 1011]
+    assert b["rounds"] == 10
+    assert b["total_runs"] == 30
+    assert len(b["identity_gates"]) == 2
 
 
 def test_long_horizon_fedbn_spec(revision):
@@ -124,9 +136,10 @@ def test_grand_totals(revision):
     per_block_total = sum(
         revision[name]["total_runs"]
         for name in ("seed_extension", "dirichlet_skew", "low_data", "long_horizon_fedbn",
-                     "mu_grid", "local_epochs", "learning_rate", "baselines_extension")
+                     "maxn_long_horizon", "mu_grid", "local_epochs", "learning_rate",
+                     "baselines_extension")
     )
-    assert revision["grand_total_runs"] == per_block_total == 163
+    assert revision["grand_total_runs"] == per_block_total == 209
 
 
 def test_data_preparation_command(revision):
@@ -153,8 +166,9 @@ def test_analysis_commands(revision):
 EXPECTED_BLOCK_RUN_COUNTS = {
     "seed_extension": 8,       # new_runs, not the full 20-cell grid
     "dirichlet_skew": 18,
-    "low_data": 24,
+    "low_data": 40,
     "long_horizon_fedbn": 6,
+    "maxn_long_horizon": 30,
     "mu_grid": 15,
     "local_epochs": 18,
     "learning_rate": 12,
@@ -171,12 +185,12 @@ def test_expand_block_run_counts(revision, block, expected_n):
 def test_expand_all_matches_sum(revision):
     runs_by_block = prc.expand_all(revision)
     total = sum(len(v) for v in runs_by_block.values())
-    assert total == sum(EXPECTED_BLOCK_RUN_COUNTS.values()) == 151
+    assert total == sum(EXPECTED_BLOCK_RUN_COUNTS.values()) == 197
 
 
 def test_output_dir_naming_convention(revision):
     pattern = re.compile(
-        r"^results/rev_(iid|noniid|dirichlet0\.1|dirichlet0\.5|dirichlet1|"
+        r"^results/(pc_[a-z0-9_]+/)?rev_(iid|noniid|dirichlet0\.1|dirichlet0\.5|dirichlet1|"
         r"iid_sub0\.05|iid_sub0\.01|noniid_sub0\.05|noniid_sub0\.01)_"
         r"[a-zA-Z0-9_.]+(_ep\d+)?(_lr[0-9.e-]+)?(_r\d+)?_seed\d+$"
     )
@@ -243,10 +257,13 @@ def test_cli_text_format_run_count():
     )
     dirs = re.findall(r"^--- (results/rev_\S+) ---$", out.stdout, flags=re.MULTILINE)
     # --no_skip_existing: the count must not depend on which rev_* results exist on disk.
-    # 151 logical cells, 9 of which share a results directory with an earlier
+    # 197 logical cells, 9 of which share a results directory with an earlier
     # block (the default-valued cells of the mu / epoch / lr sweeps) and are
-    # emitted once, as [DUP], instead of being launched again.
-    assert len(dirs) == len(set(dirs)) == 142
+    # emitted once, as [DUP], instead of being launched again; the 30 cells of
+    # maxn_long_horizon live in results/pc_maxn/.
+    assert len(dirs) == len(set(dirs)) == 158
+    maxn = re.findall(r"^--- (results/pc_maxn/rev_\S+) ---$", out.stdout, flags=re.MULTILINE)
+    assert len(maxn) == len(set(maxn)) == 30
     assert out.stdout.count("[DUP]") == 9
 
 

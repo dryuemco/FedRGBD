@@ -283,12 +283,16 @@ revision:
     fractions: [0.05, 0.01]
     data_distributions: [iid, non_iid_label]
     strategies: [fedavg, fedprox_0.01]
-    seeds: [42, 123, 456]
+    # Seeds 789 and 1011 were added on 2026-09-27, after the 3-seed block had run,
+    # because three seeds could not separate the strategies. They run in the SAME
+    # (heterogeneous) power configuration and the same results/rev_* namespace as
+    # the first three, so all five seeds pool; they ran before any mode change.
+    seeds: [42, 123, 456, 789, 1011]
     rounds: 3
     local_epochs: 5
     lr: 0.001
     batch_size: 8
-    total_runs: 24   # 2 fractions x 2 dists x 2 strategies x 3 seeds
+    total_runs: 40   # 2 fractions x 2 dists x 2 strategies x 5 seeds
 
   # ------------------------------------------------------------------------
   # 4. Longer FL horizon for FedBN (+ FedAvg reference).
@@ -305,6 +309,44 @@ revision:
     lr: 0.001
     batch_size: 8
     total_runs: 6    # 2 strategies x 3 seeds
+
+  # ------------------------------------------------------------------------
+  # 4b. Ten rounds with every node at MAXN_SUPER (added 2026-09-27).
+  #     Declares its power configuration: its runs always live in
+  #     results/pc_maxn/ and print_revision_commands.py refuses to emit them
+  #     for any other configuration, so they can never be skipped as "done"
+  #     because of, or pooled with, a heterogeneous-configuration run.
+  # ------------------------------------------------------------------------
+  maxn_long_horizon:
+    description: >
+      FedAvg, FedProx(mu=0.01) and FedBN x {iid, non_iid_label} x 5 seeds,
+      10 rounds, all three nodes at MAXN_SUPER.
+    power_config: maxn
+    strategies: [fedavg, fedprox_0.01, fedbn]
+    data_distributions: [iid, non_iid_label]
+    seeds: [42, 123, 456, 789, 1011]
+    rounds: 10
+    local_epochs: 5
+    lr: 0.001
+    batch_size: 8
+    total_runs: 30   # 3 strategies x 2 dists x 5 seeds
+    # Hard gates, checked by scripts/run_matrix.py while each run executes and
+    # again when it ends: the per-image predictions (every client, val and
+    # test) of the listed rounds must be bitwise identical to the reference
+    # run of the heterogeneous matrix with the same strategy, partition and
+    # seed, and so must the aggregated validation loss. A mismatch stops the
+    # block (no retry) and leaves IDENTITY_GATE_FAILED.json in the run dir.
+    identity_gates:
+      - name: first_three_rounds_vs_3round_matrix
+        strategies: [fedavg, fedprox_0.01]
+        reference_rounds: 3        # results/rev_<dist>_<strategy>_seed<S>
+        compare_rounds: [1, 2, 3]
+      - name: all_ten_rounds_vs_long_horizon
+        strategies: [fedavg, fedbn]
+        data_distributions: [non_iid_label]
+        seeds: [42, 123, 456]
+        reference_rounds: 10       # results/rev_noniid_<strategy>_r10_seed<S>
+        compare_rounds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
   # ------------------------------------------------------------------------
   # 5. FedProx proximal-mu sensitivity grid.
@@ -399,13 +441,13 @@ revision:
     total_runs: 50       # sum of the three parts above
 
   # Sum of every block's `total_runs` (full logical grid, incl. reused seeds).
-  grand_total_runs: 163   # 20 + 18 + 24 + 6 + 15 + 18 + 12 + 50
+  grand_total_runs: 209   # 20 + 18 + 40 + 6 + 30 + 15 + 18 + 12 + 50
   # Sum of every block's actionable run count as emitted by
   # scripts/print_revision_commands.py (seed_extension counted as new_runs=8
   # instead of total_runs=20; directory-level overlaps across blocks noted
   # above are intentionally NOT subtracted here, they are handled at run time
   # by --skip_existing).
-  grand_total_new_runs: 151   # 8 + 18 + 24 + 6 + 15 + 18 + 12 + 50
+  grand_total_new_runs: 197   # 8 + 18 + 40 + 6 + 30 + 15 + 18 + 12 + 50
 
   data_preparation:
     description: >

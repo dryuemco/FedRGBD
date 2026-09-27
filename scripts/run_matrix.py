@@ -27,6 +27,17 @@ same generated script and drives the whole block:
                       mode that changed during the run invalidates it: the
                       run directory is moved to logs/invalid_runs/ so it is
                       neither analysed nor skipped as done
+        identity    : for runs with ">>> IDENTITY GATE:" lines, the per-image
+                      predictions of the listed rounds must be bitwise
+                      identical to the reference run (checked while the run
+                      executes and again at the end, with the aggregated
+                      validation loss).  A mismatch ends the run and STOPS the
+                      block -- no retry -- and leaves IDENTITY_GATE_FAILED.json
+                      in the run directory; the block refuses to start again
+                      until a human has resolved it
+        energy      : with --energy, tegrastats logs board input power (VDD_IN)
+                      on every node for the duration of the run; the energy of
+                      the run window is written into results.json ("energy")
         on failure  : ONE retry with identical parameters, then stop the block
 
 Deliberately NOT adaptive.  It never changes a batch size, never skips a seed,
@@ -180,6 +191,7 @@ RE_RUN = re.compile(r"^echo '--- (results/\S+) ---'")
 RE_NODE = re.compile(r"^echo '>>> START ON (node_[abc]) \(")
 RE_CMD = re.compile(r"^echo '\s*(python3 src/fl/client\.py .*)'$")
 RE_SERVER = re.compile(r"^(python3 src/fl/server\.py .*)$")
+RE_GATE = re.compile(r"^echo '>>> IDENTITY GATE: (results/\S+) rounds ([0-9,]+)'$")
 
 
 def parse_block(path):
@@ -197,10 +209,14 @@ def parse_block(path):
             if m:
                 if cur:
                     runs.append(cur)
-                cur = {'out_dir': m.group(1), 'clients': {}, 'server': None}
+                cur = {'out_dir': m.group(1), 'clients': {}, 'server': None, 'gates': []}
                 pending_node = None
                 continue
             if cur is None:
+                continue
+            m = RE_GATE.match(line)
+            if m:
+                cur['gates'].append((m.group(1), [int(r) for r in m.group(2).split(',')]))
                 continue
             m = RE_NODE.match(line)
             if m:
@@ -490,7 +506,9 @@ def preflight(strict_commit=True, splits=(), power=None, measured=None):
 
 def kill_stragglers():
     for node, cfg in NODES.items():
-        cmd = "pkill -f 'src/fl/(client|server).py' || true"
+        # our own tegrastats only (their logfile lives under logs/energy/)
+        cmd = ("pkill -f 'src/fl/(client|server).py' || true; "
+               "pkill -f 'tegrastat[s] --interval [0-9]+ --logfile .*/logs/energy/' || true")
         if cfg['local']:
             subprocess.run(['bash', '-lc', cmd])
         else:
@@ -589,12 +607,336 @@ def quarantine(out_dir):
     return 'run directory moved to %s' % dest
 
 
-def execute_run(run, attempt, ready_timeout, run_timeout, poll=5.0, finish_grace=600):
+# --- identity gates ----------------------------------------------------------
+GATE_MARKER = 'IDENTITY_GATE_FAILED.json'
+PRED_NODES = ('node_a', 'node_b', 'node_c')
+PRED_SPLITS = ('val', 'test')
+PRED_ARRAYS = ('path', 'label', 'logit_margin', 'p_fire')
+
+
+def pred_file(run_dir, rnd, node, split):
+    return os.path.join(run_dir, 'predictions', 'r%03d_%s_%s.npz' % (rnd, node, split))
+
+
+def _load_pred(path):
+    """-> {array: raw bytes/dtype/shape} or None if the file is absent or not complete.
+
+    The server writes the .npz files non-atomically; a half-written zip has no
+    central directory and fails to load, so a failure here means "not yet"."""
+    import numpy as np
+    try:
+        with np.load(path, allow_pickle=False) as d:
+            return {k: (d[k].dtype.str, d[k].shape, d[k].tobytes()) for k in PRED_ARRAYS}
+    except Exception:
+        return None
+
+
+def compare_round(run_dir, ref_dir, rnd):
+    """-> (state, detail) with state 'same', 'differ' or 'pending'."""
+    for node in PRED_NODES:
+        for split in PRED_SPLITS:
+            got = _load_pred(pred_file(run_dir, rnd, node, split))
+            if got is None:
+                return 'pending', 'r%03d_%s_%s not written yet' % (rnd, node, split)
+            ref = _load_pred(pred_file(ref_dir, rnd, node, split))
+            if ref is None:
+                return 'differ', 'reference %s has no complete r%03d_%s_%s' % (ref_dir, rnd, node, split)
+            for k in PRED_ARRAYS:
+                if got[k] != ref[k]:
+                    return 'differ', ('round %d %s %s: array %r is not bitwise identical to %s'
+                                      % (rnd, node, split, k, ref_dir))
+    return 'same', 'round %d identical' % rnd
+
+
+def check_gate_references(runs):
+    """Refuse to start when a reference run a gate needs is missing or incomplete."""
+    bad = []
+    for r in runs:
+        for ref, rounds in r.get('gates', []):
+            if not os.path.isfile(os.path.join(ref, 'results.json')):
+                bad.append('%s: reference %s has no results.json' % (r['out_dir'], ref))
+                continue
+            for rnd in rounds:
+                for node in PRED_NODES:
+                    for split in PRED_SPLITS:
+                        if _load_pred(pred_file(ref, rnd, node, split)) is None:
+                            bad.append('%s: reference %s lacks r%03d_%s_%s.npz'
+                                       % (r['out_dir'], ref, rnd, node, split))
+    if bad:
+        raise SystemExit('identity-gate references incomplete, not starting:\n  - '
+                         + '\n  - '.join(bad[:20]))
+
+
+def unresolved_gate_failures(runs, root=None):
+    """Run dirs holding IDENTITY_GATE_FAILED.json: every run of the parsed block, and --
+    independent of what the generator skipped -- every run dir under ``root``."""
+    found = {r['out_dir'] for r in runs
+             if os.path.isfile(os.path.join(r['out_dir'], GATE_MARKER))}
+    if root and os.path.isdir(root):
+        for entry in sorted(os.listdir(root)):
+            path = os.path.join(root, entry)
+            if os.path.isfile(os.path.join(path, GATE_MARKER)):
+                found.add(path.replace('\\', '/'))
+    return sorted(found)
+
+
+def fail_gate(run, reason):
+    """Record a gate failure so that nothing can mistake the run for a finished one:
+    the marker is written and results.json (if any) becomes results.gate_failed.json,
+    so the generator does not skip the run as existing, the fetch job does not take
+    it, block_report does not count it and analyze_results refuses the namespace."""
+    write_gate_marker(run, reason)
+    path = os.path.join(run['out_dir'], 'results.json')
+    if os.path.isfile(path):
+        os.replace(path, os.path.join(run['out_dir'], 'results.gate_failed.json'))
+
+
+def set_aside_predictions(run, attempt):
+    """Move a gated run's prediction files out of the way before an attempt, so the
+    live gate judges only files that this attempt wrote.  Nothing is deleted."""
+    pred = os.path.join(run['out_dir'], 'predictions')
+    if not os.path.isdir(pred) or not os.listdir(pred):
+        return None
+    os.makedirs(INVALID_DIR, exist_ok=True)
+    parts = [p for p in re.split(r'[\\/]+', os.path.normpath(run['out_dir'])) if p]
+    dest = os.path.join(INVALID_DIR, '%s__before_try%d__%s' % (
+        '__'.join(parts[-2:]).replace(':', ''), attempt, datetime.now().strftime('%Y%m%d_%H%M%S')))
+    os.rename(pred, dest)
+    return dest
+
+
+def gated_rounds_on_disk_differ(run):
+    """Before a retry: the reason if any gated round already on disk differs."""
+    for ref, rounds in run.get('gates', []):
+        for rnd in rounds:
+            state, detail = compare_round(run['out_dir'], ref, rnd)
+            if state == 'differ':
+                return detail
+    return None
+
+
+class IdentityMonitor:
+    """Checks gated rounds as soon as their prediction files are complete."""
+
+    def __init__(self, run):
+        self.out_dir = run['out_dir']
+        self.todo = [(ref, rnd) for ref, rounds in run.get('gates', []) for rnd in rounds]
+        self.done = []
+
+    def poll(self):
+        """-> None, or the reason of the first mismatch."""
+        still = []
+        for ref, rnd in self.todo:
+            state, detail = compare_round(self.out_dir, ref, rnd)
+            if state == 'differ':
+                return detail
+            if state == 'same':
+                self.done.append((ref, rnd))
+                log('    identity gate: round %d == %s' % (rnd, ref))
+            else:
+                still.append((ref, rnd))
+        self.todo = still
+        return None
+
+
+def final_identity_check(run):
+    """Every gated round, at the end: predictions and aggregated validation loss.
+
+    -> (ok, detail).  Rounds whose files are still missing count as a failure."""
+    out_dir = run['out_dir']
+    try:
+        with open(os.path.join(out_dir, 'results.json')) as f:
+            got = {r['round']: r.get('weighted_val_loss') for r in json.load(f).get('rounds', [])}
+    except Exception as e:
+        return False, 'results.json unreadable for the identity check: %r' % e
+    for ref, rounds in run.get('gates', []):
+        try:
+            with open(os.path.join(ref, 'results.json')) as f:
+                want = {r['round']: r.get('weighted_val_loss') for r in json.load(f).get('rounds', [])}
+        except Exception as e:
+            return False, 'reference %s unreadable: %r' % (ref, e)
+        for rnd in rounds:
+            state, detail = compare_round(out_dir, ref, rnd)
+            if state != 'same':
+                return False, detail if state == 'differ' else 'round %d missing: %s' % (rnd, detail)
+            if got.get(rnd) is None or got.get(rnd) != want.get(rnd):
+                return False, ('round %d aggregated validation loss %r != %r in %s'
+                               % (rnd, got.get(rnd), want.get(rnd), ref))
+    n = sum(len(rounds) for _, rounds in run.get('gates', []))
+    return True, '%d gated round(s) bitwise identical' % n
+
+
+def write_gate_marker(run, reason):
+    os.makedirs(run['out_dir'], exist_ok=True)
+    with open(os.path.join(run['out_dir'], GATE_MARKER), 'w') as f:
+        json.dump({'reason': reason, 'gates': run.get('gates', []), 'time': ts()}, f, indent=2)
+
+
+# --- energy (tegrastats) ------------------------------------------------------
+ENERGY_INTERVAL_MS = 1000
+RE_TEGRA = re.compile(r'^(\d\d-\d\d-\d{4} \d\d:\d\d:\d\d) .*?\bVDD_IN (\d+)mW/')
+
+
+def parse_tegrastats(text, tz_shift=0.0):
+    """-> [(epoch_seconds, milliwatts)] from tegrastats output lines.
+
+    tegrastats stamps are the node's LOCAL time without a zone; ``time.mktime`` reads
+    them in node_a's zone, so ``tz_shift`` (seconds, see EnergyLogger.clock_offsets)
+    removes the difference between the node's zone and node_a's."""
+    out = []
+    for line in text.splitlines():
+        m = RE_TEGRA.match(line.strip())
+        if m:
+            t = time.mktime(time.strptime(m.group(1), '%m-%d-%Y %H:%M:%S')) - tz_shift
+            out.append((t, int(m.group(2))))
+    return out
+
+
+def integrate_energy(samples, t0, t1, interval_s):
+    """Energy (J) of the window [t0, t1] as the mean board power of the samples inside
+    it times the window length -- a missing sample is not counted as zero power.
+    ``coverage`` (samples x interval / window) is the quality indicator."""
+    inside = [mw for t, mw in samples if t0 <= t <= t1]
+    mean_w = sum(inside) / 1000.0 / len(inside) if inside else None
+    window = t1 - t0
+    return {'energy_J': round(mean_w * window, 1) if mean_w is not None else None,
+            'n_samples': len(inside),
+            'mean_W': round(mean_w, 3) if mean_w is not None else None,
+            'window_s': round(window, 1),
+            'coverage': round(len(inside) * interval_s / window, 3) if window > 0 else None}
+
+
+class EnergyLogger:
+    """tegrastats on every node for one run.  Each instance is wrapped in `timeout`
+    so it can never outlive the run, and stopped by its unique log path."""
+
+    def __init__(self, tag, attempt, stamp, max_s):
+        self.name = '%s_try%d_%s' % (tag, attempt, stamp)
+        self.max_s = int(max_s)
+        self.procs = {}
+        self.paths = {}
+        self.offsets = {}
+        self.tz_shift = {}
+
+    def _path(self, node):
+        return '%s/logs/energy/%s_%s.tegrastats' % (NODES[node]['repo'], self.name, node)
+
+    def _pattern(self, node):
+        # "tegrastat[s]" matches tegrastats but not this pkill's own command line
+        return 'tegrastat[s] --interval %d --logfile %s' % (ENERGY_INTERVAL_MS, self._path(node))
+
+    def clock_offsets(self):
+        """Per node: clock offset (node epoch minus node_a epoch, s) and the zone shift of
+        its local-time stamps as read by node_a's ``time.mktime``, from one
+        `date '+%s.%N|%m-%d-%Y %H:%M:%S'` bracketed by node_a's clock."""
+        for node, cfg in NODES.items():
+            cmd = "date '+%s.%N|%m-%d-%Y %H:%M:%S'"
+            t0 = time.time()
+            try:
+                if cfg['local']:
+                    out = subprocess.run(['bash', '-lc', cmd], stdout=subprocess.PIPE,
+                                         text=True, timeout=30).stdout
+                else:
+                    out = ssh(node, cmd, timeout=30).stdout
+                t1 = time.time()
+                epoch, local = (out or '').strip().split('|')
+                epoch = float(epoch)
+                self.offsets[node] = 0.0 if cfg['local'] else round(epoch - (t0 + t1) / 2.0, 3)
+                self.tz_shift[node] = round(
+                    time.mktime(time.strptime(local, '%m-%d-%Y %H:%M:%S')) - int(epoch), 0)
+            except (ValueError, subprocess.TimeoutExpired):
+                self.offsets[node] = None
+                self.tz_shift[node] = None
+
+    def start(self):
+        self.clock_offsets()
+        for node, cfg in NODES.items():
+            path = self._path(node)
+            self.paths[node] = path
+            inner = ('mkdir -p %s && exec timeout %d tegrastats --interval %d --logfile %s'
+                     % (shlex.quote(os.path.dirname(path)), self.max_s, ENERGY_INTERVAL_MS,
+                        shlex.quote(path)))
+            out = open(os.devnull, 'wb')
+            if cfg['local']:
+                argv = ['bash', '-lc', inner]
+            else:
+                argv = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10',
+                        '%s@%s' % (cfg['user'], cfg['host']), 'bash -lc %s' % shlex.quote(inner)]
+            self.procs[node] = (_popen(argv, out), out)
+
+    def stop(self):
+        for node, cfg in NODES.items():
+            cmd = "pkill -f %s || true" % shlex.quote(self._pattern(node))
+            try:
+                if cfg['local']:
+                    subprocess.run(['bash', '-lc', cmd], timeout=30)
+                else:
+                    ssh(node, cmd, timeout=30)
+            except subprocess.TimeoutExpired:
+                pass
+        for node, (proc, out) in self.procs.items():
+            try:
+                proc.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                _kill(proc)
+            out.close()
+
+    def collect(self, out_dir, t0, t1):
+        """Copy the logs into <run>/energy/ and return the results.json block."""
+        dest_dir = os.path.join(out_dir, 'energy')
+        os.makedirs(dest_dir, exist_ok=True)
+        nodes = {}
+        for node, cfg in NODES.items():
+            dest = os.path.join(dest_dir, '%s.tegrastats' % node)
+            try:
+                if cfg['local']:
+                    subprocess.run(['cp', self.paths[node], dest], check=True, timeout=60)
+                else:
+                    subprocess.run(['scp', '-q', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10',
+                                    '%s@%s:%s' % (cfg['user'], cfg['host'], self.paths[node]), dest],
+                                   check=True, timeout=120)
+                if self.offsets.get(node) is None or self.tz_shift.get(node) is None:
+                    raise ValueError('clock offset of %s could not be measured' % node)
+                with open(dest) as f:
+                    samples = parse_tegrastats(f.read(), self.tz_shift[node])
+            except Exception as e:
+                nodes[node] = {'error': repr(e)[:200]}
+                continue
+            off = self.offsets[node]
+            nodes[node] = integrate_energy(samples, t0 + off, t1 + off, ENERGY_INTERVAL_MS / 1000.0)
+            nodes[node]['clock_offset_s'] = off
+            nodes[node]['tz_shift_s'] = self.tz_shift[node]
+        complete = all('error' not in v and v.get('energy_J') is not None
+                       and (v.get('coverage') or 0) >= 0.95 for v in nodes.values())
+        total = sum(v.get('energy_J') or 0.0 for v in nodes.values()) if complete else None
+        return {'source': 'tegrastats VDD_IN (board input power), %d ms interval' % ENERGY_INTERVAL_MS,
+                'window': 'server start to server exit, node_a clock; node clocks corrected by '
+                          'the measured offset',
+                'window_start': t0, 'window_end': t1,
+                'nodes': nodes, 'total_energy_J': round(total, 1) if total is not None else None,
+                'complete': complete}
+
+
+def record_energy(out_dir, block):
+    path = os.path.join(out_dir, 'results.json')
+    with open(path) as f:
+        data = json.load(f)
+    data['energy'] = block
+    tmp = path + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(data, f, indent=2)
+    os.replace(tmp, path)
+
+
+def execute_run(run, attempt, ready_timeout, run_timeout, poll=5.0, finish_grace=600,
+                monitor=None, times=None):
     """Server first, clients once the port accepts, then watch all four processes.
 
     -> (rc, reason).  rc is the server's exit code, or negative when the runner
     ended the run: -1 timeout, -2 server never became ready, -3 a client died,
-    -4 the server did not exit after every client had finished.
+    -4 the server did not exit after every client had finished, -5 an identity
+    gate failed (``monitor.poll()`` returned a reason).  ``times`` (a dict) gets
+    the node_a wall-clock of server start and server exit.
 
     A client that exits with a non-zero code before the server exits ends the run
     at once: without it the server can never complete.  Exit code 0 is a client's
@@ -608,6 +950,8 @@ def execute_run(run, attempt, ready_timeout, run_timeout, poll=5.0, finish_grace
         slog = os.path.join(LOG_DIR, '%s_try%d_server_%s.log' % (tag, attempt, stamp))
         server, sh = start_server(run, slog)
         handles.append(sh)
+        if times is not None:
+            times['server_start'] = time.time()
         log('    server started (pid %d); waiting for %s:%d to accept connections'
             % (server.pid, NODES['node_a']['host'], SERVER_PORT))
         ready, why = wait_for_port(NODES['node_a']['host'], SERVER_PORT, ready_timeout,
@@ -645,7 +989,14 @@ def execute_run(run, attempt, ready_timeout, run_timeout, poll=5.0, finish_grace
                 why = 'TIMEOUT after %ds' % run_timeout
                 log('    %s -- killing the run' % why)
                 return -1, why
+            if monitor is not None:
+                reason = monitor.poll()
+                if reason:
+                    log('    IDENTITY GATE FAIL: %s -- ending the run now' % reason)
+                    return -5, 'identity gate failed: ' + reason
             time.sleep(poll)
+        if times is not None:
+            times['server_exit'] = time.time()
         return server.returncode, 'server exited'
     finally:
         if server is not None:
@@ -688,6 +1039,9 @@ def main():
                     help='run the pre-flight checks and exit')
     ap.add_argument('--dry_run', action='store_true', help='list the runs and exit')
     ap.add_argument('--allow_commit_mismatch', action='store_true')
+    ap.add_argument('--energy', action='store_true',
+                    help='log board input power (tegrastats VDD_IN) on every node during each '
+                         'run and record the energy of the run window in results.json')
     ap.add_argument('--testbed', default=TESTBED_LOCAL,
                     help='node hosts/users/paths (default: %s; copy %s to create it)'
                          % (TESTBED_LOCAL, TESTBED_EXAMPLE))
@@ -735,6 +1089,12 @@ def main():
     runs = parse_block(script)
     check_server_address(runs)
     check_namespace(runs, args.power_config)
+    failed_gates = unresolved_gate_failures(runs, power_root(args.power_config))
+    if failed_gates:
+        log('PRE-FLIGHT FAIL -- unresolved identity-gate failure(s), not starting: %s. A human '
+            'must decide what they mean before the block may continue.' % ', '.join(failed_gates))
+        sys.exit(1)
+    check_gate_references(runs)
     todo = [r for r in runs if not os.path.isfile(os.path.join(r['out_dir'], 'results.json'))]
     log('block script: %s (power_config %s: %s)'
         % (script, args.power_config, ', '.join('%s=%s' % (n, power[n]) for n in NODE_NAMES)))
@@ -762,6 +1122,7 @@ def main():
         log('=== [%d/%d] %s ===' % (i, len(todo), run['out_dir']))
         ok = False
         preflight_failed = False
+        gate_failed = None
         m = RE_ROUNDS.search(run['server'])
         timeout = args.run_timeout or int(m.group(1) if m else 3) * args.round_timeout
         for attempt in (1, 2):
@@ -777,16 +1138,63 @@ def main():
                     log('      - %s' % p)
                 preflight_failed = True
                 break
+            if run.get('gates'):
+                if attempt > 1:
+                    reason = gated_rounds_on_disk_differ(run)
+                    if reason:
+                        log('    IDENTITY GATE FAIL in the failed attempt\'s rounds: %s' % reason)
+                        fail_gate(run, reason)
+                        gate_failed = reason
+                        ok = False
+                        break
+                moved = set_aside_predictions(run, attempt)
+                if moved:
+                    log('    earlier prediction files moved to %s' % moved)
+            monitor = IdentityMonitor(run) if run.get('gates') else None
+            energy = None
+            if args.energy:
+                energy = EnergyLogger(os.path.basename(run['out_dir']), attempt,
+                                      datetime.now().strftime('%Y%m%d_%H%M%S'), timeout + 1800)
+                energy.start()
+            times = {}
             t0 = time.time()
-            rc, ended = execute_run(run, attempt, args.server_ready_timeout, timeout,
-                                    finish_grace=args.finish_grace)
+            try:
+                rc, ended = execute_run(run, attempt, args.server_ready_timeout, timeout,
+                                        finish_grace=args.finish_grace, monitor=monitor,
+                                        times=times)
+            finally:
+                if energy is not None:
+                    energy.stop()
             dt = time.time() - t0
+            if rc == -5:
+                fail_gate(run, ended)
+                gate_failed = ended
+                ok = False
+                break
             ok, why = result_ok(run['out_dir'])
+            if ok and run.get('gates'):
+                gate_ok, gate_why = final_identity_check(run)
+                if not gate_ok:
+                    fail_gate(run, gate_why)
+                    log('    IDENTITY GATE FAIL: %s' % gate_why)
+                    gate_failed = gate_why
+                    ok = False          # a finished run whose gate failed is NOT done
+                    break
+                why = '%s; %s' % (why, gate_why)
             if ok:
                 _, after = check_power(power)
                 ok, power_why = record_power(run['out_dir'], args.power_config, power,
                                              before, after)
                 why = '%s; %s' % (why, power_why)
+            if ok and energy is not None and 'server_exit' in times:
+                try:
+                    block = energy.collect(run['out_dir'], times['server_start'],
+                                           times['server_exit'])
+                    record_energy(run['out_dir'], block)
+                    why = ('%s; energy %.0f kJ' % (why, block['total_energy_J'] / 1000.0)
+                           if block['complete'] else '%s; energy INCOMPLETE (see results.json)' % why)
+                except Exception as e:           # energy is auxiliary: never fails a run
+                    why = '%s; energy not recorded (%r)' % (why, e)
             log('    %s (rc=%s), %.1f min, result: %s (%s)'
                 % (ended, rc, dt / 60.0, 'OK' if ok else 'BAD', why))
             if ok:
@@ -795,7 +1203,12 @@ def main():
             done += 1
         else:
             failed += 1
-            if preflight_failed:
+            if gate_failed:
+                log('STOPPING the block: IDENTITY GATE FAILED for %s: %s. Not retried. The '
+                    'run directory keeps its output (results.json renamed to '
+                    'results.gate_failed.json) and %s; the block will not start again until '
+                    'a human has resolved it.' % (run['out_dir'], gate_failed, GATE_MARKER))
+            elif preflight_failed:
                 log('STOPPING the block: pre-flight failed before %s (see above). Fix the '
                     'cause, then re-run this command; finished runs are skipped '
                     'automatically.' % run['out_dir'])

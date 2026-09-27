@@ -422,6 +422,15 @@ POWER_UNRECORDED = "unrecorded"
 _RE_POWER_DIR = re.compile(r"^pc_([A-Za-z0-9][A-Za-z0-9_-]*)$")
 
 
+class IdentityGateError(ValueError):
+    """A run whose identity gate failed on the testbed (``IDENTITY_GATE_FAILED.json``
+    in its directory, written by scripts/run_matrix.py).  Such a run is not analysed
+    until a human has resolved what the failure means: :func:`collect_runs` raises."""
+
+
+IDENTITY_GATE_MARKER = "IDENTITY_GATE_FAILED.json"
+
+
 class PowerConfigError(ValueError):
     """A run whose power configuration is contradictory.  Never skipped silently:
     :func:`collect_runs` re-raises it, because dropping or mis-assigning such a run
@@ -1263,6 +1272,12 @@ def collect_runs(
 ) -> List[Dict[str, Any]]:
     """Load every run under ``results_dir`` into a list of records."""
     runs: List[Dict[str, Any]] = []
+    # anywhere below results_dir, with or without a results.json: a gate that fails while
+    # the run executes leaves the marker in a directory the loader would never visit
+    for dirpath, _dirs, files in os.walk(results_dir):
+        if IDENTITY_GATE_MARKER in files:
+            raise IdentityGateError("{}: identity gate failed on the testbed ({}); resolve it "
+                                    "before analysing".format(dirpath, IDENTITY_GATE_MARKER))
     for run_dir in iter_run_dirs(results_dir, include_test_runs):
         try:
             runs.append(

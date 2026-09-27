@@ -15,8 +15,27 @@
     block chain and a stray write there would cost days.
 
     A run is fetched only when it is FINISHED: its remote results.json must parse as
-    JSON and carry model_selection.selected_round. A run still being written fails
-    that test and is skipped until the next pass.
+    JSON, carry model_selection.selected_round AND the "power" record that
+    scripts/run_matrix.py adds after its own checks, and not have been modified for
+    $MinAgeMinutes minutes (default 15, longer than run_matrix's 10-minute finish
+    grace). A run whose identity gate failed has no results.json (it is renamed) and
+    is never fetched. A run still being written fails these tests and is skipped
+    until the next pass.
+
+    Runs are looked for in results/rev_* (the heterogeneous-power matrix) and in
+    every power-configuration namespace results/pc_<name>/rev_*; the local copy goes
+    to the same relative path.
+
+    Every pass runs scripts/block_report.py, which prints "COMPLETE <block> <n>" for
+    every complete block. A pop-up is shown for each (block, n) not yet in
+    logs/fetch_notified.state.json, and only then is it recorded there: delivery is
+    at least once, and a pass that fails to show it retries on the next. The first
+    pass after this was introduced records the blocks that were already complete,
+    silently. A "milestone" in the config can attach its own message and commands to
+    one block and run count; it fires only if the node's run_matrix.log shows the
+    block ended cleanly (require_log_regex), and the commands are written to
+    fetch.log. If the log cannot be read, nothing is recorded and the next pass
+    tries again.
 
     Already-present runs are skipped by md5 of results.json. If a local copy exists
     and differs from the remote, nothing is overwritten -- the difference is logged
@@ -75,6 +94,10 @@ foreach ($exe in @($SshExe, $ScpExe)) {
     if (-not (Test-Path $exe)) { Write-Log 'ERROR' "missing $exe (install the Windows OpenSSH client)"; exit 2 }
 }
 
+$MinAgeMinutes = if ($cfg.min_age_minutes) { [int]$cfg.min_age_minutes } else { 15 }
+# results/rev_<run>  or  results/pc_<config>/rev_<run>
+$RunPathRegex = '^results/((?:pc_[A-Za-z0-9_-]+/)?rev_[^/]+)/results\.json$'
+
 $Remote = '{0}@{1}' -f $cfg.user, $cfg.host
 $RemoteRepo = $cfg.remote_repo.TrimEnd('/')
 $LocalResults = Join-Path $RepoRoot 'results'
@@ -94,13 +117,21 @@ function Invoke-Remote {
         the exit code. stderr is captured into the log rather than the return value. #>
     param([string]$Command)
     $errFile = [System.IO.Path]::GetTempFileName()
+    # Windows PowerShell 5.1 turns ANY stderr output of a native command into a
+    # terminating error under $ErrorActionPreference = 'Stop', even when redirected.
+    # ssh's stderr is data here (logged below), never a reason to abort the pass.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     try {
         $out = & $SshExe @SshOpts $Remote $Command 2>$errFile
         $script:LastExit = $LASTEXITCODE
         $err = (Get-Content $errFile -Raw -ErrorAction SilentlyContinue)
         if ($script:LastExit -ne 0 -and $err) { Write-Log 'WARN' ("ssh stderr: {0}" -f $err.Trim()) }
         return $out
-    } finally { Remove-Item $errFile -ErrorAction SilentlyContinue }
+    } finally {
+        $ErrorActionPreference = $prevEap
+        Remove-Item $errFile -ErrorAction SilentlyContinue
+    }
 }
 
 function Test-Reachable {
@@ -256,9 +287,10 @@ if (-not (Test-Reachable)) {
     exit 1
 }
 
-# One call for every candidate's checksum. `md5sum` on a file being written still
+# One call for every candidate's checksum, restricted to results.json files that have
+# not changed for $MinAgeMinutes minutes. `md5sum` on a file being written still
 # returns something, so the JSON validity check below is what actually gates a fetch.
-$remoteList = Invoke-Remote ("cd '{0}' && md5sum results/rev_*/results.json 2>/dev/null" -f $RemoteRepo)
+$remoteList = Invoke-Remote ("cd '{0}' && find results -maxdepth 3 -name results.json -mmin +{1} -regextype posix-extended -regex 'results/(pc_[A-Za-z0-9_-]+/)?rev_[^/]+/results[.]json' -exec md5sum {{}} + 2>/dev/null" -f $RemoteRepo, $MinAgeMinutes)
 if ($script:LastExit -ne 0 -and -not $remoteList) {
     Write-Log 'INFO' 'no rev_* runs on the node yet'
     exit 0
@@ -272,7 +304,7 @@ $tracked = @{}
 try {
     $gitOut = & git -C $RepoRoot ls-files 'results' 2>$null
     foreach ($p in ($gitOut -split "`n")) {
-        if ($p -match '^results/(rev_[^/]+)/results\.json$') { $tracked[$Matches[1]] = $true }
+        if ($p -match $RunPathRegex) { $tracked[$Matches[1]] = $true }
     }
     Write-Log 'INFO' ("{0} run(s) already committed; their local copies are authoritative and will not be compared" -f $tracked.Count)
 } catch {
@@ -283,11 +315,12 @@ $fetched = 0; $skipped = 0; $pending = 0; $warned = 0; $committed = 0
 foreach ($line in ($remoteList -split "`n")) {
     $line = $line.Trim()
     if (-not $line) { continue }
-    if ($line -notmatch '^([0-9a-f]{32})\s+results/(rev_[^/]+)/results\.json$') { continue }
+    if ($line -notmatch '^([0-9a-f]{32})\s+(\S+)$') { continue }
     $remoteMd5 = $Matches[1]
-    $run = $Matches[2]
+    if ($Matches[2] -notmatch $RunPathRegex) { continue }
+    $run = $Matches[1]                      # rev_<run> or pc_<config>/rev_<run>
 
-    $localRun = Join-Path $LocalResults $run
+    $localRun = Join-Path $LocalResults ($run -replace '/', '\')
     $localJson = Join-Path $localRun 'results.json'
 
     if (Test-Path $localJson) {
@@ -321,6 +354,11 @@ foreach ($line in ($remoteList -split "`n")) {
         Write-Log 'INFO' ("{0}: no model_selection.selected_round -- run in progress, skipping" -f $run)
         $pending++; continue
     }
+    if (-not ($parsed.PSObject.Properties.Name -contains 'power')) {
+        # run_matrix adds "power" only after its own checks (identity gates, power modes)
+        Write-Log 'INFO' ("{0}: no power record yet -- the runner has not finished with it, skipping" -f $run)
+        $pending++; continue
+    }
 
     if ($DryRun) {
         Write-Log 'INFO' ("{0}: WOULD fetch (selected_round={1})" -f $run, $selected)
@@ -329,7 +367,7 @@ foreach ($line in ($remoteList -split "`n")) {
 
     # Copy into a staging name first, so an interrupted scp can never leave a
     # half-written directory that a later pass would mistake for a finished run.
-    $staging = Join-Path $LocalResults ('.incoming_' + $run)
+    $staging = Join-Path $LocalResults ('.incoming_' + ($run -replace '/', '__'))
     if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
     & $ScpExe @SshOpts '-r' ("{0}:{1}/results/{2}" -f $Remote, $RemoteRepo, $run) $staging 2>&1 |
         ForEach-Object { if ($_) { Write-Log 'DEBUG' $_ } }
@@ -350,6 +388,8 @@ foreach ($line in ($remoteList -split "`n")) {
         Remove-Item $staging -Recurse -Force
         continue
     }
+    $parent = Split-Path -Parent $localRun
+    if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Path $parent | Out-Null }
     Move-Item $staging $localRun
     $npz = (Get-ChildItem -Path (Join-Path $localRun 'predictions') -Filter *.npz -ErrorAction SilentlyContinue).Count
     Write-Log 'INFO' ("{0}: fetched (selected_round={1}, {2} prediction files)" -f $run, $selected, $npz)
@@ -361,13 +401,93 @@ Write-Log 'INFO' ("fetch done: {0} fetched, {1} already present, {2} in progress
 # --------------------------------------------------------------------------- #
 # block completion -> mechanical pipeline into a scratch directory
 # --------------------------------------------------------------------------- #
-if ($fetched -gt 0 -and -not $DryRun) {
+$NotifiedStateFile = Join-Path $LogDir 'fetch_notified.state.json'
+
+function Invoke-BlockNotifications {
+    <#  One pop-up per complete (block, run count) not yet notified, recorded only
+        AFTER it was shown: a pass that fails half-way delivers it on the next pass.
+        A configured milestone for that block and run count replaces the generic text
+        with its own message and writes its commands to fetch.log -- but only if the
+        node's run_matrix.log shows the block ended cleanly; otherwise the pop-up
+        says it did NOT end cleanly. If the log cannot be read, nothing is recorded. #>
+    param([string[]]$ReportLines)
+    $notified = @{}
+    $baseline = -not (Test-Path $NotifiedStateFile)
+    if (-not $baseline) {
+        try { foreach ($k in (Get-Content $NotifiedStateFile -Raw | ConvertFrom-Json).notified) { $notified[$k] = $true } }
+        catch { Write-Log 'WARN' 'notification state unreadable; not notifying this pass'; return }
+    }
+    $changed = $false
+    foreach ($l in $ReportLines) {
+        if ($l -notmatch '^COMPLETE\s+(\S+)\s+(\d+)\s*$') { continue }
+        $block = $Matches[1]; $n = [int]$Matches[2]
+        $key = '{0}|{1}' -f $block, $n
+        if ($notified.ContainsKey($key)) { continue }
+        if ($baseline) {
+            # blocks complete before notifications existed: record, do not pop up
+            Write-Log 'INFO' ("notification baseline: block {0} already complete ({1} runs)" -f $block, $n)
+            $notified[$key] = $true; $changed = $true
+            continue
+        }
+        try {
+            $milestone = $null
+            foreach ($m in @($cfg.milestones)) {
+                if ($m -and $m.block -eq $block -and [int]$m.runs -eq $n) { $milestone = $m; break }
+            }
+            if (-not $milestone) {
+                Write-Log 'NOTIFY' ("block {0} complete ({1} runs)" -f $block, $n)
+                Show-Alert ("block {0} complete ({1} runs) -- see logs\fetch.log" -f $block, $n)
+            } else {
+                $clean = $true
+                if ($milestone.require_log_regex) {
+                    $tailN = if ($cfg.alert_log_tail_lines) { [int]$cfg.alert_log_tail_lines } else { 400 }
+                    $text = Invoke-Remote ("tail -n {0} '{1}/logs/run_matrix.log'" -f $tailN, $RemoteRepo)
+                    if ($script:LastExit -ne 0 -or -not $text) {
+                        Write-Log 'WARN' ("{0}: could not read run_matrix.log to confirm a clean end; will retry next pass" -f $key)
+                        continue
+                    }
+                    $clean = [regex]::IsMatch(($text -join "`n"), $milestone.require_log_regex, (Get-RegexOptions $false))
+                }
+                if ($clean) {
+                    Write-Log 'MILESTONE' $milestone.message
+                    foreach ($c in @($milestone.commands)) { if ($c) { Write-Log 'MILESTONE' ("    " + $c) } }
+                    Show-Alert ($milestone.message + " -- the exact commands are in logs\fetch.log")
+                } else {
+                    $msg = ("block {0} complete ({1} runs) but run_matrix.log does NOT show a clean end ({2}); do not switch anything, check the node" -f $block, $n, $milestone.require_log_regex)
+                    Write-Log 'ALERT' $msg
+                    Show-Alert $msg
+                }
+            }
+            $notified[$key] = $true; $changed = $true
+        } catch {
+            Write-Log 'WARN' ("notification for {0} failed ({1}); will retry next pass" -f $key, $_.Exception.Message)
+        }
+    }
+    if ($changed -or $baseline) {
+        $state = [pscustomobject]@{ updated = (Get-Date -Format 'o'); notified = @($notified.Keys | Sort-Object) }
+        try { $state | ConvertTo-Json -Depth 3 | Set-Content -Path $NotifiedStateFile -Encoding utf8 }
+        catch { Write-Log 'WARN' 'could not write the notification state; a pop-up may repeat' }
+    }
+}
+
+# Every pass, not only passes that fetched something: block_report is idempotent, and
+# a notification that failed on the pass that completed a block must be retried even
+# though the node then sits idle (after 5a it waits for a human to switch modes).
+if (-not $DryRun) {
     $python = $cfg.python
     $reporter = Join-Path $PSScriptRoot 'block_report.py'
     if ($python -and (Test-Path $python) -and (Test-Path $reporter)) {
-        Write-Log 'INFO' 'checking for newly complete blocks'
-        & $python $reporter --repo $RepoRoot 2>&1 | ForEach-Object { if ($_) { Write-Log 'INFO' ("block_report: {0}" -f $_) } }
-        if ($LASTEXITCODE -ne 0) { Write-Log 'WARN' ("block_report exited {0}" -f $LASTEXITCODE) }
+        Write-Log 'INFO' 'checking for complete blocks'
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'      # stderr of a native command must not throw
+        try {
+            $reportLines = @(& $python $reporter --repo $RepoRoot 2>&1 | ForEach-Object { "$_" })
+            $reportExit = $LASTEXITCODE
+        } finally { $ErrorActionPreference = $prevEap }
+        foreach ($l in $reportLines) { if ($l) { Write-Log 'INFO' ("block_report: {0}" -f $l) } }
+        if ($reportExit -ne 0) { Write-Log 'WARN' ("block_report exited {0}" -f $reportExit) }
+        try { Invoke-BlockNotifications $reportLines }
+        catch { Write-Log 'WARN' ("block notification failed: {0}" -f $_.Exception.Message) }
     } else {
         Write-Log 'WARN' 'python or block_report.py not configured; skipping block reports'
     }

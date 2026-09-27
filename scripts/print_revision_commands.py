@@ -22,6 +22,17 @@ never skipped as "already done" because the heterogeneous run exists, and
 the directory).  Centralized / local-only baselines run on the desktop GPU and
 are not affected.
 
+A block may *declare* its configuration (``power_config: maxn`` in
+``configs/experiment_matrix.yaml``).  Its runs then always live in that
+namespace, whatever ``--power_config`` says, and naming a different
+configuration explicitly for that block is an error: a block written for MAXN can
+never be emitted for the heterogeneous testbed.
+
+Identity gates.  A block may list ``identity_gates``: rounds whose per-image
+predictions must be bitwise identical to a reference run of the heterogeneous
+matrix.  They are emitted into the bash script as ``>>> IDENTITY GATE:`` lines,
+which ``scripts/run_matrix.py`` parses and enforces.
+
 Usage
 -----
     python3 scripts/print_revision_commands.py
@@ -36,7 +47,7 @@ from __future__ import annotations
 import argparse
 import os
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import yaml
 
@@ -138,6 +149,10 @@ class Run:
     lr: float = _DEFAULT_LR
     batch_size: int = 8
     epochs: int = field(default=0)  # baselines only
+    #: power configuration the block declares (None: follows --power_config)
+    power_config: Optional[str] = None
+    #: [(reference_run_dir, [rounds])] -- bitwise-identity gates (run_matrix.py)
+    identity: List[Tuple[str, List[int]]] = field(default_factory=list)
 
     def results_json(self) -> str:
         return os.path.join(REPO_ROOT, self.output_dir, "results.json")
@@ -248,6 +263,42 @@ def expand_long_horizon_fedbn(cfg: dict) -> List[Run]:
             for seed in cfg["seeds"]:
                 runs.append(_fl_run("long_horizon_fedbn", dist, dist, strategy, seed,
                                      cfg["rounds"], cfg["local_epochs"], cfg["lr"], cfg["batch_size"]))
+    return runs
+
+
+def _identity_gates(cfg: dict, dist: str, strategy: str, seed) -> List[Tuple[str, List[int]]]:
+    """The (reference run dir, rounds) gates of ``identity_gates`` that apply to a run.
+
+    References are runs of the heterogeneous matrix (``results/rev_*``) with the same
+    strategy, partition and seed and ``reference_rounds`` rounds.
+    """
+    gates = []
+    for gate in cfg.get("identity_gates") or []:
+        if strategy not in gate.get("strategies", [strategy]):
+            continue
+        if dist not in gate.get("data_distributions", [dist]):
+            continue
+        if seed not in gate.get("seeds", [seed]):
+            continue
+        ref = make_output_dir(dist_tag(dist), strategy, seed, rounds=int(gate["reference_rounds"]),
+                              local_epochs=cfg["local_epochs"], lr=cfg["lr"])
+        rounds = sorted(int(r) for r in gate["compare_rounds"])
+        if not rounds or rounds[-1] > int(cfg["rounds"]) or rounds[-1] > int(gate["reference_rounds"]):
+            raise SystemExit("identity gate %r compares rounds %s beyond a run's budget"
+                             % (gate.get("name"), rounds))
+        gates.append((ref, rounds))
+    return gates
+
+
+def expand_maxn_long_horizon(cfg: dict) -> List[Run]:
+    runs = []
+    for strategy in cfg["strategies"]:
+        for dist in cfg["data_distributions"]:
+            for seed in cfg["seeds"]:
+                run = _fl_run("maxn_long_horizon", dist, dist, strategy, seed,
+                              cfg["rounds"], cfg["local_epochs"], cfg["lr"], cfg["batch_size"])
+                run.identity = _identity_gates(cfg, dist, strategy, seed)
+                runs.append(run)
     return runs
 
 
@@ -362,6 +413,7 @@ BLOCK_EXPANDERS = {
     "dirichlet_skew": expand_dirichlet_skew,
     "low_data": expand_low_data,
     "long_horizon_fedbn": expand_long_horizon_fedbn,
+    "maxn_long_horizon": expand_maxn_long_horizon,
     "mu_grid": expand_mu_grid,
     "local_epochs": expand_local_epochs,
     "learning_rate": expand_learning_rate,
@@ -377,6 +429,7 @@ BLOCK_ORDER = [
     "mu_grid",
     "local_epochs",
     "learning_rate",
+    "maxn_long_horizon",
     "baselines_extension",
 ]
 
@@ -387,8 +440,21 @@ def expand_all(revision_cfg: dict, block: Optional[str] = None) -> Dict[str, Lis
     for name in names:
         if name not in BLOCK_EXPANDERS:
             raise SystemExit(f"Unknown block {name!r}; choices: {', '.join(BLOCK_ORDER)}")
-        out[name] = BLOCK_EXPANDERS[name](revision_cfg[name])
+        runs = BLOCK_EXPANDERS[name](revision_cfg[name])
+        declared = revision_cfg[name].get("power_config")
+        if declared:
+            root = power_config_root(declared)
+            for run in runs:
+                run.power_config = declared
+                if run.kind == "fl" and root != "results" and run.output_dir.startswith("results/"):
+                    run.output_dir = root + "/" + run.output_dir[len("results/"):]
+        out[name] = runs
     return out
+
+
+def block_power_config(revision_cfg: dict, block: str) -> Optional[str]:
+    """The power configuration a block declares, or None."""
+    return (revision_cfg.get(block) or {}).get("power_config")
 
 
 def rebase_baselines(runs_by_block: Dict[str, List[Run]], root: str) -> None:
@@ -418,8 +484,29 @@ def rebase_power_config(runs_by_block: Dict[str, List[Run]], power_config: str) 
         return
     for runs in runs_by_block.values():
         for run in runs:
+            if run.power_config is not None:
+                continue            # the block declares its own namespace
             if run.kind == "fl" and run.output_dir.startswith("results/"):
                 run.output_dir = root + "/" + run.output_dir[len("results/"):]
+
+
+def check_declared_namespaces(revision_cfg: dict, runs_by_block: Dict[str, List[Run]]) -> None:
+    """A run moved into a power namespace must not land in a directory that belongs to a
+    block declaring that configuration: it would be skipped there as existing and carry
+    none of that block's identity gates (e.g. long_horizon_fedbn with --power_config
+    maxn writes exactly the six gated maxn_long_horizon ten-round directories)."""
+    declared_dirs = {}
+    for name, block in revision_cfg.items():
+        if isinstance(block, dict) and block.get("power_config") and name in BLOCK_EXPANDERS:
+            for run in expand_all(revision_cfg, name)[name]:
+                declared_dirs[run.output_dir] = name
+    for name, runs in runs_by_block.items():
+        for run in runs:
+            owner = declared_dirs.get(run.output_dir)
+            if owner and owner != name:
+                raise SystemExit(
+                    f"{run.output_dir} of block {name!r} belongs to block {owner!r}, which "
+                    f"declares its power configuration; run {owner!r} instead")
 
 
 # --------------------------------------------------------------------------- #
@@ -461,6 +548,8 @@ def print_text(runs_by_block: Dict[str, List[Run]], skip_existing: bool) -> int:
                 continue
             printed += 1
             print(f"\n--- {run.output_dir} ---")
+            for ref, rounds in run.identity:
+                print(f"  identity gate: rounds {','.join(map(str, rounds))} == {ref}")
             if run.kind == "fl":
                 print(f"  Node A (server, {NODE_IPS['node_a']}):")
                 print(f"    {run.server_command()}")
@@ -492,6 +581,8 @@ def print_bash(runs_by_block: Dict[str, List[Run]], skip_existing: bool,
                 continue
             printed += 1
             print(f"\necho '--- {run.output_dir} ---'")
+            for ref, rounds in run.identity:
+                print(f"echo '>>> IDENTITY GATE: {ref} rounds {','.join(map(str, rounds))}'")
             if run.kind == "fl":
                 for node, cmd in zip(("node_a", "node_b", "node_c"), run.client_commands()):
                     print(f"echo '>>> START ON {node} ({NODE_IPS[node]}):'")
@@ -527,9 +618,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                    help="write centralized / local-only runs under DIR instead of results/ "
                         "(e.g. results/rev_baselines_sel for the re-run under the selection "
                         "rule, so the earlier rev_* baselines are not overwritten)")
-    p.add_argument("--power_config", choices=POWER_CONFIGS, default=DEFAULT_POWER_CONFIG,
+    p.add_argument("--power_config", choices=POWER_CONFIGS, default=None,
                    help="Jetson power modes of the block: federated runs of any configuration "
-                        "other than '%s' go to results/pc_<name>/ (default: %s)"
+                        "other than '%s' go to results/pc_<name>/ (default: the block's "
+                        "declared configuration, else %s)"
                         % (DEFAULT_POWER_CONFIG, DEFAULT_POWER_CONFIG))
     args = p.parse_args(argv)
 
@@ -538,12 +630,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.all_seeds:
         revision_cfg = apply_all_seeds(revision_cfg)
     runs_by_block = expand_all(revision_cfg, args.block)
+    if args.power_config is not None:
+        for name in list(runs_by_block):
+            declared = block_power_config(revision_cfg, name)
+            if declared and declared != args.power_config:
+                if args.block:
+                    raise SystemExit(
+                        f"block {name!r} declares power_config {declared!r}; it cannot be "
+                        f"emitted for {args.power_config!r}")
+                print(f"# skipping block {name!r}: it declares power_config {declared!r}",
+                      file=__import__("sys").stderr)
+                del runs_by_block[name]
+    effective = (args.power_config
+                 or (block_power_config(revision_cfg, args.block) if args.block else None)
+                 or DEFAULT_POWER_CONFIG)
     if args.baseline_root:
         rebase_baselines(runs_by_block, args.baseline_root)
-    rebase_power_config(runs_by_block, args.power_config)
+    rebase_power_config(runs_by_block, effective)
+    check_declared_namespaces(revision_cfg, runs_by_block)
 
     if args.format == "bash":
-        n = print_bash(runs_by_block, args.skip_existing, args.power_config)
+        n = print_bash(runs_by_block, args.skip_existing, effective)
     else:
         n = print_text(runs_by_block, args.skip_existing)
 
