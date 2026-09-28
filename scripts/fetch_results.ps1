@@ -186,8 +186,22 @@ function Show-Alert {
     param([string]$Body)
     $msgExe = Join-Path $env:SystemRoot 'System32\msg.exe'
     if (Test-Path $msgExe) {
-        & $msgExe * /TIME:3600 ("FedRGBD testbed: " + $Body) 2>$null
-        if ($LASTEXITCODE -eq 0) { return }
+        # msg.exe rejects a message longer than ~255 characters ("Invalid parameter(s)"),
+        # and under $ErrorActionPreference = 'Stop' its stderr used to abort the whole
+        # alert scan -- no pop-up and no state saved (2026-09-28). Shorten, never throw.
+        $text = "FedRGBD testbed: " + $Body
+        $tail = ' ... (full text: logsetch.log)'
+        if ($text.Length -gt 250) { $text = $text.Substring(0, 250 - $tail.Length) + $tail }
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            & $msgExe * /TIME:3600 $text 2>$null | Out-Null
+            $msgExit = $LASTEXITCODE
+        } catch {
+            $msgExit = -1
+        } finally { $ErrorActionPreference = $prevEap }
+        if ($msgExit -eq 0) { return }
+        Write-Log 'WARN' ("msg.exe failed (exit {0}); falling back to a message box" -f $msgExit)
     }
     # msg.exe is absent on Home editions; fall back to a detached message box.
     $safe = $Body -replace "'", "''"
