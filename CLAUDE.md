@@ -70,9 +70,15 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
    revision** (say it that way — it is not a pre-registration like rule 7, and the paper states
    the difference in §"Declared Primary Metric"). For every partition and method: balanced
    accuracy leads, MCC is the second summary statistic, accuracy is reported alongside but
-   never ranks methods on its own. **Why:** under label and Dirichlet skew each node's test
-   split inherits that node's class proportions, so accuracy rewards majority-class
-   prediction — the very failure federation should fix. The original illustration --
+   never ranks methods on its own. **Why (decided 2026-09-28, general grounds):** FLAME is
+   imbalanced (62.8 % fire), the per-node class distributions of the non-IID partitions are
+   strongly skewed and each node's test split inherits them, and balanced accuracy is the
+   standard metric for imbalanced classification -- accuracy rewards majority-class
+   prediction, the very failure federation should fix. The metric is NOT switched now that
+   results exist (switching after seeing results is what the rule prevents); only the
+   rationale changed. The label-skew accuracy inversion below prompted the rule on 22 Sep
+   but is **no longer its justification** -- under the pooled aggregation it disappears.
+   The paper's rationale passage carries a `\todo` for the narrative stage. The original illustration --
    local-only beats centralized on accuracy (95.5 vs 94.3 %) and loses on balanced accuracy
    (88.6 vs 94.7 %) -- mixed two aggregations (88.6 is a client mean, 94.7 pooled): under the
    pooled aggregation below it is 95.3 vs 94.7, under the client mean 88.6 vs 93.8. The

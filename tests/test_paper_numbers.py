@@ -362,3 +362,23 @@ def test_aggregation_flip_list_header_matches_its_csv():
     # every pair appears once: reference-vs-reference pairs are not duplicated per power group
     keys = df[["subset", "distribution", "a", "b"]].astype(str).agg("|".join, axis=1)
     assert keys.is_unique
+
+
+def test_fedbn_bn_share_is_the_computed_one():
+    """FedBN transmits the full model; the BN share of a transfer comes from
+    scripts/fedbn_payload.py (analysis/fedbn_payload.json), not from the keyboard."""
+    import json
+
+    tex = open(MAIN_TEX, encoding="utf-8").read()
+    path = os.path.join(ROOT, "analysis", "fedbn_payload.json")
+    share = json.load(open(path, encoding="utf-8"))["bn_share_of_bytes"]
+    assert "never transmitted" not in tex
+    assert "$%.2f$\%% of one model transfer" % (100 * share) in tex
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        return
+    import sys
+    sys.path.insert(0, ROOT)
+    from scripts.fedbn_payload import bn_payload_share
+    assert bn_payload_share()["bn_share_of_bytes"] == pytest.approx(share, rel=0, abs=1e-12)
