@@ -215,8 +215,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     if not os.path.isfile(script):
         say('no restart: block script %s not found' % script)
         return 1
-    for src, dest in move_partial(partial_run_dirs(script), stamp):
+    moved = move_partial(partial_run_dirs(script), stamp)
+    for src, dest in moved:
         say('moved partial run %s -> %s' % (src, dest))
+    if not moved:
+        say('no partial run directory to move')
 
     session = 'fedrgbd_resume_%s' % stamp
     out = os.path.join(run_matrix.LOG_DIR, 'resume_%s.out' % stamp)
