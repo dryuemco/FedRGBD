@@ -98,6 +98,18 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
    `analysis/aggregation_flips.md`. Never report the test-size-weighted client mean that the
    FL runs log themselves (kept only as `selected_test_metrics_logged`).
 
+9. **Global evaluation is a pre-registered second perspective** (declared 2026-09-28,
+   `docs/GLOBAL_EVALUATION.md`): every model on the union of the three nodes' test splits
+   -- local-only as the mean over the three node models run on the whole union -- with a
+   seed-paired FL - local-only difference, cluster bootstrap, clean subset as robustness,
+   a fixed three-way verdict rule and Holm within each family. The personalised pooled
+   figure of rule 8 stays primary. Definition, code and rule were committed and pushed
+   before any local-only global value was aggregated or compared -- NOT "before its
+   numbers existed": the per-node cross-evaluations were logged automatically during
+   baseline training (2026-09-19/20) and the FL/centralized global values are the known
+   pooled figures; use the doc's Provenance wording. Never change them afterwards, never
+   add or drop a comparison, never paraphrase the verdict phrases. `scripts/global_evaluation.py`.
+
 ## Model selection (declared rule — use this wording, do not paraphrase it)
 
 The reported model is the one from the round (baselines: epoch) with the lowest validation

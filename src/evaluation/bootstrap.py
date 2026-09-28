@@ -248,5 +248,108 @@ def config_ci(runs: List[List[Unit]], aggregation: str, key: str, B: int = DEFAU
     return out
 
 
-__all__ = ["BOOT_METRICS", "DEFAULT_B", "Unit", "config_ci", "metrics_from_counts",
-           "paired_diff_ci", "run_replicates"]
+# ---------------------------------------------------------------------------------------
+# Several models on ONE shared held-out set (docs/GLOBAL_EVALUATION.md)
+#
+# In the global evaluation every model of a partition -- the federated global model, the
+# centralized model and each of the three local-only node models -- is evaluated on the
+# same images, the union of the three nodes' test splits.  A run may therefore consist of
+# several models (local-only: one per node) whose value is their mean, and all of them
+# must see the same resample of the shared set.  Threshold metrics only (from resampled
+# confusion counts): the ROC-AUC path of ``Unit.replicate`` holds B x N image weights,
+# which does not fit in memory at B = 10,000 on a union of several thousand images.
+# ---------------------------------------------------------------------------------------
+
+THRESHOLD_METRICS = ("accuracy", "balanced_accuracy", "precision", "recall", "specificity",
+                     "f1", "macro_f1", "mcc")
+
+
+def check_same_set(units: Sequence[Unit]) -> None:
+    """Raise unless every unit covers the same sequences with the same images per class."""
+    ref = units[0]
+    pos = ref.counts[:, 0] + ref.counts[:, 2]                  # tp + fn = class-1 images
+    for u in units[1:]:
+        if not (u.G == ref.G and np.array_equal(u.gid, ref.gid) and np.array_equal(u.n, ref.n)
+                and np.array_equal(u.counts[:, 0] + u.counts[:, 2], pos)):
+            raise ValueError("the models are not evaluated on the same held-out images")
+
+
+def _threshold_metric(unit: Unit, W: np.ndarray, metric: str) -> np.ndarray:
+    tp, fp, fn, tn = (W @ unit.counts).T
+    return metrics_from_counts(tp, fp, fn, tn)[metric]
+
+
+def _run_value(models: Sequence[Unit], W: np.ndarray, metric: str) -> np.ndarray:
+    """Value of one run under the sequence weights W: the mean over its models."""
+    return np.mean([_threshold_metric(u, W, metric) for u in models], axis=0)
+
+
+def _percentile_ci(values: np.ndarray, level: float) -> Dict[str, float]:
+    lo_q, hi_q = 100 * (1 - level) / 2, 100 * (1 + level) / 2
+    return {"ci_low": float(np.percentile(values, lo_q)),
+            "ci_high": float(np.percentile(values, hi_q))}
+
+
+def shared_set_ci(runs: List[List[Unit]], key: str, metric: str = "balanced_accuracy",
+                  B: int = DEFAULT_B, level: float = 0.95) -> Dict[str, float]:
+    """Seed x sequence bootstrap CI of a configuration whose runs are lists of models
+    evaluated on one shared set; a run's value is the mean over its models.
+
+    Each run draws its own stratified sequence resample, shared by all of that run's
+    models, then the runs are resampled with replacement -- ``config_ci`` in every other
+    respect, with which it coincides (same key, same draws) for one model per run.
+    -> {"mean", "ci_low", "ci_high", "se", "n_runs", "B"}.
+    """
+    if not runs:
+        raise ValueError("no runs")
+    check_same_set([u for run in runs for u in run])
+    rng = np.random.default_rng(BASE_SEED + zlib.crc32(key.encode("utf-8")))
+    ones = np.ones((1, runs[0][0].G))
+    point = float(np.mean([_run_value(run, ones, metric)[0] for run in runs]))
+    per_run = np.stack([_run_value(run, run[0].weights(B, rng), metric) for run in runs])
+    S = len(runs)
+    pick = rng.integers(0, S, size=(B, S))
+    col = (np.arange(B)[:, None] * S + np.arange(S)[None, :]) % B
+    rep = per_run[pick, col].mean(axis=1)
+    out = {"mean": point, "se": float(np.std(rep, ddof=1)), "n_runs": S, "B": B}
+    out.update(_percentile_ci(rep, level))
+    return out
+
+
+def seed_paired_diff_ci(runs_a: List[List[Unit]], runs_b: List[List[Unit]], key: str,
+                        metric: str = "balanced_accuracy", B: int = DEFAULT_B,
+                        level: float = 0.95) -> Dict[str, float]:
+    """CI and bootstrap p-value of the seed-paired difference mean_s [A_s - B_s].
+
+    ``runs_a[s]`` and ``runs_b[s]`` are the runs of the same seed s (lists of models, a
+    run's value being the mean over its models), all evaluated on one shared set.  One
+    replicate draws ONE stratified sequence resample of the shared set, applied to every
+    model of both sides, and ONE draw of S seed indices with replacement, applied to both
+    sides, so the pairing is kept.  The interval is the percentile interval of the B
+    replicate differences; the two-sided p-value is
+    ``min(1, 2 * min(#{D* <= 0} + 1, #{D* >= 0} + 1) / (B + 1))``.
+    -> {"diff", "ci_low", "ci_high", "p_boot", "n_pairs", "B"}.
+    """
+    if not runs_a or len(runs_a) != len(runs_b):
+        raise ValueError("need the same, non-zero number of runs on both sides (one per seed)")
+    check_same_set([u for run in list(runs_a) + list(runs_b) for u in run])
+    rng = np.random.default_rng(BASE_SEED + zlib.crc32(("seedpaired|" + key).encode("utf-8")))
+    ref = runs_a[0][0]
+    ones = np.ones((1, ref.G))
+    W = ref.weights(B, rng)
+    point = float(np.mean([_run_value(a, ones, metric)[0] - _run_value(b, ones, metric)[0]
+                           for a, b in zip(runs_a, runs_b)]))
+    d = np.stack([_run_value(a, W, metric) - _run_value(b, W, metric)
+                  for a, b in zip(runs_a, runs_b)])                       # (S, B)
+    S = len(runs_a)
+    pick = rng.integers(0, S, size=(B, S))
+    rep = d[pick, np.arange(B)[:, None]].mean(axis=1)
+    p = min(1.0, 2 * min(int((rep <= 0).sum()) + 1, int((rep >= 0).sum()) + 1) / (B + 1))
+    out = {"diff": point, "p_boot": p, "n_pairs": S, "B": B}
+    out.update(_percentile_ci(rep, level))
+    return out
+
+
+__all__ = ["BOOT_METRICS", "DEFAULT_B", "THRESHOLD_METRICS", "Unit", "check_same_set",
+           "config_ci", "metrics_from_counts", "paired_diff_ci", "run_replicates",
+           "seed_paired_diff_ci", "shared_set_ci"]
