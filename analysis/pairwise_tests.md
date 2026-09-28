@@ -93,7 +93,7 @@ Paired by seed within each partitioning protocol and data distribution. Headline
 | Centralized vs FedAvg | 3 | 0.9161 | 0.8542 | 0.0619 | 1.934 | 2.350 | 0.2500 | 0.0787 |  |
 | Centralized vs FedProx(mu=0.01) | 3 | 0.9161 | 0.8426 | 0.0735 | 5.176 | 8.051 | 0.2500 | 0.0122 |  |
 | Centralized vs Local-only | 3 | 0.9161 | 0.7926 | 0.1235 | 2.214 | 3.631 | 0.2500 | 0.0618 |  |
-| FedAvg vs FedProx(mu=0.01) | 3 | 0.8542 | 0.8426 | 0.0116 | 0.323 | 0.469 | 1.0000 | 0.6319 |  |
+| FedAvg vs FedProx(mu=0.01) | 5 | 0.8491 | 0.8407 | 0.0085 | 0.328 | 0.462 | 0.8125 | 0.5042 |  |
 | FedAvg vs Local-only | 3 | 0.8542 | 0.7926 | 0.0616 | 0.768 | 1.501 | 0.2500 | 0.3150 |  |
 | FedProx(mu=0.01) vs Local-only | 3 | 0.8426 | 0.7926 | 0.0500 | 1.109 | 1.525 | 0.2500 | 0.1948 |  |
 
@@ -104,7 +104,7 @@ Paired by seed within each partitioning protocol and data distribution. Headline
 | Centralized vs FedAvg | 3 | 0.9221 | 0.9058 | 0.0163 | 0.236 | 0.407 | 1.0000 | 0.7224 |  |
 | Centralized vs FedProx(mu=0.01) | 3 | 0.9221 | 0.8844 | 0.0377 | 0.625 | 0.928 | 0.2500 | 0.3924 |  |
 | Centralized vs Local-only | 3 | 0.9221 | 0.8061 | 0.1160 | 3.630 | 4.546 | 0.2500 | 0.0244 |  |
-| FedAvg vs FedProx(mu=0.01) | 3 | 0.9058 | 0.8844 | 0.0214 | 1.078 | 0.462 | 0.2500 | 0.2029 |  |
+| FedAvg vs FedProx(mu=0.01) | 5 | 0.8952 | 0.8942 | 0.0010 | 0.031 | 0.027 | 1.0000 | 0.9482 |  |
 | FedAvg vs Local-only | 3 | 0.9058 | 0.8061 | 0.0997 | 2.598 | 2.955 | 0.2500 | 0.0460 |  |
 | FedProx(mu=0.01) vs Local-only | 3 | 0.8844 | 0.8061 | 0.0783 | 2.244 | 2.280 | 0.2500 | 0.0603 |  |
 
@@ -240,7 +240,7 @@ Paired by seed within each partitioning protocol and data distribution. Headline
 | Centralized vs FedAvg | 3 | 0.9421 | 0.8360 | 0.1061 | 0.886 | 1.265 | 0.2500 | 0.2647 |  |
 | Centralized vs FedProx(mu=0.01) | 3 | 0.9421 | 0.8778 | 0.0643 | 1.052 | 1.461 | 0.5000 | 0.2101 |  |
 | Centralized vs Local-only | 3 | 0.9421 | 0.8527 | 0.0894 | 0.928 | 1.273 | 0.2500 | 0.2491 |  |
-| FedAvg vs FedProx(mu=0.01) | 3 | 0.8360 | 0.8778 | -0.0418 | -0.231 | -0.441 | 1.0000 | 0.7275 |  |
+| FedAvg vs FedProx(mu=0.01) | 5 | 0.8408 | 0.8763 | -0.0355 | -0.259 | -0.496 | 0.8125 | 0.5937 |  |
 | FedAvg vs Local-only | 3 | 0.8360 | 0.8527 | -0.0166 | -0.085 | -0.152 | 0.7500 | 0.8962 |  |
 | FedProx(mu=0.01) vs Local-only | 3 | 0.8778 | 0.8527 | 0.0251 | 0.310 | 0.303 | 0.7500 | 0.6454 |  |
 
@@ -251,7 +251,7 @@ Paired by seed within each partitioning protocol and data distribution. Headline
 | Centralized vs FedAvg | 3 | 0.9281 | 0.9541 | -0.0260 | -1.020 | -1.408 | 0.2500 | 0.2193 |  |
 | Centralized vs FedProx(mu=0.01) | 3 | 0.9281 | 0.9373 | -0.0091 | -0.183 | -0.366 | 0.7500 | 0.7811 |  |
 | Centralized vs Local-only | 3 | 0.9281 | 0.9448 | -0.0167 | -0.782 | -0.952 | 0.5000 | 0.3083 |  |
-| FedAvg vs FedProx(mu=0.01) | 3 | 0.9541 | 0.9373 | 0.0169 | 0.619 | 0.885 | 0.5000 | 0.3958 |  |
+| FedAvg vs FedProx(mu=0.01) | 5 | 0.9548 | 0.9441 | 0.0107 | 0.462 | 0.671 | 0.4375 | 0.3603 |  |
 | FedAvg vs Local-only | 3 | 0.9541 | 0.9448 | 0.0093 | 0.838 | 1.341 | 0.5000 | 0.2836 |  |
 | FedProx(mu=0.01) vs Local-only | 3 | 0.9373 | 0.9448 | -0.0075 | -0.262 | -0.415 | 0.7500 | 0.6943 |  |
 
@@ -360,7 +360,7 @@ Paired by seed within each partitioning protocol and data distribution. Headline
 | Centralized vs FedAvg | 3 | 0.9154 | 0.8475 | 0.0679 | 2.054 | 2.473 | 0.2500 | 0.0707 |  |
 | Centralized vs FedProx(mu=0.01) | 3 | 0.9154 | 0.8351 | 0.0803 | 5.603 | 8.597 | 0.2500 | 0.0105 |  |
 | Centralized vs Local-only | 3 | 0.9154 | 0.7868 | 0.1286 | 2.395 | 3.993 | 0.2500 | 0.0535 |  |
-| FedAvg vs FedProx(mu=0.01) | 3 | 0.8475 | 0.8351 | 0.0123 | 0.330 | 0.477 | 1.0000 | 0.6252 |  |
+| FedAvg vs FedProx(mu=0.01) | 5 | 0.8424 | 0.8331 | 0.0093 | 0.345 | 0.485 | 0.8125 | 0.4834 |  |
 | FedAvg vs Local-only | 3 | 0.8475 | 0.7868 | 0.0607 | 0.768 | 1.508 | 0.2500 | 0.3150 |  |
 | FedProx(mu=0.01) vs Local-only | 3 | 0.8351 | 0.7868 | 0.0484 | 1.137 | 1.567 | 0.2500 | 0.1878 |  |
 
@@ -371,7 +371,7 @@ Paired by seed within each partitioning protocol and data distribution. Headline
 | Centralized vs FedAvg | 3 | 0.9213 | 0.9031 | 0.0182 | 0.253 | 0.435 | 1.0000 | 0.7035 |  |
 | Centralized vs FedProx(mu=0.01) | 3 | 0.9213 | 0.8803 | 0.0409 | 0.663 | 0.965 | 0.2500 | 0.3699 |  |
 | Centralized vs Local-only | 3 | 0.9213 | 0.7980 | 0.1232 | 3.718 | 4.833 | 0.2500 | 0.0233 |  |
-| FedAvg vs FedProx(mu=0.01) | 3 | 0.9031 | 0.8803 | 0.0228 | 1.012 | 0.463 | 0.2500 | 0.2218 |  |
+| FedAvg vs FedProx(mu=0.01) | 5 | 0.8923 | 0.8901 | 0.0022 | 0.062 | 0.054 | 1.0000 | 0.8971 |  |
 | FedAvg vs Local-only | 3 | 0.9031 | 0.7980 | 0.1051 | 2.622 | 2.945 | 0.2500 | 0.0452 |  |
 | FedProx(mu=0.01) vs Local-only | 3 | 0.8803 | 0.7980 | 0.0823 | 2.210 | 2.261 | 0.2500 | 0.0620 |  |
 
@@ -507,7 +507,7 @@ Paired by seed within each partitioning protocol and data distribution. Headline
 | Centralized vs FedAvg | 3 | 0.9171 | 0.7928 | 0.1242 | 1.220 | 2.112 | 0.2500 | 0.1690 |  |
 | Centralized vs FedProx(mu=0.01) | 3 | 0.9171 | 0.8526 | 0.0644 | 3.664 | 1.985 | 0.2500 | 0.0239 |  |
 | Centralized vs Local-only | 3 | 0.9171 | 0.7091 | 0.2079 | 2.296 | 2.866 | 0.2500 | 0.0578 |  |
-| FedAvg vs FedProx(mu=0.01) | 3 | 0.7928 | 0.8526 | -0.0598 | -0.519 | -0.948 | 0.7500 | 0.4638 |  |
+| FedAvg vs FedProx(mu=0.01) | 5 | 0.8009 | 0.8489 | -0.0481 | -0.517 | -0.961 | 0.6250 | 0.3119 |  |
 | FedAvg vs Local-only | 3 | 0.7928 | 0.7091 | 0.0837 | 0.493 | 0.925 | 0.7500 | 0.4834 |  |
 | FedProx(mu=0.01) vs Local-only | 3 | 0.8526 | 0.7091 | 0.1435 | 1.511 | 1.887 | 0.2500 | 0.1202 |  |
 
@@ -518,6 +518,6 @@ Paired by seed within each partitioning protocol and data distribution. Headline
 | Centralized vs FedAvg | 3 | 0.8938 | 0.9236 | -0.0298 | -0.441 | -0.872 | 0.7500 | 0.5250 |  |
 | Centralized vs FedProx(mu=0.01) | 3 | 0.8938 | 0.8861 | 0.0078 | 0.108 | 0.215 | 1.0000 | 0.8687 |  |
 | Centralized vs Local-only | 3 | 0.8938 | 0.8815 | 0.0123 | 0.297 | 0.450 | 0.7500 | 0.6580 |  |
-| FedAvg vs FedProx(mu=0.01) | 3 | 0.9236 | 0.8861 | 0.0376 | 3.739 | 1.190 | 0.2500 | 0.0230 |  |
+| FedAvg vs FedProx(mu=0.01) | 5 | 0.9088 | 0.9003 | 0.0086 | 0.212 | 0.259 | 0.8125 | 0.6606 |  |
 | FedAvg vs Local-only | 3 | 0.9236 | 0.8815 | 0.0421 | 1.553 | 2.012 | 0.2500 | 0.1149 |  |
 | FedProx(mu=0.01) vs Local-only | 3 | 0.8861 | 0.8815 | 0.0046 | 0.150 | 0.189 | 1.0000 | 0.8197 |  |
