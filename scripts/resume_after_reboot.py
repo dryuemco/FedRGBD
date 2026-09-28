@@ -198,7 +198,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 1
     say('all three nodes answer')
 
-    check = ['python3', 'scripts/run_matrix.py', '--check_only', '--testbed', opts.testbed]
+    check = [sys.executable, 'scripts/run_matrix.py', '--check_only', '--testbed', opts.testbed]
     if opts.power_config:
         check += ['--power_config', opts.power_config]
     if opts.allow_commit_mismatch:
