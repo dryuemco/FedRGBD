@@ -128,6 +128,13 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
    42/123/456, vs long_horizon_fedbn; amendment committed before 5b launched) -- `scripts/cross_config_comparison.py`, reported whatever it shows, never a
    gate, never "equivalent". Do not change it after the first 5b run finishes.
 
+11. **The camera experiment is pre-registered** (2026-09-28, before any footage existed,
+   `docs/CAMERA_EXPERIMENT_PREREG.md`): questions (a) leave-one-scene-out cross-sensor and
+   (b) sensor-skewed federated training, scene as the unit of every split, RGB primary,
+   depth secondary, IR descriptive, fixed folds, families, verdict phrases and
+   interpretation rules. Never change it once footage exists; never train on or select
+   with a held-out scene.
+
 ## Model selection (declared rule — use this wording, do not paraphrase it)
 
 The reported model is the one from the round (baselines: epoch) with the lowest validation
