@@ -1,0 +1,860 @@
+{
+ "note": "written by tests/test_revision_commands_frozen.py; never regenerate to make the test pass -- see its docstring",
+ "outputs": {
+  "--no_skip_existing --format bash": {
+   "exit": 0,
+   "stderr_len": 27,
+   "stderr_sha256": "8e099cc26ead5bc1ff7e180cc63baa73b9fd047ad3240a4c4b13cc30bd2b63dc",
+   "stdout_len": 160962,
+   "stdout_sha256": "0fad8504378ffa8c12d32fc815344dee787c2107ddc2216e9f8f2884690b80a5"
+  },
+  "--no_skip_existing --format bash --all_seeds": {
+   "exit": 0,
+   "stderr_len": 27,
+   "stderr_sha256": "f6c7be2ea3429f4e5d1bed68edb7b7a0c340ea4a341a6efb61688f42edd2945f",
+   "stdout_len": 171353,
+   "stdout_sha256": "5440030f910ceda83b2a2cdfb5ae2b0f707b126f22f1b49bbfd9dbcda7d5c2e9"
+  },
+  "--no_skip_existing --format bash --all_seeds --baseline_root results/rev_baselines_sel": {
+   "exit": 0,
+   "stderr_len": 27,
+   "stderr_sha256": "f6c7be2ea3429f4e5d1bed68edb7b7a0c340ea4a341a6efb61688f42edd2945f",
+   "stdout_len": 174701,
+   "stdout_sha256": "56f949f434e5eefaf32fb6270f8a212a6607b226a0d533cf3124c3ed1e2179ab"
+  },
+  "--no_skip_existing --format bash --all_seeds --baseline_root results/rev_baselines_sel --block baselines_extension": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "d711cf53af7b7aafe980698a4e2a2967cf3616d719590492bcf58177ad4631c5",
+   "stdout_len": 26629,
+   "stdout_sha256": "156f067e1cc15012088c0b1ec39f764f6307cf82c294079e8a5a2b7612f47ecf"
+  },
+  "--no_skip_existing --format bash --all_seeds --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 97,
+   "stderr_sha256": "c34e5f4fcbf2c2d411c6b1c68b2740b1ea412a8c3fc99251fe04f5ef5db3df9c",
+   "stdout_len": 140892,
+   "stdout_sha256": "0b712995e1af8370cafd3ccf779ca6543f5774218626231774fe82c655d8f2b9"
+  },
+  "--no_skip_existing --format bash --all_seeds --power_config maxn": {
+   "exit": 1,
+   "stderr_len": 183,
+   "stderr_sha256": "97b101324c833bbef51c19e48bee45b0c63e07f23ae2fe3efc0e07fb3d258127",
+   "stdout_len": 0,
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "--no_skip_existing --format bash --block baselines_extension": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "79b854149bac1760c45ca7a7c01a268c2f852db99229c50a8662df360c2f31eb",
+   "stdout_len": 19157,
+   "stdout_sha256": "ec5cfdedd3a9bbfe2f0af30aef578016298512e3ed2682aad9e4940a371cad54"
+  },
+  "--no_skip_existing --format bash --block baselines_extension --all_seeds": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "d711cf53af7b7aafe980698a4e2a2967cf3616d719590492bcf58177ad4631c5",
+   "stdout_len": 23281,
+   "stdout_sha256": "ee8114900aa78a68abdefa058416087b9f49b05122a976d00290a49bcd6821f7"
+  },
+  "--no_skip_existing --format bash --block baselines_extension --all_seeds --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "d711cf53af7b7aafe980698a4e2a2967cf3616d719590492bcf58177ad4631c5",
+   "stdout_len": 23281,
+   "stdout_sha256": "ee8114900aa78a68abdefa058416087b9f49b05122a976d00290a49bcd6821f7"
+  },
+  "--no_skip_existing --format bash --block baselines_extension --all_seeds --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "d711cf53af7b7aafe980698a4e2a2967cf3616d719590492bcf58177ad4631c5",
+   "stdout_len": 23272,
+   "stdout_sha256": "1ef6edb0466df3ecaf83c355f32a25812c1dcea24d888dba4ccfeb24be2d45f2"
+  },
+  "--no_skip_existing --format bash --block baselines_extension --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "79b854149bac1760c45ca7a7c01a268c2f852db99229c50a8662df360c2f31eb",
+   "stdout_len": 19157,
+   "stdout_sha256": "ec5cfdedd3a9bbfe2f0af30aef578016298512e3ed2682aad9e4940a371cad54"
+  },
+  "--no_skip_existing --format bash --block baselines_extension --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "79b854149bac1760c45ca7a7c01a268c2f852db99229c50a8662df360c2f31eb",
+   "stdout_len": 19148,
+   "stdout_sha256": "6c0a876a678a3681ce6b9323748c0aaea99fd3d63a92375159a4d0e4a93c721e"
+  },
+  "--no_skip_existing --format bash --block dirichlet_skew": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 18547,
+   "stdout_sha256": "22e01a57b406f85650e81c188452d38710bafd651d6348f1217f24e1197cfd53"
+  },
+  "--no_skip_existing --format bash --block dirichlet_skew --all_seeds": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 18547,
+   "stdout_sha256": "22e01a57b406f85650e81c188452d38710bafd651d6348f1217f24e1197cfd53"
+  },
+  "--no_skip_existing --format bash --block dirichlet_skew --all_seeds --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 18547,
+   "stdout_sha256": "22e01a57b406f85650e81c188452d38710bafd651d6348f1217f24e1197cfd53"
+  },
+  "--no_skip_existing --format bash --block dirichlet_skew --all_seeds --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 18970,
+   "stdout_sha256": "465d1f31e393fd4fed218ec5fa05c116c185361a003172e69095aacee0cd254f"
+  },
+  "--no_skip_existing --format bash --block dirichlet_skew --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 18547,
+   "stdout_sha256": "22e01a57b406f85650e81c188452d38710bafd651d6348f1217f24e1197cfd53"
+  },
+  "--no_skip_existing --format bash --block dirichlet_skew --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 18970,
+   "stdout_sha256": "465d1f31e393fd4fed218ec5fa05c116c185361a003172e69095aacee0cd254f"
+  },
+  "--no_skip_existing --format bash --block learning_rate": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "3d0387eb1e2c09577983d0b5d02348138589b5eac7f40d1817aadde0be56cbc6",
+   "stdout_len": 12374,
+   "stdout_sha256": "5ca75a94c14e323e6d227705106916d2b692d4699cf0e57dc7a852cc389d8360"
+  },
+  "--no_skip_existing --format bash --block learning_rate --all_seeds": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "3d0387eb1e2c09577983d0b5d02348138589b5eac7f40d1817aadde0be56cbc6",
+   "stdout_len": 12374,
+   "stdout_sha256": "5ca75a94c14e323e6d227705106916d2b692d4699cf0e57dc7a852cc389d8360"
+  },
+  "--no_skip_existing --format bash --block learning_rate --all_seeds --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "3d0387eb1e2c09577983d0b5d02348138589b5eac7f40d1817aadde0be56cbc6",
+   "stdout_len": 12374,
+   "stdout_sha256": "5ca75a94c14e323e6d227705106916d2b692d4699cf0e57dc7a852cc389d8360"
+  },
+  "--no_skip_existing --format bash --block learning_rate --all_seeds --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "3d0387eb1e2c09577983d0b5d02348138589b5eac7f40d1817aadde0be56cbc6",
+   "stdout_len": 12653,
+   "stdout_sha256": "4aa38c660e3d4d607d0a90554f105b304189a6b5b9c61d51370193308b9c5a8c"
+  },
+  "--no_skip_existing --format bash --block learning_rate --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "3d0387eb1e2c09577983d0b5d02348138589b5eac7f40d1817aadde0be56cbc6",
+   "stdout_len": 12374,
+   "stdout_sha256": "5ca75a94c14e323e6d227705106916d2b692d4699cf0e57dc7a852cc389d8360"
+  },
+  "--no_skip_existing --format bash --block learning_rate --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "3d0387eb1e2c09577983d0b5d02348138589b5eac7f40d1817aadde0be56cbc6",
+   "stdout_len": 12653,
+   "stdout_sha256": "4aa38c660e3d4d607d0a90554f105b304189a6b5b9c61d51370193308b9c5a8c"
+  },
+  "--no_skip_existing --format bash --block local_epochs": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 18341,
+   "stdout_sha256": "890ac6bec1d85c79206cfa2eae2fde85969161b2ae13ebc637a0a159b72779d5"
+  },
+  "--no_skip_existing --format bash --block local_epochs --all_seeds": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 18341,
+   "stdout_sha256": "890ac6bec1d85c79206cfa2eae2fde85969161b2ae13ebc637a0a159b72779d5"
+  },
+  "--no_skip_existing --format bash --block local_epochs --all_seeds --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 18341,
+   "stdout_sha256": "890ac6bec1d85c79206cfa2eae2fde85969161b2ae13ebc637a0a159b72779d5"
+  },
+  "--no_skip_existing --format bash --block local_epochs --all_seeds --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 18764,
+   "stdout_sha256": "ed0cbf2c545621cb3895a15f5bc5f080f8563e26472024170a6258a84f904290"
+  },
+  "--no_skip_existing --format bash --block local_epochs --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 18341,
+   "stdout_sha256": "890ac6bec1d85c79206cfa2eae2fde85969161b2ae13ebc637a0a159b72779d5"
+  },
+  "--no_skip_existing --format bash --block local_epochs --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 18764,
+   "stdout_sha256": "ed0cbf2c545621cb3895a15f5bc5f080f8563e26472024170a6258a84f904290"
+  },
+  "--no_skip_existing --format bash --block long_horizon_fedbn": {
+   "exit": 0,
+   "stderr_len": 23,
+   "stderr_sha256": "b241cc7af6010479079675bc1723ccb7923184613efc11405d71ff0529ddea86",
+   "stdout_len": 6188,
+   "stdout_sha256": "c022c39361fc13dcc8b14268a7f8dfab8b92931fbf2715f4e797fcd2a8c1fcd5"
+  },
+  "--no_skip_existing --format bash --block long_horizon_fedbn --all_seeds": {
+   "exit": 0,
+   "stderr_len": 23,
+   "stderr_sha256": "b241cc7af6010479079675bc1723ccb7923184613efc11405d71ff0529ddea86",
+   "stdout_len": 6188,
+   "stdout_sha256": "c022c39361fc13dcc8b14268a7f8dfab8b92931fbf2715f4e797fcd2a8c1fcd5"
+  },
+  "--no_skip_existing --format bash --block long_horizon_fedbn --all_seeds --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 23,
+   "stderr_sha256": "b241cc7af6010479079675bc1723ccb7923184613efc11405d71ff0529ddea86",
+   "stdout_len": 6188,
+   "stdout_sha256": "c022c39361fc13dcc8b14268a7f8dfab8b92931fbf2715f4e797fcd2a8c1fcd5"
+  },
+  "--no_skip_existing --format bash --block long_horizon_fedbn --all_seeds --power_config maxn": {
+   "exit": 1,
+   "stderr_len": 183,
+   "stderr_sha256": "97b101324c833bbef51c19e48bee45b0c63e07f23ae2fe3efc0e07fb3d258127",
+   "stdout_len": 0,
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "--no_skip_existing --format bash --block long_horizon_fedbn --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 23,
+   "stderr_sha256": "b241cc7af6010479079675bc1723ccb7923184613efc11405d71ff0529ddea86",
+   "stdout_len": 6188,
+   "stdout_sha256": "c022c39361fc13dcc8b14268a7f8dfab8b92931fbf2715f4e797fcd2a8c1fcd5"
+  },
+  "--no_skip_existing --format bash --block long_horizon_fedbn --power_config maxn": {
+   "exit": 1,
+   "stderr_len": 183,
+   "stderr_sha256": "97b101324c833bbef51c19e48bee45b0c63e07f23ae2fe3efc0e07fb3d258127",
+   "stdout_len": 0,
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "--no_skip_existing --format bash --block low_data": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "4d1700451e1e103834d346a5edaf5b4e61d99eb9568ad0b27d68506830cb1661",
+   "stdout_len": 41701,
+   "stdout_sha256": "e2850cf1d36c48bfcbec4564bf7a835134246c7f3c9b91211e38aa88bd9eab2c"
+  },
+  "--no_skip_existing --format bash --block low_data --all_seeds": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "4d1700451e1e103834d346a5edaf5b4e61d99eb9568ad0b27d68506830cb1661",
+   "stdout_len": 41701,
+   "stdout_sha256": "e2850cf1d36c48bfcbec4564bf7a835134246c7f3c9b91211e38aa88bd9eab2c"
+  },
+  "--no_skip_existing --format bash --block low_data --all_seeds --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "4d1700451e1e103834d346a5edaf5b4e61d99eb9568ad0b27d68506830cb1661",
+   "stdout_len": 41701,
+   "stdout_sha256": "e2850cf1d36c48bfcbec4564bf7a835134246c7f3c9b91211e38aa88bd9eab2c"
+  },
+  "--no_skip_existing --format bash --block low_data --all_seeds --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "4d1700451e1e103834d346a5edaf5b4e61d99eb9568ad0b27d68506830cb1661",
+   "stdout_len": 42652,
+   "stdout_sha256": "cc39dad093a4f4cf4c3e85c144387be7e0d5ba87d7552dcbf43487e8b664c519"
+  },
+  "--no_skip_existing --format bash --block low_data --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "4d1700451e1e103834d346a5edaf5b4e61d99eb9568ad0b27d68506830cb1661",
+   "stdout_len": 41701,
+   "stdout_sha256": "e2850cf1d36c48bfcbec4564bf7a835134246c7f3c9b91211e38aa88bd9eab2c"
+  },
+  "--no_skip_existing --format bash --block low_data --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "4d1700451e1e103834d346a5edaf5b4e61d99eb9568ad0b27d68506830cb1661",
+   "stdout_len": 42652,
+   "stdout_sha256": "cc39dad093a4f4cf4c3e85c144387be7e0d5ba87d7552dcbf43487e8b664c519"
+  },
+  "--no_skip_existing --format bash --block maxn_long_horizon": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "6f5c335fbfb321267e28656bc13dc9f27792937bd9a79db99a10ec25692984aa",
+   "stdout_len": 30591,
+   "stdout_sha256": "c8f0f0fc8ae86a5b333b10bccdbe6f1f5c8dcef30b150bcb523a7e95465fdbc3"
+  },
+  "--no_skip_existing --format bash --block maxn_long_horizon --all_seeds": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "6f5c335fbfb321267e28656bc13dc9f27792937bd9a79db99a10ec25692984aa",
+   "stdout_len": 30591,
+   "stdout_sha256": "c8f0f0fc8ae86a5b333b10bccdbe6f1f5c8dcef30b150bcb523a7e95465fdbc3"
+  },
+  "--no_skip_existing --format bash --block maxn_long_horizon --all_seeds --power_config heterogeneous": {
+   "exit": 1,
+   "stderr_len": 96,
+   "stderr_sha256": "3b96caea7b1a4c6ce7aaeadbe73b85f5f4ce729f588a4fe12f4a47a6f9dd101b",
+   "stdout_len": 0,
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "--no_skip_existing --format bash --block maxn_long_horizon --all_seeds --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "6f5c335fbfb321267e28656bc13dc9f27792937bd9a79db99a10ec25692984aa",
+   "stdout_len": 30591,
+   "stdout_sha256": "c8f0f0fc8ae86a5b333b10bccdbe6f1f5c8dcef30b150bcb523a7e95465fdbc3"
+  },
+  "--no_skip_existing --format bash --block maxn_long_horizon --power_config heterogeneous": {
+   "exit": 1,
+   "stderr_len": 96,
+   "stderr_sha256": "3b96caea7b1a4c6ce7aaeadbe73b85f5f4ce729f588a4fe12f4a47a6f9dd101b",
+   "stdout_len": 0,
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "--no_skip_existing --format bash --block maxn_long_horizon --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "6f5c335fbfb321267e28656bc13dc9f27792937bd9a79db99a10ec25692984aa",
+   "stdout_len": 30591,
+   "stdout_sha256": "c8f0f0fc8ae86a5b333b10bccdbe6f1f5c8dcef30b150bcb523a7e95465fdbc3"
+  },
+  "--no_skip_existing --format bash --block mu_grid": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "7c6676b705a8119019b2b0741dfe5b14aae00ea75f72cf21d340be086aa55af0",
+   "stdout_len": 15358,
+   "stdout_sha256": "974c43103ffc1e6ce0dbe6a065cb0b6da559bfd79c01f32fe34d130132d5e7fb"
+  },
+  "--no_skip_existing --format bash --block mu_grid --all_seeds": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "7c6676b705a8119019b2b0741dfe5b14aae00ea75f72cf21d340be086aa55af0",
+   "stdout_len": 15358,
+   "stdout_sha256": "974c43103ffc1e6ce0dbe6a065cb0b6da559bfd79c01f32fe34d130132d5e7fb"
+  },
+  "--no_skip_existing --format bash --block mu_grid --all_seeds --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "7c6676b705a8119019b2b0741dfe5b14aae00ea75f72cf21d340be086aa55af0",
+   "stdout_len": 15358,
+   "stdout_sha256": "974c43103ffc1e6ce0dbe6a065cb0b6da559bfd79c01f32fe34d130132d5e7fb"
+  },
+  "--no_skip_existing --format bash --block mu_grid --all_seeds --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "7c6676b705a8119019b2b0741dfe5b14aae00ea75f72cf21d340be086aa55af0",
+   "stdout_len": 15709,
+   "stdout_sha256": "546c598187490bb9f38d118e8c6efedee9efffd88ab165d876a369791c65fe04"
+  },
+  "--no_skip_existing --format bash --block mu_grid --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "7c6676b705a8119019b2b0741dfe5b14aae00ea75f72cf21d340be086aa55af0",
+   "stdout_len": 15358,
+   "stdout_sha256": "974c43103ffc1e6ce0dbe6a065cb0b6da559bfd79c01f32fe34d130132d5e7fb"
+  },
+  "--no_skip_existing --format bash --block mu_grid --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "7c6676b705a8119019b2b0741dfe5b14aae00ea75f72cf21d340be086aa55af0",
+   "stdout_len": 15709,
+   "stdout_sha256": "546c598187490bb9f38d118e8c6efedee9efffd88ab165d876a369791c65fe04"
+  },
+  "--no_skip_existing --format bash --block seed_extension": {
+   "exit": 0,
+   "stderr_len": 23,
+   "stderr_sha256": "ba95eb53749abb4a4a00ac884c4c0e0e9c1db89e64b959c7d0f4acb917327ae0",
+   "stdout_len": 8070,
+   "stdout_sha256": "44dfbc7c2cf300926b12b99e5a0d0f8de57e98b4244e7d54a44e8a39c0094bf4"
+  },
+  "--no_skip_existing --format bash --block seed_extension --all_seeds": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "a3bc817352ce581e0f3ceb3ff22e43446826c02986e7d6b33234089643bcaab4",
+   "stdout_len": 19827,
+   "stdout_sha256": "22590915dcf93598a86df170f9bb002764cedbe01fc7ab99d8acfbd1490e9908"
+  },
+  "--no_skip_existing --format bash --block seed_extension --all_seeds --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "a3bc817352ce581e0f3ceb3ff22e43446826c02986e7d6b33234089643bcaab4",
+   "stdout_len": 19827,
+   "stdout_sha256": "22590915dcf93598a86df170f9bb002764cedbe01fc7ab99d8acfbd1490e9908"
+  },
+  "--no_skip_existing --format bash --block seed_extension --all_seeds --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "a3bc817352ce581e0f3ceb3ff22e43446826c02986e7d6b33234089643bcaab4",
+   "stdout_len": 20298,
+   "stdout_sha256": "2bfa2f4feb43fc429a28a52730800ceeebc45af8dc8686a8fcef394a28849d39"
+  },
+  "--no_skip_existing --format bash --block seed_extension --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 23,
+   "stderr_sha256": "ba95eb53749abb4a4a00ac884c4c0e0e9c1db89e64b959c7d0f4acb917327ae0",
+   "stdout_len": 8070,
+   "stdout_sha256": "44dfbc7c2cf300926b12b99e5a0d0f8de57e98b4244e7d54a44e8a39c0094bf4"
+  },
+  "--no_skip_existing --format bash --block seed_extension --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 23,
+   "stderr_sha256": "ba95eb53749abb4a4a00ac884c4c0e0e9c1db89e64b959c7d0f4acb917327ae0",
+   "stdout_len": 8253,
+   "stdout_sha256": "7dde30e65e6e545e6765888963a22e9a5f37e528ae802580d84c1092948b774f"
+  },
+  "--no_skip_existing --format bash --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 97,
+   "stderr_sha256": "e646442f02f85b60ccab121c148f928e189f7c4ae112067468eff3da24efcf23",
+   "stdout_len": 130501,
+   "stdout_sha256": "a2166ac25ed79178f0efa8fcf58dedae9f45c8ec134b750ccb086ad15203fcad"
+  },
+  "--no_skip_existing --format bash --power_config maxn": {
+   "exit": 1,
+   "stderr_len": 183,
+   "stderr_sha256": "97b101324c833bbef51c19e48bee45b0c63e07f23ae2fe3efc0e07fb3d258127",
+   "stdout_len": 0,
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "--no_skip_existing --format text": {
+   "exit": 0,
+   "stderr_len": 27,
+   "stderr_sha256": "8e099cc26ead5bc1ff7e180cc63baa73b9fd047ad3240a4c4b13cc30bd2b63dc",
+   "stdout_len": 126715,
+   "stdout_sha256": "d359ba3add00f4b0704d1b24b58dab621096dc4c4eff47e5f4fe1d3438c209f1"
+  },
+  "--no_skip_existing --format text --all_seeds": {
+   "exit": 0,
+   "stderr_len": 27,
+   "stderr_sha256": "f6c7be2ea3429f4e5d1bed68edb7b7a0c340ea4a341a6efb61688f42edd2945f",
+   "stdout_len": 135156,
+   "stdout_sha256": "774a79d8b4c220933be45daafb28bce187ac599bbdf7219124c3e296f561840c"
+  },
+  "--no_skip_existing --format text --all_seeds --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 97,
+   "stderr_sha256": "c34e5f4fcbf2c2d411c6b1c68b2740b1ea412a8c3fc99251fe04f5ef5db3df9c",
+   "stdout_len": 111712,
+   "stdout_sha256": "cb823e98863f6ff79c353c3e6867c7229a902950dbc1ef0661626ca6fc8db680"
+  },
+  "--no_skip_existing --format text --all_seeds --power_config maxn": {
+   "exit": 1,
+   "stderr_len": 183,
+   "stderr_sha256": "97b101324c833bbef51c19e48bee45b0c63e07f23ae2fe3efc0e07fb3d258127",
+   "stdout_len": 0,
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "--no_skip_existing --format text --block baselines_extension": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "79b854149bac1760c45ca7a7c01a268c2f852db99229c50a8662df360c2f31eb",
+   "stdout_len": 16166,
+   "stdout_sha256": "02b3a11ea342c4652445a1c78a6e079772d9a890285a4f065c38e0842db0fc93"
+  },
+  "--no_skip_existing --format text --block baselines_extension --all_seeds": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "d711cf53af7b7aafe980698a4e2a2967cf3616d719590492bcf58177ad4631c5",
+   "stdout_len": 19652,
+   "stdout_sha256": "9bd4b3d8a83f0efb66e6f459215adb62fd13eacaae23a9f2aa23a3b93d8aa81e"
+  },
+  "--no_skip_existing --format text --block baselines_extension --all_seeds --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "d711cf53af7b7aafe980698a4e2a2967cf3616d719590492bcf58177ad4631c5",
+   "stdout_len": 19652,
+   "stdout_sha256": "9bd4b3d8a83f0efb66e6f459215adb62fd13eacaae23a9f2aa23a3b93d8aa81e"
+  },
+  "--no_skip_existing --format text --block baselines_extension --all_seeds --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "d711cf53af7b7aafe980698a4e2a2967cf3616d719590492bcf58177ad4631c5",
+   "stdout_len": 19652,
+   "stdout_sha256": "9bd4b3d8a83f0efb66e6f459215adb62fd13eacaae23a9f2aa23a3b93d8aa81e"
+  },
+  "--no_skip_existing --format text --block baselines_extension --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "79b854149bac1760c45ca7a7c01a268c2f852db99229c50a8662df360c2f31eb",
+   "stdout_len": 16166,
+   "stdout_sha256": "02b3a11ea342c4652445a1c78a6e079772d9a890285a4f065c38e0842db0fc93"
+  },
+  "--no_skip_existing --format text --block baselines_extension --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "79b854149bac1760c45ca7a7c01a268c2f852db99229c50a8662df360c2f31eb",
+   "stdout_len": 16166,
+   "stdout_sha256": "02b3a11ea342c4652445a1c78a6e079772d9a890285a4f065c38e0842db0fc93"
+  },
+  "--no_skip_existing --format text --block dirichlet_skew": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 14324,
+   "stdout_sha256": "236ba0a88d6f38d3de7e2237bcae0ff08deefaafc5a06ec02668b8fc5f8edc1b"
+  },
+  "--no_skip_existing --format text --block dirichlet_skew --all_seeds": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 14324,
+   "stdout_sha256": "236ba0a88d6f38d3de7e2237bcae0ff08deefaafc5a06ec02668b8fc5f8edc1b"
+  },
+  "--no_skip_existing --format text --block dirichlet_skew --all_seeds --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 14324,
+   "stdout_sha256": "236ba0a88d6f38d3de7e2237bcae0ff08deefaafc5a06ec02668b8fc5f8edc1b"
+  },
+  "--no_skip_existing --format text --block dirichlet_skew --all_seeds --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 14612,
+   "stdout_sha256": "23445176ea8cfa593578f248c5d70ad07d94284f37525c19793cce74676e30e6"
+  },
+  "--no_skip_existing --format text --block dirichlet_skew --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 14324,
+   "stdout_sha256": "236ba0a88d6f38d3de7e2237bcae0ff08deefaafc5a06ec02668b8fc5f8edc1b"
+  },
+  "--no_skip_existing --format text --block dirichlet_skew --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 14612,
+   "stdout_sha256": "23445176ea8cfa593578f248c5d70ad07d94284f37525c19793cce74676e30e6"
+  },
+  "--no_skip_existing --format text --block learning_rate": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "3d0387eb1e2c09577983d0b5d02348138589b5eac7f40d1817aadde0be56cbc6",
+   "stdout_len": 9565,
+   "stdout_sha256": "792d3c2eedfc77211f92655bf2601840c92578207c3c2354284d83701f600aa7"
+  },
+  "--no_skip_existing --format text --block learning_rate --all_seeds": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "3d0387eb1e2c09577983d0b5d02348138589b5eac7f40d1817aadde0be56cbc6",
+   "stdout_len": 9565,
+   "stdout_sha256": "792d3c2eedfc77211f92655bf2601840c92578207c3c2354284d83701f600aa7"
+  },
+  "--no_skip_existing --format text --block learning_rate --all_seeds --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "3d0387eb1e2c09577983d0b5d02348138589b5eac7f40d1817aadde0be56cbc6",
+   "stdout_len": 9565,
+   "stdout_sha256": "792d3c2eedfc77211f92655bf2601840c92578207c3c2354284d83701f600aa7"
+  },
+  "--no_skip_existing --format text --block learning_rate --all_seeds --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "3d0387eb1e2c09577983d0b5d02348138589b5eac7f40d1817aadde0be56cbc6",
+   "stdout_len": 9757,
+   "stdout_sha256": "cb8f2c7f9567f836fb514c80ad910a2014b5dfe90e595aeccbd598a67ec9c0e2"
+  },
+  "--no_skip_existing --format text --block learning_rate --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "3d0387eb1e2c09577983d0b5d02348138589b5eac7f40d1817aadde0be56cbc6",
+   "stdout_len": 9565,
+   "stdout_sha256": "792d3c2eedfc77211f92655bf2601840c92578207c3c2354284d83701f600aa7"
+  },
+  "--no_skip_existing --format text --block learning_rate --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "3d0387eb1e2c09577983d0b5d02348138589b5eac7f40d1817aadde0be56cbc6",
+   "stdout_len": 9757,
+   "stdout_sha256": "cb8f2c7f9567f836fb514c80ad910a2014b5dfe90e595aeccbd598a67ec9c0e2"
+  },
+  "--no_skip_existing --format text --block local_epochs": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 14166,
+   "stdout_sha256": "f440b9c5deeb6b14836a9eb9f9506482a116ae9e45219d9926ae59f37bbf50dc"
+  },
+  "--no_skip_existing --format text --block local_epochs --all_seeds": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 14166,
+   "stdout_sha256": "f440b9c5deeb6b14836a9eb9f9506482a116ae9e45219d9926ae59f37bbf50dc"
+  },
+  "--no_skip_existing --format text --block local_epochs --all_seeds --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 14166,
+   "stdout_sha256": "f440b9c5deeb6b14836a9eb9f9506482a116ae9e45219d9926ae59f37bbf50dc"
+  },
+  "--no_skip_existing --format text --block local_epochs --all_seeds --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 14454,
+   "stdout_sha256": "776ce5786ef8e30ace514cc1cf4dab393011f34ab4ccc5b10437d25b200995e8"
+  },
+  "--no_skip_existing --format text --block local_epochs --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 14166,
+   "stdout_sha256": "f440b9c5deeb6b14836a9eb9f9506482a116ae9e45219d9926ae59f37bbf50dc"
+  },
+  "--no_skip_existing --format text --block local_epochs --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "ac1e6ad6f7f0d74e17e4fcb7471ef17c562be8b0225980566dd322f7902063c5",
+   "stdout_len": 14454,
+   "stdout_sha256": "776ce5786ef8e30ace514cc1cf4dab393011f34ab4ccc5b10437d25b200995e8"
+  },
+  "--no_skip_existing --format text --block long_horizon_fedbn": {
+   "exit": 0,
+   "stderr_len": 23,
+   "stderr_sha256": "b241cc7af6010479079675bc1723ccb7923184613efc11405d71ff0529ddea86",
+   "stdout_len": 4802,
+   "stdout_sha256": "8dff3ba3f5defc3300b0964480bac3b4e92d50f9af419109048486d16fa4661f"
+  },
+  "--no_skip_existing --format text --block long_horizon_fedbn --all_seeds": {
+   "exit": 0,
+   "stderr_len": 23,
+   "stderr_sha256": "b241cc7af6010479079675bc1723ccb7923184613efc11405d71ff0529ddea86",
+   "stdout_len": 4802,
+   "stdout_sha256": "8dff3ba3f5defc3300b0964480bac3b4e92d50f9af419109048486d16fa4661f"
+  },
+  "--no_skip_existing --format text --block long_horizon_fedbn --all_seeds --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 23,
+   "stderr_sha256": "b241cc7af6010479079675bc1723ccb7923184613efc11405d71ff0529ddea86",
+   "stdout_len": 4802,
+   "stdout_sha256": "8dff3ba3f5defc3300b0964480bac3b4e92d50f9af419109048486d16fa4661f"
+  },
+  "--no_skip_existing --format text --block long_horizon_fedbn --all_seeds --power_config maxn": {
+   "exit": 1,
+   "stderr_len": 183,
+   "stderr_sha256": "97b101324c833bbef51c19e48bee45b0c63e07f23ae2fe3efc0e07fb3d258127",
+   "stdout_len": 0,
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "--no_skip_existing --format text --block long_horizon_fedbn --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 23,
+   "stderr_sha256": "b241cc7af6010479079675bc1723ccb7923184613efc11405d71ff0529ddea86",
+   "stdout_len": 4802,
+   "stdout_sha256": "8dff3ba3f5defc3300b0964480bac3b4e92d50f9af419109048486d16fa4661f"
+  },
+  "--no_skip_existing --format text --block long_horizon_fedbn --power_config maxn": {
+   "exit": 1,
+   "stderr_len": 183,
+   "stderr_sha256": "97b101324c833bbef51c19e48bee45b0c63e07f23ae2fe3efc0e07fb3d258127",
+   "stdout_len": 0,
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "--no_skip_existing --format text --block low_data": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "4d1700451e1e103834d346a5edaf5b4e61d99eb9568ad0b27d68506830cb1661",
+   "stdout_len": 32270,
+   "stdout_sha256": "3bb88021ef2304c4466a568cb8bfb2315dea4d3d01533b8dff2cd0d953c043b2"
+  },
+  "--no_skip_existing --format text --block low_data --all_seeds": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "4d1700451e1e103834d346a5edaf5b4e61d99eb9568ad0b27d68506830cb1661",
+   "stdout_len": 32270,
+   "stdout_sha256": "3bb88021ef2304c4466a568cb8bfb2315dea4d3d01533b8dff2cd0d953c043b2"
+  },
+  "--no_skip_existing --format text --block low_data --all_seeds --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "4d1700451e1e103834d346a5edaf5b4e61d99eb9568ad0b27d68506830cb1661",
+   "stdout_len": 32270,
+   "stdout_sha256": "3bb88021ef2304c4466a568cb8bfb2315dea4d3d01533b8dff2cd0d953c043b2"
+  },
+  "--no_skip_existing --format text --block low_data --all_seeds --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "4d1700451e1e103834d346a5edaf5b4e61d99eb9568ad0b27d68506830cb1661",
+   "stdout_len": 32910,
+   "stdout_sha256": "3712097b4c1d8b9a89bb1c4f04a4f64057ce04b13111a77f3eb385bca4aa6ef6"
+  },
+  "--no_skip_existing --format text --block low_data --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "4d1700451e1e103834d346a5edaf5b4e61d99eb9568ad0b27d68506830cb1661",
+   "stdout_len": 32270,
+   "stdout_sha256": "3bb88021ef2304c4466a568cb8bfb2315dea4d3d01533b8dff2cd0d953c043b2"
+  },
+  "--no_skip_existing --format text --block low_data --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "4d1700451e1e103834d346a5edaf5b4e61d99eb9568ad0b27d68506830cb1661",
+   "stdout_len": 32910,
+   "stdout_sha256": "3712097b4c1d8b9a89bb1c4f04a4f64057ce04b13111a77f3eb385bca4aa6ef6"
+  },
+  "--no_skip_existing --format text --block maxn_long_horizon": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "6f5c335fbfb321267e28656bc13dc9f27792937bd9a79db99a10ec25692984aa",
+   "stdout_len": 23444,
+   "stdout_sha256": "8906f7055731aa87e39911aa1d9161d025ec34a42e044664c5019b8ce119615e"
+  },
+  "--no_skip_existing --format text --block maxn_long_horizon --all_seeds": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "6f5c335fbfb321267e28656bc13dc9f27792937bd9a79db99a10ec25692984aa",
+   "stdout_len": 23444,
+   "stdout_sha256": "8906f7055731aa87e39911aa1d9161d025ec34a42e044664c5019b8ce119615e"
+  },
+  "--no_skip_existing --format text --block maxn_long_horizon --all_seeds --power_config heterogeneous": {
+   "exit": 1,
+   "stderr_len": 96,
+   "stderr_sha256": "3b96caea7b1a4c6ce7aaeadbe73b85f5f4ce729f588a4fe12f4a47a6f9dd101b",
+   "stdout_len": 0,
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "--no_skip_existing --format text --block maxn_long_horizon --all_seeds --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "6f5c335fbfb321267e28656bc13dc9f27792937bd9a79db99a10ec25692984aa",
+   "stdout_len": 23444,
+   "stdout_sha256": "8906f7055731aa87e39911aa1d9161d025ec34a42e044664c5019b8ce119615e"
+  },
+  "--no_skip_existing --format text --block maxn_long_horizon --power_config heterogeneous": {
+   "exit": 1,
+   "stderr_len": 96,
+   "stderr_sha256": "3b96caea7b1a4c6ce7aaeadbe73b85f5f4ce729f588a4fe12f4a47a6f9dd101b",
+   "stdout_len": 0,
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "--no_skip_existing --format text --block maxn_long_horizon --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "6f5c335fbfb321267e28656bc13dc9f27792937bd9a79db99a10ec25692984aa",
+   "stdout_len": 23444,
+   "stdout_sha256": "8906f7055731aa87e39911aa1d9161d025ec34a42e044664c5019b8ce119615e"
+  },
+  "--no_skip_existing --format text --block mu_grid": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "7c6676b705a8119019b2b0741dfe5b14aae00ea75f72cf21d340be086aa55af0",
+   "stdout_len": 11875,
+   "stdout_sha256": "a2f256600e8a8143a47427986beaf45809cdfce67d11d264b506a9821bdc17c9"
+  },
+  "--no_skip_existing --format text --block mu_grid --all_seeds": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "7c6676b705a8119019b2b0741dfe5b14aae00ea75f72cf21d340be086aa55af0",
+   "stdout_len": 11875,
+   "stdout_sha256": "a2f256600e8a8143a47427986beaf45809cdfce67d11d264b506a9821bdc17c9"
+  },
+  "--no_skip_existing --format text --block mu_grid --all_seeds --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "7c6676b705a8119019b2b0741dfe5b14aae00ea75f72cf21d340be086aa55af0",
+   "stdout_len": 11875,
+   "stdout_sha256": "a2f256600e8a8143a47427986beaf45809cdfce67d11d264b506a9821bdc17c9"
+  },
+  "--no_skip_existing --format text --block mu_grid --all_seeds --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "7c6676b705a8119019b2b0741dfe5b14aae00ea75f72cf21d340be086aa55af0",
+   "stdout_len": 12115,
+   "stdout_sha256": "ab3d47087c3f637e29673335b377c5811f6e62b43c6fc26207244d38a9765d1c"
+  },
+  "--no_skip_existing --format text --block mu_grid --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "7c6676b705a8119019b2b0741dfe5b14aae00ea75f72cf21d340be086aa55af0",
+   "stdout_len": 11875,
+   "stdout_sha256": "a2f256600e8a8143a47427986beaf45809cdfce67d11d264b506a9821bdc17c9"
+  },
+  "--no_skip_existing --format text --block mu_grid --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "7c6676b705a8119019b2b0741dfe5b14aae00ea75f72cf21d340be086aa55af0",
+   "stdout_len": 12115,
+   "stdout_sha256": "ab3d47087c3f637e29673335b377c5811f6e62b43c6fc26207244d38a9765d1c"
+  },
+  "--no_skip_existing --format text --block seed_extension": {
+   "exit": 0,
+   "stderr_len": 23,
+   "stderr_sha256": "ba95eb53749abb4a4a00ac884c4c0e0e9c1db89e64b959c7d0f4acb917327ae0",
+   "stdout_len": 6235,
+   "stdout_sha256": "1e483d399581f2752f242f9664c0c6a51467afcc56f1be77a8f1aec4449a5b9f"
+  },
+  "--no_skip_existing --format text --block seed_extension --all_seeds": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "a3bc817352ce581e0f3ceb3ff22e43446826c02986e7d6b33234089643bcaab4",
+   "stdout_len": 15266,
+   "stdout_sha256": "9e196cdab9e7d66a8cacc398be117f1c9c4925322918096e3a747e4d4e01a3c3"
+  },
+  "--no_skip_existing --format text --block seed_extension --all_seeds --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "a3bc817352ce581e0f3ceb3ff22e43446826c02986e7d6b33234089643bcaab4",
+   "stdout_len": 15266,
+   "stdout_sha256": "9e196cdab9e7d66a8cacc398be117f1c9c4925322918096e3a747e4d4e01a3c3"
+  },
+  "--no_skip_existing --format text --block seed_extension --all_seeds --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 25,
+   "stderr_sha256": "a3bc817352ce581e0f3ceb3ff22e43446826c02986e7d6b33234089643bcaab4",
+   "stdout_len": 15586,
+   "stdout_sha256": "4b962cee3185a3db3b745fc66a4dc1ea029b0c9eaad35b85edcae32d9f246dc5"
+  },
+  "--no_skip_existing --format text --block seed_extension --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 23,
+   "stderr_sha256": "ba95eb53749abb4a4a00ac884c4c0e0e9c1db89e64b959c7d0f4acb917327ae0",
+   "stdout_len": 6235,
+   "stdout_sha256": "1e483d399581f2752f242f9664c0c6a51467afcc56f1be77a8f1aec4449a5b9f"
+  },
+  "--no_skip_existing --format text --block seed_extension --power_config maxn": {
+   "exit": 0,
+   "stderr_len": 23,
+   "stderr_sha256": "ba95eb53749abb4a4a00ac884c4c0e0e9c1db89e64b959c7d0f4acb917327ae0",
+   "stdout_len": 6363,
+   "stdout_sha256": "9cfe6b989d7654620a692fc6371b6d7d7d5151a90597267ca6ec6b9e36329f66"
+  },
+  "--no_skip_existing --format text --power_config heterogeneous": {
+   "exit": 0,
+   "stderr_len": 97,
+   "stderr_sha256": "e646442f02f85b60ccab121c148f928e189f7c4ae112067468eff3da24efcf23",
+   "stdout_len": 103271,
+   "stdout_sha256": "19a60170e4cfdfd582715ca429baf90332a5b7700aa8f844ac45dbf185c11da2"
+  },
+  "--no_skip_existing --format text --power_config maxn": {
+   "exit": 1,
+   "stderr_len": 183,
+   "stderr_sha256": "97b101324c833bbef51c19e48bee45b0c63e07f23ae2fe3efc0e07fb3d258127",
+   "stdout_len": 0,
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+ },
+ "source_commit": "2a565b3"
+}

@@ -546,3 +546,55 @@ revision:
       - "python3 scripts/cross_sensor_loso.py --data_dir data/raw/custom --train_nodes node_a --test_nodes node_b --modality rgb_d --epochs 15 --batch_size 8 --lr 1e-3 --seed 42 --pooled_random_split --output_dir results/loso_a_to_b_rgb_d_seed42"
       - "python3 scripts/cross_sensor_loso.py --data_dir data/raw/custom --train_nodes node_a node_b --test_nodes node_c --modality rgb_d --epochs 15 --batch_size 8 --lr 1e-3 --seed 42 --pooled_random_split --output_dir results/loso_ab_to_c_rgb_d_seed42"
       - "python3 scripts/cross_sensor_loso.py --data_dir data/raw/custom --train_nodes node_a --same_node --modality rgb_d_ir --epochs 15 --batch_size 8 --lr 1e-3 --seed 42 --output_dir results/loso_a_same_rgb_d_ir_seed42"
+
+  # ------------------------------------------------------------------------
+  # 10. Camera experiment, question (b): federated training with sensor-skewed
+  #     clients (docs/CAMERA_EXPERIMENT_PREREG.md section 6, declared
+  #     2026-09-28 before any footage existed).  node_a holds only D435if
+  #     frames, node_b only D435i, node_c only ZED 2i.  Five scene folds
+  #     (data/splits_camera/fl_folds.csv): test = fold f, validation =
+  #     fold (f + 1) mod 5, training = the other three, the same scenes on
+  #     every client; materialised by scripts/camera_fl_prepare.py into
+  #     data/processed/camera_fold<f>/node_{a,b,c}.
+  #     Declares its power configuration like maxn_long_horizon: all three
+  #     nodes at MAXN_SUPER, runs always in results/pc_maxn/, never emitted
+  #     for another configuration and never pooled with one.  It has no
+  #     determinism_gate of its own and is not covered by maxn_long_horizon's.
+  #     Not in print_revision_commands.py's BLOCK_ORDER (not part of the FLAME
+  #     matrix, not counted in grand_total_runs, like cross_sensor_loso):
+  #     emitted only with --block camera_sensor_skew (testbed, run_matrix.py)
+  #     and --block camera_sensor_skew_baselines (desktop GPU, never run_matrix).
+  #     Analysis: scripts/camera_analysis_b.py -> analysis/camera/b/.
+  # ------------------------------------------------------------------------
+  camera_sensor_skew:
+    description: >
+      FedAvg, FedProx(mu=0.01) and FedBN x 5 scene folds x 3 seeds, 10 rounds,
+      5 local epochs, Adam 1e-3, batch 8, each client holding only its own
+      sensor's RGB frames, all three nodes at MAXN_SUPER.
+    prereg: "docs/CAMERA_EXPERIMENT_PREREG.md"
+    power_config: maxn
+    strategies: [fedavg, fedprox_0.01, fedbn]
+    folds: [0, 1, 2, 3, 4]
+    seeds: [42, 123, 456]
+    rounds: 10
+    local_epochs: 5
+    lr: 0.001
+    batch_size: 8
+    modality: "rgb"
+    output_dir_convention: "results/pc_maxn/rev_camera_fold<f>_<strategy>_r10_seed<S>"
+    total_runs: 45   # 3 strategies x 5 folds x 3 seeds
+    data_preparation:
+      - "python3 scripts/camera_fl_prepare.py --clean"
+      - "python3 scripts/camera_fl_prepare.py --verify"
+    desktop_baselines:
+      description: >
+        Local-only (each client alone, scripts/train_local.py --batch) and
+        centralized (the three clients' training data pooled,
+        scripts/train_centralized.py), epochs = rounds x local_epochs
+        (10 x 5 = 50), same optimiser, per fold and seed, desktop GPU, the
+        declared selection rule; then scripts/predict_from_checkpoint.py
+        <run> for the per-image predictions the analysis reads.
+      baseline_types: [centralized, local_only]
+      output_root: results/rev_baselines_camera
+      output_dir_convention: "results/rev_baselines_camera/rev_camera_fold<f>_<centralized|local>_r10_seed<S>"
+      total_runs: 30   # 2 types x 5 folds x 3 seeds (= 60 trainings: local-only trains one model per node)

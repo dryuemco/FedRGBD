@@ -1374,3 +1374,50 @@ Five reviewers, two skeptics per finding; 25 of 29 findings confirmed and fixed:
   (about 61 kB per client and round, excluded from B(R)). Removed with the 2-node figure:
   its caption `\todo` "Add seed-aggregated bars with 95% CIs" -- the only pre-existing
   `\todo` that is gone.
+
+## Camera experiment: implementation (2026-09-29)
+
+The implementation that `docs/CAMERA_EXPERIMENT_PREREG.md` section 8 lists, committed before
+any footage exists. Nothing here is imported by the FLAME training path (`src/fl/`,
+`src/data/dataset.py`, `src/models/`, `src/evaluation/{metrics,model_selection,predictions}.py`,
+`scripts/run_matrix.py`); checked by the import closure of `src/fl/client.py`,
+`src/fl/server.py` and `scripts/run_matrix.py`.
+
+* **Capture.** `src/data/camera_capture_common.py`: the shared contract (capture ids,
+  40 frames at 5 fps, scheduled common start, file layout, per-frame metadata, capture
+  record, no-overwrite / `--retake`). `src/data/zed_capture.py` (node_c, ZED 2i) and
+  `src/data/realsense_capture.py` (node_a/node_b) implement its `CameraBackend`; the
+  legacy RealSense CLI (`--output/--frames/--fps`) is unchanged.
+  `scripts/camera_capture_session.py`: node_a starts one capture on all three nodes at a
+  common `--start_at`; `--check` probes SSH, SDK, camera and clock offset. It refuses to
+  schedule a capture when any node's clock is more than `START_TOLERANCE_S` (1 s, the
+  prereg's "second-level synchronisation") off node_a or cannot be measured -- after the
+  2026-09-28 outage node_a booted ~22 min behind until NTP synced -- and logs the offsets
+  in `session_log.jsonl`.
+* **Labels and manifests.** `scripts/camera_labels.py` (frame table and the three
+  pre-registered exclusions), `scripts/camera_manifests.py` (`loso_folds.csv`,
+  `fl_folds.csv` from the sorted kept scene ids alone, never from directory-walk order).
+* **Question (a).** `scripts/camera_loso.py` (leave-one-scene-out runs),
+  `scripts/camera_analysis_a.py` (declared analysis); `src/evaluation/bootstrap.py` gains
+  `scene_paired_contrast_ci` (one scene resample shared by sides evaluated on different
+  images of the same scenes). `src/data/custom_dataset.py` gains `preprocess="camera"`
+  (`camera_preprocess.py` geometry, optional decode cache); the default `"resize"` path
+  is unchanged.
+* **Question (b).** `configs/experiment_matrix.yaml` block `camera_sensor_skew`
+  (45 federated runs, `power_config: maxn`, `results/pc_maxn/rev_camera_fold<f>_*`) and its
+  desktop baselines; `scripts/print_revision_commands.py` emits them only with
+  `--block camera_sensor_skew` / `--block camera_sensor_skew_baselines` (not in
+  `BLOCK_ORDER`). `scripts/camera_fl_prepare.py` materialises the five scene folds as
+  `data/processed/camera_fold<f>/node_{a,b,c}` in the layout the FL client already reads;
+  `scripts/camera_analysis_b.py` is the declared analysis.
+* **Existing blocks frozen.** `tests/test_revision_commands_frozen.py` +
+  `tests/fixtures/revision_commands_frozen.json`: SHA-256 of stdout/stderr and the exit
+  code of `print_revision_commands.py` for 122 argument combinations (default output and
+  every FLAME block x text/bash x with/without `--all_seeds` x no/heterogeneous/maxn power
+  configuration, plus `--baseline_root`), written from 2a565b3, the last commit before the
+  camera blocks. The working tree reproduced all 122 byte for byte; changing one seed of
+  `maxn_long_horizon` fails 13 of them.
+* **Open before the first camera FL run.** `scripts/analyze_results.py` walks all of
+  `results/`, so `results/pc_maxn/rev_camera_*` would enter `analysis/summary_table.csv`
+  next to the FLAME MAXN runs (as their own partitions `camera_fold<f>`, not pooled, but
+  in the FLAME tables). Exclude them there before those runs exist.

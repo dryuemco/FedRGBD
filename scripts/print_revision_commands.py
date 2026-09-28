@@ -33,6 +33,11 @@ predictions must be bitwise identical to a reference run of the heterogeneous
 matrix.  They are emitted into the bash script as ``>>> IDENTITY GATE:`` lines,
 which ``scripts/run_matrix.py`` parses and enforces.
 
+Camera experiment.  ``camera_sensor_skew`` (question (b) of
+docs/CAMERA_EXPERIMENT_PREREG.md, declared ``power_config: maxn``) and its desktop
+baselines ``camera_sensor_skew_baselines`` are not part of the FLAME matrix: they are
+not in the default output and are emitted only with ``--block``.
+
 Usage
 -----
     python3 scripts/print_revision_commands.py
@@ -153,6 +158,9 @@ class Run:
     power_config: Optional[str] = None
     #: [(reference_run_dir, [rounds])] -- bitwise-identity gates (run_matrix.py)
     identity: List[Tuple[str, List[int]]] = field(default_factory=list)
+    #: commands printed after a baseline's training command (camera baselines: the
+    #: per-image predictions of the selected model, which the analysis reads)
+    post_commands: List[str] = field(default_factory=list)
 
     def results_json(self) -> str:
         return os.path.join(REPO_ROOT, self.output_dir, "results.json")
@@ -391,6 +399,60 @@ def expand_baselines_extension(cfg: dict) -> List[Run]:
     return runs
 
 
+# --------------------------------------------------------------------------- #
+# camera experiment, question (b): sensor-skewed clients (docs/CAMERA_EXPERIMENT_PREREG.md
+# section 6).  One yaml block, ``camera_sensor_skew``, expanded twice: its 45 federated
+# runs (testbed, MAXN_SUPER; the block declares ``power_config: maxn``) and, under the
+# separate name ``camera_sensor_skew_baselines``, its local-only / centralized desktop
+# baselines -- a separate name so that the bash run_matrix.py parses never contains a
+# ``scripts/train_*`` line (it refuses those: they run on the desktop GPU).  Neither is in
+# BLOCK_ORDER: the camera experiment is not part of the FLAME matrix, so the default
+# (all-block) output and every FLAME block stay exactly as they were; select them with
+# ``--block``.
+# --------------------------------------------------------------------------- #
+CAMERA_BLOCK = "camera_sensor_skew"
+CAMERA_BASELINE_BLOCK = "camera_sensor_skew_baselines"
+CAMERA_BASELINE_ROOT = "results/rev_baselines_camera"
+
+
+def camera_split(fold) -> str:
+    """``data/processed/<split>/node_{a,b,c}`` of a federated camera fold."""
+    return f"camera_fold{int(fold)}"
+
+
+def expand_camera_sensor_skew(cfg: dict) -> List[Run]:
+    """45 federated runs: strategies x folds x seeds, ``rev_camera_fold<f>_<strategy>_r10_seed<S>``
+    (``camera_fold<f>`` is never a FLAME partition tag, so no name can collide with the
+    FLAME matrix; the declared power configuration moves them to results/pc_maxn/)."""
+    runs = []
+    for strategy in cfg["strategies"]:
+        for fold in cfg["folds"]:
+            split = camera_split(fold)
+            for seed in cfg["seeds"]:
+                runs.append(_fl_run(CAMERA_BLOCK, split, split, strategy, seed,
+                                    cfg["rounds"], cfg["local_epochs"], cfg["lr"], cfg["batch_size"]))
+    return runs
+
+
+def expand_camera_sensor_skew_baselines(cfg: dict) -> List[Run]:
+    """Desktop GPU baselines of the camera block: local-only (``train_local.py --batch``,
+    one model per node) and centralized, epochs = rounds x local_epochs (10 x 5 = 50),
+    same optimiser, per fold and seed, under ``results/rev_baselines_camera/``."""
+    part = cfg["desktop_baselines"]
+    root = part.get("output_root", CAMERA_BASELINE_ROOT).replace("\\", "/").rstrip("/")
+    runs = []
+    for baseline_type in part["baseline_types"]:
+        for fold in cfg["folds"]:
+            split = camera_split(fold)
+            for seed in cfg["seeds"]:
+                run = _baseline_run(CAMERA_BASELINE_BLOCK, split, split, baseline_type, seed,
+                                    cfg["rounds"], cfg["local_epochs"], cfg["lr"], cfg["batch_size"])
+                run.output_dir = root + "/" + run.output_dir[len("results/"):]
+                run.post_commands = [f"python3 scripts/predict_from_checkpoint.py {run.output_dir}"]
+                runs.append(run)
+    return runs
+
+
 def apply_all_seeds(revision_cfg: dict) -> dict:
     """The transformation ``--all_seeds`` applies to the config.
 
@@ -418,7 +480,13 @@ BLOCK_EXPANDERS = {
     "local_epochs": expand_local_epochs,
     "learning_rate": expand_learning_rate,
     "baselines_extension": expand_baselines_extension,
+    CAMERA_BLOCK: expand_camera_sensor_skew,
+    CAMERA_BASELINE_BLOCK: expand_camera_sensor_skew_baselines,
 }
+
+#: blocks expanded from another block's yaml entry (the camera baselines live in
+#: ``camera_sensor_skew.desktop_baselines``); they declare no power configuration
+BLOCK_CONFIG_KEYS = {CAMERA_BASELINE_BLOCK: CAMERA_BLOCK}
 
 # Order in which blocks are expanded/printed when no --block filter is given.
 BLOCK_ORDER = [
@@ -433,6 +501,16 @@ BLOCK_ORDER = [
     "baselines_extension",
 ]
 
+#: a line printed under a block's header (text and bash)
+BLOCK_NOTES = {
+    CAMERA_BASELINE_BLOCK: "DESKTOP GPU BASELINES (camera, question b) -- run on the desktop, "
+                           "never with scripts/run_matrix.py",
+}
+
+#: blocks outside the FLAME matrix: never part of the default (all-block) output, only
+#: emitted with ``--block``
+EXTRA_BLOCKS = [CAMERA_BLOCK, CAMERA_BASELINE_BLOCK]
+
 
 def expand_all(revision_cfg: dict, block: Optional[str] = None) -> Dict[str, List[Run]]:
     names = [block] if block else BLOCK_ORDER
@@ -440,8 +518,8 @@ def expand_all(revision_cfg: dict, block: Optional[str] = None) -> Dict[str, Lis
     for name in names:
         if name not in BLOCK_EXPANDERS:
             raise SystemExit(f"Unknown block {name!r}; choices: {', '.join(BLOCK_ORDER)}")
-        runs = BLOCK_EXPANDERS[name](revision_cfg[name])
-        declared = revision_cfg[name].get("power_config")
+        runs = BLOCK_EXPANDERS[name](revision_cfg[BLOCK_CONFIG_KEYS.get(name, name)])
+        declared = block_power_config(revision_cfg, name)
         if declared:
             root = power_config_root(declared)
             for run in runs:
@@ -538,6 +616,8 @@ def print_text(runs_by_block: Dict[str, List[Run]], skip_existing: bool) -> int:
         print(f"\n{'=' * 70}")
         print(f"Block: {block}  ({len(runs)} runs)")
         print("=" * 70)
+        if block in BLOCK_NOTES:
+            print(f"# {BLOCK_NOTES[block]}")
         for run in runs:
             status = emit_status(run, skip_existing, seen)
             if status == "dup":
@@ -558,6 +638,8 @@ def print_text(runs_by_block: Dict[str, List[Run]], skip_existing: bool) -> int:
                     print(f"    {cmd}")
             else:
                 print(f"  {run.baseline_command()}")
+                for cmd in run.post_commands:
+                    print(f"  {cmd}")
     return printed
 
 
@@ -571,6 +653,8 @@ def print_bash(runs_by_block: Dict[str, List[Run]], skip_existing: bool,
     print("set -e")
     for block, runs in runs_by_block.items():
         print(f"\necho '=== Block: {block} ({len(runs)} runs) ==='")
+        if block in BLOCK_NOTES:
+            print(f"# {BLOCK_NOTES[block]}")
         for run in runs:
             status = emit_status(run, skip_existing, seen)
             if status == "dup":
@@ -595,6 +679,8 @@ def print_bash(runs_by_block: Dict[str, List[Run]], skip_existing: bool,
                 print("sleep 30")
             else:
                 print(run.baseline_command())
+                for cmd in run.post_commands:
+                    print(cmd)
                 print(f"echo '[DONE] {run.output_dir}'")
     return printed
 
@@ -605,7 +691,8 @@ def print_bash(runs_by_block: Dict[str, List[Run]], skip_existing: bool,
 def main(argv: Optional[Sequence[str]] = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--config", default=DEFAULT_CONFIG, help="path to experiment_matrix.yaml")
-    p.add_argument("--block", default=None, choices=BLOCK_ORDER, help="only print this block")
+    p.add_argument("--block", default=None, choices=BLOCK_ORDER + EXTRA_BLOCKS,
+                   help="only print this block (%s: only with --block)" % ", ".join(EXTRA_BLOCKS))
     p.add_argument("--format", choices=["text", "bash"], default="text")
     p.add_argument("--skip_existing", dest="skip_existing", action="store_true", default=True,
                    help="skip runs whose results/<run>/results.json already exists (default: on)")

@@ -13,6 +13,20 @@ Usage:
 
     # List connected cameras
     python3 src/data/realsense_capture.py --list
+
+    # Camera experiment (docs/CAMERA_EXPERIMENT_PREREG.md): one capture in the data
+    # contract of src/data/camera_capture_common.py -- 40 frames at 5 fps, depth aligned
+    # to colour, left IR, per-frame metadata; normally started by
+    # scripts/camera_capture_session.py with a common --start_at on all three nodes
+    python3 src/data/realsense_capture.py --scene s01 --label fire --distance_m 2 \\
+        --node node_a [--start_at <unix s>] [--retake]
+
+    # Camera experiment smoke test (a few frames through the capture path, temp dir)
+    python3 src/data/realsense_capture.py --test --node node_a
+
+Without --scene the legacy behaviour (--output/--frames/--serial/--fps, default
+500 frames at 30 fps into data/raw/custom/capture) is unchanged.  pyrealsense2 is
+imported lazily, so the module imports on a machine without it.
 """
 
 import argparse
@@ -24,16 +38,38 @@ from pathlib import Path
 
 import numpy as np
 
-try:
-    import pyrealsense2 as rs
-except ImportError:
-    print("ERROR: pyrealsense2 not found.")
-    print("If built from source, try: export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.10/site-packages")
-    sys.exit(1)
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _REPO not in sys.path:
+    sys.path.insert(0, _REPO)
+
+from src.data.camera_capture_common import (  # noqa: E402
+    DEFAULT_FPS, DEFAULT_FRAMES, DEFAULT_ROOT, LABELS, CameraBackend, CaptureError, Frame,
+    depth_to_mm_uint16, run_capture, smoke_test,
+)
+
+#: pyrealsense2, imported lazily (only node_a / node_b have it; tests run without it)
+rs = None
+
+
+def _import_rs(exit_on_fail=True):
+    """Import pyrealsense2 on first use.  The legacy CLI exits as it always did."""
+    global rs
+    if rs is None:
+        try:
+            import pyrealsense2 as _rs
+        except ImportError:
+            if not exit_on_fail:
+                raise
+            print("ERROR: pyrealsense2 not found.")
+            print("If built from source, try: export PYTHONPATH=$PYTHONPATH:/usr/local/lib/python3.10/site-packages")
+            sys.exit(1)
+        rs = _rs
+    return rs
 
 
 def list_cameras():
     """List all connected RealSense cameras."""
+    _import_rs()
     ctx = rs.context()
     devices = ctx.query_devices()
 
@@ -63,6 +99,7 @@ def list_cameras():
 def configure_pipeline(serial=None, width_rgb=1920, height_rgb=1080,
                        width_depth=1280, height_depth=720, fps=30):
     """Configure RealSense pipeline for RGB + Depth + IR capture."""
+    _import_rs()
     pipeline = rs.pipeline()
     config = rs.config()
 
@@ -79,6 +116,7 @@ def configure_pipeline(serial=None, width_rgb=1920, height_rgb=1080,
 
 def get_camera_intrinsics(profile):
     """Extract camera intrinsics from the pipeline profile."""
+    _import_rs()
     intrinsics = {}
 
     for stream_type, name in [(rs.stream.color, "rgb"),
@@ -105,6 +143,7 @@ def get_camera_intrinsics(profile):
 
 def capture_test(num_frames=5):
     """Quick test: capture a few frames and display info."""
+    _import_rs()
     print("=" * 60)
     print("RealSense Camera Test")
     print("=" * 60)
@@ -184,6 +223,7 @@ def capture_frames(output_dir, num_frames=500, serial=None,
         print("ERROR: OpenCV not found. Install: pip install opencv-python-headless")
         sys.exit(1)
 
+    _import_rs()
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -310,36 +350,271 @@ def capture_frames(output_dir, num_frames=500, serial=None,
         pipeline.stop()
 
 
-def main():
+# --------------------------------------------------------------------------- #
+# camera experiment back-end (docs/CAMERA_EXPERIMENT_PREREG.md)
+# --------------------------------------------------------------------------- #
+#: D435 colour is 1920x1080 max, depth/IR 1280x720 max; there is no 5 fps mode, so the
+#: stream runs at 30 fps and the capture keeps 5 fps by device timestamp
+EXP_RGB_RES = (1920, 1080)
+EXP_DEPTH_RES = (1280, 720)
+EXP_STREAM_FPS = 30
+
+
+def realsense_sdk_version(rs_mod=None):
+    """librealsense version string, or None.
+
+    pyrealsense2 built from source on the nodes has no ``__version__``; fall back to the
+    installed distribution's metadata, then to ``pkg-config --modversion realsense2``.
+    """
+    rs_mod = rs_mod if rs_mod is not None else rs
+    for attr in ("__version__", "__full_version__"):
+        v = getattr(rs_mod, attr, None) if rs_mod is not None else None
+        if v:
+            return str(v)
+    try:
+        from importlib import metadata
+        for dist in ("pyrealsense2", "pyrealsense2-aarch64"):
+            try:
+                return metadata.version(dist)
+            except metadata.PackageNotFoundError:
+                continue
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        import subprocess
+        out = subprocess.run(["pkg-config", "--modversion", "realsense2"],
+                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                             text=True, timeout=5)
+        if out.returncode == 0 and out.stdout.strip():
+            return "librealsense " + out.stdout.strip()
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def _metadata(frame, key):
+    """Frame metadata value, or None when the platform does not report it."""
+    attr = getattr(rs.frame_metadata_value, key, None)
+    if attr is None:
+        return None
+    try:
+        if frame.supports_frame_metadata(attr):
+            return int(frame.get_frame_metadata(attr))
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def _option(sensor, key):
+    attr = getattr(rs.option, key, None)
+    if sensor is None or attr is None:
+        return None
+    try:
+        if sensor.supports(attr):
+            return float(sensor.get_option(attr))
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def _safe_info(device, key):
+    try:
+        return device.get_info(getattr(rs.camera_info, key))
+    except Exception:  # noqa: BLE001
+        return None
+
+
+class RealSenseBackend(CameraBackend):
+    """RGB (rgb8, 1920x1080), depth z16 aligned to colour with rs.align, left IR (y8)."""
+
+    def __init__(self, serial=None, rgb_res=EXP_RGB_RES, depth_res=EXP_DEPTH_RES,
+                 stream_fps=EXP_STREAM_FPS):
+        self.serial = serial
+        self.rgb_res = tuple(rgb_res)
+        self.depth_res = tuple(depth_res)
+        self.stream_fps = int(stream_fps)
+        self.pipeline = None
+        self._info = {}
+
+    def open(self):
+        _import_rs(exit_on_fail=False)
+        self.pipeline = rs.pipeline()
+        config = rs.config()
+        if self.serial:
+            config.enable_device(str(self.serial))
+        w, h = self.rgb_res
+        dw, dh = self.depth_res
+        config.enable_stream(rs.stream.color, w, h, rs.format.rgb8, self.stream_fps)
+        config.enable_stream(rs.stream.depth, dw, dh, rs.format.z16, self.stream_fps)
+        config.enable_stream(rs.stream.infrared, 1, dw, dh, rs.format.y8, self.stream_fps)
+        profile = self.pipeline.start(config)
+        self.align = rs.align(rs.stream.color)
+        device = profile.get_device()
+        self.depth_sensor = device.first_depth_sensor()
+        self.color_sensor = None
+        try:
+            self.color_sensor = device.first_color_sensor()
+        except Exception:  # noqa: BLE001 - older librealsense: find it by name
+            for sensor in device.query_sensors():
+                if _safe_info(sensor, "name") == "RGB Camera":
+                    self.color_sensor = sensor
+        scale_m = float(self.depth_sensor.get_depth_scale())
+        self.depth_scale_to_mm = scale_m * 1000.0
+        emitter = _option(self.depth_sensor, "emitter_enabled")
+        self._info = {
+            "camera_model": device.get_info(rs.camera_info.name),
+            "serial": device.get_info(rs.camera_info.serial_number),
+            "firmware": device.get_info(rs.camera_info.firmware_version),
+            "sdk_version": realsense_sdk_version(rs),
+            "depth_mode": None,
+            "rgb_resolution": [int(w), int(h)],
+            "depth_resolution": [int(dw), int(dh)],
+            "stream_fps": float(self.stream_fps),
+            "depth_scale_m": scale_m,
+            "emitter_enabled": None if emitter is None else bool(emitter),
+            "usb_type": _safe_info(device, "usb_type_descriptor"),
+            "intrinsics": get_camera_intrinsics(profile),
+            "depth_aligned_to": "color (rs.align)",
+            "ir_stream": "infrared 1 (left imager), not aligned",
+        }
+
+    def info(self):
+        return dict(self._info)
+
+    def skip(self):
+        self.pipeline.wait_for_frames(timeout_ms=5000)
+
+    def grab(self):
+        while True:
+            frames = self.pipeline.wait_for_frames(timeout_ms=5000)
+            aligned = self.align.process(frames)
+            color = aligned.get_color_frame()
+            depth = aligned.get_depth_frame()
+            ir = frames.get_infrared_frame(1)
+            if color and depth and ir:
+                break
+        rgb = np.array(np.asanyarray(color.get_data()), copy=True)
+        depth_raw = np.asanyarray(depth.get_data())
+        if abs(self.depth_scale_to_mm - 1.0) < 1e-9:
+            depth_mm = np.array(depth_raw, dtype=np.uint16, copy=True)
+        else:
+            depth_mm = depth_to_mm_uint16(depth_raw, self.depth_scale_to_mm)
+        ir_img = np.array(np.asanyarray(ir.get_data()), dtype=np.uint8, copy=True)
+
+        exposure = _metadata(color, "actual_exposure")
+        source = "frame_metadata"
+        if exposure is None:
+            exposure = _option(self.color_sensor, "exposure")
+            source = "sensor_option" if exposure is not None else None
+        gain = _metadata(color, "gain_level")
+        if gain is None:
+            gain = _option(self.color_sensor, "gain")
+        wb = _metadata(color, "white_balance")
+        if wb is None:
+            wb = _option(self.color_sensor, "white_balance")
+        ae = _metadata(color, "auto_exposure")
+        if ae is None:
+            ae = _option(self.color_sensor, "enable_auto_exposure")
+        try:
+            domain = str(frames.get_frame_timestamp_domain())
+        except Exception:  # noqa: BLE001
+            domain = None
+        meta = {
+            "exposure": exposure,
+            "exposure_source": source,
+            "gain": gain,
+            "white_balance": wb,
+            "auto_exposure": None if ae is None else bool(ae),
+            "ir_exposure": _metadata(ir, "actual_exposure"),
+            "ir_gain": _metadata(ir, "gain_level"),
+            "timestamp_domain": domain,
+            "frame_number_color": int(color.get_frame_number()),
+        }
+        return Frame(rgb=rgb, depth_mm=depth_mm, ir=ir_img,
+                     device_ts_ms=float(frames.get_timestamp()), meta=meta)
+
+    def close(self):
+        if self.pipeline is not None:
+            try:
+                self.pipeline.stop()
+            finally:
+                self.pipeline = None
+
+
+def build_parser():
     parser = argparse.ArgumentParser(description="FedRGBD RealSense Capture")
     parser.add_argument("--test", action="store_true",
-                        help="Quick test: capture 5 frames and display info")
+                        help="Quick test: capture 5 frames and display info "
+                             "(with --node: camera-experiment smoke test into a temp dir)")
     parser.add_argument("--list", action="store_true",
                         help="List connected RealSense cameras")
     parser.add_argument("--output", type=str, default="data/raw/custom/capture",
-                        help="Output directory for captured frames")
-    parser.add_argument("--frames", type=int, default=500,
-                        help="Number of frames to capture")
+                        help="[legacy] Output directory for captured frames")
+    parser.add_argument("--frames", type=int, default=None,
+                        help="Number of frames to capture (legacy default 500; "
+                             "camera experiment default %d)" % DEFAULT_FRAMES)
     parser.add_argument("--serial", type=str, default=None,
                         help="Camera serial number (auto-detect if not specified)")
-    parser.add_argument("--fps", type=int, default=30,
-                        help="Capture frame rate")
+    parser.add_argument("--fps", type=float, default=None,
+                        help="Legacy: stream frame rate (default 30). Camera experiment: "
+                             "frames per second kept (default %g)" % DEFAULT_FPS)
+    # camera experiment: the flags of camera_capture_common.add_capture_args, minus
+    # --frames/--fps whose legacy defaults differ (resolved in main)
+    parser.add_argument("--scene", help="[camera experiment] scene id, s01, s02, ...")
+    parser.add_argument("--label", choices=LABELS)
+    parser.add_argument("--distance_m", type=float)
+    parser.add_argument("--start_at", type=float, default=None,
+                        help="scheduled start, unix seconds (host wall clock)")
+    parser.add_argument("--root", default=DEFAULT_ROOT)
+    parser.add_argument("--node", default=None, choices=("node_a", "node_b"))
+    parser.add_argument("--retake", action="store_true",
+                        help="move an existing capture to _retakes/<timestamp>/ first")
+    parser.add_argument("--notes", default="", help="free text stored in the record")
+    parser.add_argument("--stream_fps", type=int, default=EXP_STREAM_FPS,
+                        help="[camera experiment] stream rate, sampled down to --fps")
+    return parser
 
-    args = parser.parse_args()
 
-    if args.list:
-        list_cameras()
-    elif args.test:
-        success = capture_test()
-        sys.exit(0 if success else 1)
-    else:
-        capture_frames(
-            output_dir=args.output,
-            num_frames=args.frames,
-            serial=args.serial,
-            fps=args.fps
-        )
+def main(argv=None, backend_factory=None):
+    args = build_parser().parse_args(argv)
+    experiment = args.scene is not None or (args.test and args.node is not None)
+    if not experiment:  # the original CLI, unchanged
+        if args.list:
+            list_cameras()
+        elif args.test:
+            success = capture_test()
+            sys.exit(0 if success else 1)
+        else:
+            capture_frames(
+                output_dir=args.output,
+                num_frames=args.frames if args.frames is not None else 500,
+                serial=args.serial,
+                fps=int(args.fps) if args.fps is not None else 30
+            )
+        return 0
+
+    frames = args.frames if args.frames is not None else DEFAULT_FRAMES
+    fps = args.fps if args.fps is not None else DEFAULT_FPS
+    factory = backend_factory or (lambda: RealSenseBackend(serial=args.serial,
+                                                           stream_fps=args.stream_fps))
+    if args.test:
+        return 0 if smoke_test(factory(), args.node) else 1
+    if args.node is None or args.label is None or args.distance_m is None:
+        print("--scene needs --label, --distance_m and --node (node_a or node_b)",
+              file=sys.stderr)
+        return 2
+    try:
+        rec = run_capture(factory(), args.scene, args.label, args.distance_m, args.node,
+                          root=args.root, frames=frames, fps=fps, start_at=args.start_at,
+                          retake=args.retake, notes=args.notes)
+    except (CaptureError, ValueError) as e:
+        print("ERROR: %s" % e, file=sys.stderr)
+        return 1
+    print(json.dumps({k: rec[k] for k in ("capture_id", "node", "n_frames_written",
+                                          "n_frames_requested", "start_scheduled_unix",
+                                          "start_actual_unix", "status")}))
+    return 0 if rec["status"] == "complete" else 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

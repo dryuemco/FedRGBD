@@ -350,6 +350,64 @@ def seed_paired_diff_ci(runs_a: List[List[Unit]], runs_b: List[List[Unit]], key:
     return out
 
 
+# ---------------------------------------------------------------------------------------
+# Different images of the SAME clusters (docs/CAMERA_EXPERIMENT_PREREG.md, section 5)
+#
+# In the camera experiment every scene is recorded by every sensor, so "model X on sensor-Y
+# frames" and "model X on sensor-X frames" cover different images of one common scene set.
+# ``check_same_set`` does not hold, but the scenes are shared: one scene resample is applied
+# to every side, so the scene variance common to both sides cancels in the difference.
+# ---------------------------------------------------------------------------------------
+
+def scene_paired_contrast_ci(terms: Sequence, key: str, metric: str = "balanced_accuracy",
+                             B: int = DEFAULT_B, level: float = 0.95) -> Dict[str, float]:
+    """CI and bootstrap p-value of a seed-paired linear contrast of sides evaluated on
+    different images of the same clusters (scenes).
+
+    ``terms`` is a sequence of ``(coefficient, runs)``; ``runs[s]`` is the run of seed s
+    (a list of models, the run's value being the mean over its models, as in
+    ``seed_paired_diff_ci``).  Every term has the same number S of runs, index s being the
+    same seed in every term.  The contrast is ``C = mean_s sum_k coef_k * value_k,s``; a
+    plain difference D(X -> Y) is ``[(+1, runs on Y frames), (-1, runs on X frames)]``.
+
+    Every unit of every term must cover the same clusters (``gid``), not the same images.
+    One replicate draws ONE cluster resample over that common set -- stratified by the
+    classes a cluster carries across all units (with both classes in every scene, one
+    stratum) -- applied to every model of every term, and ONE draw of S seed indices with
+    replacement, applied to every term, so both the scene and the seed pairing are kept.
+    Percentile interval; two-sided p-value
+    ``min(1, 2 * min(#{C* <= 0} + 1, #{C* >= 0} + 1) / (B + 1))``; the generator is keyed
+    by ``BASE_SEED + crc32("scenepaired|" + key)``.  Threshold metrics only.
+    -> {"diff", "ci_low", "ci_high", "p_boot", "n_pairs", "n_clusters", "B"}.
+    """
+    terms = [(float(c), list(runs)) for c, runs in terms]
+    if not terms or not terms[0][1]:
+        raise ValueError("need at least one term with at least one run")
+    S = len(terms[0][1])
+    if any(len(runs) != S for _, runs in terms):
+        raise ValueError("every term needs the same number of runs (one per seed)")
+    units = [u for _, runs in terms for run in runs for u in run]
+    ref = units[0]
+    if any(u.G != ref.G or not np.array_equal(u.gid, ref.gid) for u in units):
+        raise ValueError("the sides do not cover the same clusters")
+    joint = Unit(np.concatenate([u.label for u in units]),
+                 np.zeros(sum(len(u.label) for u in units)),
+                 np.concatenate([u.gid[u.g] for u in units]))
+    rng = np.random.default_rng(BASE_SEED + zlib.crc32(("scenepaired|" + key).encode("utf-8")))
+    W = joint.weights(B, rng)
+    ones = np.ones((1, ref.G))
+    point = float(np.mean([sum(c * _run_value(runs[s], ones, metric)[0] for c, runs in terms)
+                           for s in range(S)]))
+    d = np.stack([sum(c * _run_value(runs[s], W, metric) for c, runs in terms)
+                  for s in range(S)])                                     # (S, B)
+    pick = rng.integers(0, S, size=(B, S))
+    rep = d[pick, np.arange(B)[:, None]].mean(axis=1)
+    p = min(1.0, 2 * min(int((rep <= 0).sum()) + 1, int((rep >= 0).sum()) + 1) / (B + 1))
+    out = {"diff": point, "p_boot": p, "n_pairs": S, "n_clusters": int(ref.G), "B": B}
+    out.update(_percentile_ci(rep, level))
+    return out
+
+
 __all__ = ["BOOT_METRICS", "DEFAULT_B", "THRESHOLD_METRICS", "Unit", "check_same_set",
            "config_ci", "metrics_from_counts", "paired_diff_ci", "run_replicates",
-           "seed_paired_diff_ci", "shared_set_ci"]
+           "scene_paired_contrast_ci", "seed_paired_diff_ci", "shared_set_ci"]

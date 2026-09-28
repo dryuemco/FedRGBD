@@ -387,6 +387,47 @@ def load_ir(path: str, img_size: int) -> np.ndarray:
         return np.asarray(im, dtype=np.float32) / 255.0
 
 
+# -- camera experiment preprocessing (docs/CAMERA_EXPERIMENT_PREREG.md, sec. 3) -------- #
+#: ``preprocess`` values of :class:`CustomRGBDDataset`.  "resize" is the original square
+#: resize (the default, unchanged); "camera" uses src/data/camera_preprocess.py: shorter
+#: side to ``img_size`` and a centred square crop, depth clipped to 0.3-10 m and scaled to
+#: [0, 1] with invalid pixels 0.
+PREPROCESS_MODES = ("resize", "camera")
+
+
+def _rgb_camera_u8(path: str, img_size: int) -> np.ndarray:
+    from src.data.camera_preprocess import rgb_224
+    with Image.open(path) as im:
+        return np.asarray(rgb_224(im, size=img_size), dtype=np.uint8)
+
+
+def _ir_camera_u8(path: str, img_size: int) -> np.ndarray:
+    from src.data.camera_preprocess import rgb_224
+    with Image.open(path) as im:
+        return np.asarray(rgb_224(im.convert("L"), size=img_size).convert("L"), dtype=np.uint8)
+
+
+def load_rgb_camera(path: str, img_size: int) -> np.ndarray:
+    """RGB via ``camera_preprocess.rgb_224`` as ``[H, W, 3]`` float32 in ``[0, 1]``."""
+    return _rgb_camera_u8(path, img_size).astype(np.float32) / 255.0
+
+
+def load_depth_camera(path: str, img_size: int) -> np.ndarray:
+    """Aligned 16-bit mm depth via ``camera_preprocess.depth_224``: ``[H, W]`` in [0, 1]."""
+    from src.data.camera_preprocess import depth_224
+    with Image.open(path) as im:
+        arr = np.asarray(im)
+    if arr.ndim == 3:
+        arr = arr[..., 0]
+    return depth_224(arr, size=img_size)
+
+
+def load_ir_camera(path: str, img_size: int) -> np.ndarray:
+    """IR with the RGB geometry of ``camera_preprocess.rgb_224`` (shorter side, centre
+    crop): ``[H, W]`` float32 in ``[0, 1]``."""
+    return _ir_camera_u8(path, img_size).astype(np.float32) / 255.0
+
+
 # --------------------------------------------------------------------------- #
 # dataset
 # --------------------------------------------------------------------------- #
@@ -409,6 +450,15 @@ class CustomRGBDDataset(Dataset):
             fold of a LOSO run shares one label vocabulary.
         max_depth_m: depth clipping range in metres (default 10).
         seed: base seed for the augmentation RNG.
+        preprocess: "resize" (default, the original square resize) or "camera"
+            (``src/data/camera_preprocess.py``: shorter side + centre crop, depth
+            clipped to 0.3-10 m and scaled to [0, 1] with invalid pixels 0, then
+            normalised with ``normalize_depth``; ``max_depth_m`` is not used).
+        cache: optional dict shared between datasets; with ``preprocess="camera"`` the
+            preprocessed streams (before augmentation and normalisation; RGB/IR as
+            uint8, depth as float32) are memoised in it per ``(uid, stream, img_size)``,
+            so native-resolution PNGs are decoded once per process.  The tensors are
+            identical with or without it.  Ignored for ``preprocess="resize"``.
 
     Each item is ``(tensor[C, H, W] float32, label int)`` where ``C`` is
     ``MODALITY_CHANNELS[modality]``.  RGB channels use ImageNet statistics;
@@ -430,9 +480,15 @@ class CustomRGBDDataset(Dataset):
         class_to_idx: Optional[Dict[str, int]] = None,
         max_depth_m: float = DEFAULT_MAX_DEPTH_M,
         seed: int = 42,
+        preprocess: str = "resize",
+        cache: Optional[Dict] = None,
     ):
         if modality not in MODALITY_CHANNELS:
             raise ValueError(f"unknown modality {modality!r}; choose from {MODALITIES}")
+        if preprocess not in PREPROCESS_MODES:
+            raise ValueError(f"unknown preprocess {preprocess!r}; choose from {PREPROCESS_MODES}")
+        self.preprocess = preprocess
+        self.cache = cache
 
         self.root = root
         self.modality = modality
@@ -510,15 +566,36 @@ class CustomRGBDDataset(Dataset):
             rgb = np.clip((rgb * brightness - mean) * contrast + mean, 0.0, 1.0)
         return rgb, depth, ir
 
+    def _camera_stream(self, rec, stream: str) -> np.ndarray:
+        """One camera-preprocessed stream (RGB/IR uint8, depth float32), memoised."""
+        key = (str(rec["uid"]), stream, self.img_size)
+        if self.cache is not None and key in self.cache:
+            return self.cache[key]
+        loader = {"rgb": _rgb_camera_u8, "depth": load_depth_camera, "ir": _ir_camera_u8}[stream]
+        arr = loader(str(rec["path_" + stream]), self.img_size)
+        if self.cache is not None:
+            arr.setflags(write=False)
+            self.cache[key] = arr
+        return arr
+
     def __getitem__(self, idx: int):
         rec = self.records[idx]
         rgb = depth = ir = None
-        if "rgb" in self.streams:
-            rgb = load_rgb(str(rec["path_rgb"]), self.img_size)
-        if "depth" in self.streams:
-            depth = load_depth_m(str(rec["path_depth"]), self.img_size, self.max_depth_m)
-        if "ir" in self.streams:
-            ir = load_ir(str(rec["path_ir"]), self.img_size)
+        camera = self.preprocess == "camera"
+        if camera:
+            if "rgb" in self.streams:
+                rgb = self._camera_stream(rec, "rgb").astype(np.float32) / 255.0
+            if "depth" in self.streams:
+                depth = self._camera_stream(rec, "depth")
+            if "ir" in self.streams:
+                ir = self._camera_stream(rec, "ir").astype(np.float32) / 255.0
+        else:
+            if "rgb" in self.streams:
+                rgb = load_rgb(str(rec["path_rgb"]), self.img_size)
+            if "depth" in self.streams:
+                depth = load_depth_m(str(rec["path_depth"]), self.img_size, self.max_depth_m)
+            if "ir" in self.streams:
+                ir = load_ir(str(rec["path_ir"]), self.img_size)
 
         if self.train:
             rgb, depth, ir = self._augment(rgb, depth, ir, idx)
@@ -528,7 +605,8 @@ class CustomRGBDDataset(Dataset):
             for c in range(3):
                 channels.append((rgb[..., c] - IMAGENET_MEAN[c]) / IMAGENET_STD[c])
         if depth is not None:
-            channels.append((depth / self.max_depth_m - DEPTH_MEAN) / DEPTH_STD)
+            scaled = depth if camera else depth / self.max_depth_m   # camera: already [0, 1]
+            channels.append((scaled - DEPTH_MEAN) / DEPTH_STD)
         if ir is not None:
             channels.append((ir - IR_MEAN) / IR_STD)
 
@@ -551,8 +629,12 @@ __all__ = [
     "index_supports_modality",
     "load_depth_m",
     "load_frame_index",
+    "load_depth_camera",
     "load_ir",
+    "load_ir_camera",
     "load_rgb",
+    "load_rgb_camera",
+    "PREPROCESS_MODES",
     "required_streams",
     "scenes_in",
 ]
