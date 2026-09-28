@@ -151,7 +151,9 @@ function Get-AlertPatterns {
         [pscustomobject]@{ pattern = 'STOPPING';            ignore_case = $false },
         [pscustomobject]@{ pattern = 'DURDU';               ignore_case = $false },
         [pscustomobject]@{ pattern = 'BASLAMADI';           ignore_case = $false },
-        [pscustomobject]@{ pattern = 'pre-?flight\s+FAIL';  ignore_case = $true  }
+        [pscustomobject]@{ pattern = 'pre-?flight\s+FAIL';  ignore_case = $true  },
+        # every decision of scripts/resume_after_reboot.py (logs/resume.log)
+        [pscustomobject]@{ pattern = 'RESUME \[';           ignore_case = $false }
     )
 }
 
@@ -220,7 +222,8 @@ function Invoke-AlertScan {
 
     $sources = @(
         @{ name = 'chain.log';      path = '~/chain.log' },
-        @{ name = 'run_matrix.log'; path = ("'{0}/logs/run_matrix.log'" -f $RemoteRepo) }
+        @{ name = 'run_matrix.log'; path = ("'{0}/logs/run_matrix.log'" -f $RemoteRepo) },
+        @{ name = 'resume.log';     path = ("'{0}/logs/resume.log'" -f $RemoteRepo) }
     )
 
     $new = @()

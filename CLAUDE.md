@@ -175,7 +175,9 @@ python scripts/export_latex_tables.py --analysis_dir analysis --output_dir paper
 ```
 
 On the testbed use `scripts/run_matrix.py --block <b> --power_config <heterogeneous|maxn>`
-(required). The main matrix ran with unharmonised power modes (node_a 15W, node_b MAXN_SUPER,
+(required). After a reboot of node_a, a crontab `@reboot` entry runs
+`scripts/resume_after_reboot.py`, which restarts a block only if `logs/run_matrix.log` shows
+it was interrupted (no recorded end); every decision is in `logs/resume.log`. The main matrix ran with unharmonised power modes (node_a 15W, node_b MAXN_SUPER,
 node_c 7W) and is `heterogeneous`, `results/rev_*`; any other configuration writes to
 `results/pc_<name>/rev_*` and is never pooled with it (`docs/REVISION_CHANGES.md`, "Power
 configurations").

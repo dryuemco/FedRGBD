@@ -1129,6 +1129,11 @@ def main():
     # every path below (logs/, results/, scripts/, analysis/) is repo-relative
     os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     os.makedirs(LOG_DIR, exist_ok=True)
+    if not (args.check_only or args.dry_run):
+        # scripts/resume_after_reboot.py finds the last invocation by this line and
+        # restarts it only if nothing after it records an end (block finished,
+        # STOPPING, a failed pre-flight, a gate failure)
+        log('run_matrix start (pid %d): %s' % (os.getpid(), json.dumps(sys.argv[1:])))
     global SERVER_PORT
     nodes, SERVER_PORT = load_testbed(args.testbed)
     NODES.clear()

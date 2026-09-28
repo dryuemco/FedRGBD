@@ -1231,6 +1231,26 @@ All of the above was reviewed adversarially before it ran (five reviewers, two
 skeptics per finding); the sixteen confirmed findings are fixed and covered by
 `tests/test_testbed_extension.py`.
 
+## Outage resilience: resume an interrupted block after a reboot of node_a (2026-09-28)
+
+A power outage on 2026-09-28 rebooted the testbed with nothing running. From now on a user
+crontab `@reboot` entry on node_a (no sudo) runs `scripts/resume_after_reboot.py`:
+
+* `run_matrix.py` writes `run_matrix start (pid N): <argv as JSON>` when a block
+  invocation starts (not for `--check_only` / `--dry_run`). The resume script reads the
+  lines after the last such line. It restarts only if none of them records an end --
+  `block finished`, `STOPPING`, `PRE-FLIGHT FAIL` / `pre-flight FAIL`, `IDENTITY GATE FAIL`,
+  `nothing to do` -- i.e. the block was *interrupted*. Never after a gate failure, a stop,
+  a failed pre-flight or a clean finish; a log without a start line is never restarted.
+* Then: wait (up to 1 h) until node_b and node_c answer over SSH; run the pre-flight
+  (`run_matrix.py --check_only` with the invocation's power configuration) and stop there
+  if it fails; move every run directory of the block without a valid `results.json` and
+  without a gate marker to `results/_interrupted/<timestamp>/` (nothing is deleted; the
+  fetch job and the analysis never see that tree); restart the same command in a new tmux
+  session `fedrgbd_resume_<timestamp>`, output `logs/resume_<timestamp>.out`.
+* Every decision is a `RESUME [time] ...` line in `logs/resume.log`; the desktop fetch task
+  scans that file too and raises a pop-up for each new line.
+
 ## MAXN gate replaced: determinism gate + declared cross-configuration comparison (2026-09-28)
 
 5b's first run failed its identity gate in round 1 (04:58). Diagnosis and two smoke tests
