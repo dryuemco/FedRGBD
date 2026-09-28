@@ -85,13 +85,43 @@ def test_ties_go_to_the_earlier_round(tmp_path):
 def test_difference_sign_verdicts_and_holm(tmp_path):
     root = _tree(tmp_path, maxn_skill=0.95, het_skill=0.6)
     runs, comps = ccc.compare(root, lambda p: GROUPS, B=500)
-    assert len(comps) == 4 and (comps.n_pairs == 3).all()
-    assert (comps["diff"] > 0).all()
-    assert set(comps.verdict) <= {ccc.HIGHER, ccc.NO_DIFFERENCE}
-    assert (comps.holm_m == 4).all()
-    assert (comps.p_holm >= comps.p_boot - 1e-12).all()
+    first = comps[comps.family == "rounds_1_3"]
+    assert len(first) == 4 and (first.n_pairs == 3).all()
+    assert (first["diff"] > 0).all()
+    assert set(first.verdict) <= {ccc.HIGHER, ccc.NO_DIFFERENCE}
+    assert (first.holm_m == 4).all()
+    assert (first.p_holm >= first.p_boot - 1e-12).all()
+    ten = comps[comps.family == "ten_rounds"]              # no heterogeneous r10 run here
+    assert len(ten) == 2 and (ten.n_pairs == 0).all()
     md = ccc.comparisons_markdown(comps)
-    assert "equivalent" not in md and md.count("\n| ") == 5
+    assert "equivalent" not in md and "## rounds_1_3" in md and "## ten_rounds" in md
+
+
+def test_ten_round_family_selects_over_all_rounds_with_its_own_holm(tmp_path):
+    root = _tree(tmp_path, maxn_skill=0.7, het_skill=0.7, seeds=(42, 123, 456),
+                 cells=[("noniid", "fedavg")])
+    for strategy in ("fedavg", "fedbn"):
+        for seed in (42, 123, 456):
+            if strategy == "fedbn":           # MAXN FedBN runs of the same shape
+                vl = {r: 1.0 for r in range(1, 11)}
+                vl[2], vl[7] = 0.5, 0.1
+                skills = {r: 0.7 for r in range(1, 11)}
+                skills[7] = 1.0
+                _write_run(ccc.maxn_dir(root, "noniid", strategy, seed), vl, skills, seed)
+            hv = {r: 1.0 for r in range(1, 11)}
+            hv[9] = 0.2
+            _write_run(ccc.heterogeneous_dir(root, "noniid", strategy, seed, 10), hv,
+                       {r: 0.6 for r in range(1, 11)}, seed + 7)
+    runs, comps = ccc.compare(root, lambda p: GROUPS, B=300)
+    ten_runs = runs[runs.family == "ten_rounds"]
+    assert set(ten_runs[ten_runs.power_config == "maxn"].selected_round) == {7}
+    assert set(ten_runs[ten_runs.power_config == "heterogeneous"].selected_round) == {9}
+    ten = comps[comps.family == "ten_rounds"]
+    assert list(ten.strategy) == ["FedAvg", "FedBN"] and (ten.n_pairs == 3).all()
+    assert (ten.holm_m == 2).all() and (ten["diff"] > 0).all()
+    first = comps[(comps.family == "rounds_1_3") & (comps.n_pairs > 0)]
+    assert (first.holm_m == 1).all()                       # families never share a Holm
+    assert set(runs[runs.family == "rounds_1_3"].selected_round) <= {1, 2, 3}
 
 
 def test_missing_pairs_are_listed_not_invented(tmp_path):

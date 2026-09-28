@@ -5,11 +5,16 @@ Declared in ``docs/CROSS_CONFIG_COMPARISON.md`` before block 5b (``maxn_long_hor
 launched; read that file first.  This is an analysis, never a gate: it is reported
 whatever it shows.
 
-For every cell (partition x strategy) with a heterogeneous 3-round run and seed pairs:
-the MAXN run's rounds 1-3 against the heterogeneous 3-round run of the same cell and
-seed.  Each run's model is the one of the round in {1, 2, 3} with the lowest aggregated
-validation loss (the declared selection rule, restricted to rounds 1-3; earlier round on
-ties).  Its value is balanced accuracy pooled over the union of the three clients' test
+Two families, each with its own Holm correction:
+
+``rounds_1_3``   every cell (partition x strategy) with a heterogeneous 3-round run: the
+                 MAXN run's rounds 1-3 against the heterogeneous 3-round run of the same
+                 cell and seed; each run's model is the round in {1, 2, 3} with the lowest
+                 aggregated validation loss (earlier round on ties).
+``ten_rounds``   label skew x FedAvg and FedBN, seeds 42/123/456 (amendment of
+                 2026-09-28, before 5b launched): the MAXN run against the heterogeneous
+                 ``long_horizon_fedbn`` 10-round run of the same cell and seed, both over
+                 all ten rounds with the declared selection rule.  Its value is balanced accuracy pooled over the union of the three clients' test
 splits (CLAUDE.md rule 8, primary aggregation).  The seed-paired difference
 D = MAXN - heterogeneous gets the stratified cluster bootstrap of
 ``src.evaluation.bootstrap.seed_paired_diff_ci``, a three-way interval verdict and a
@@ -46,6 +51,14 @@ PARTITIONS = (("iid", "iid"), ("noniid", "non_iid_label"))
 #: strategies with a heterogeneous 3-round run of every seed; FedBN has none (see the doc)
 STRATEGIES = (("fedavg", "FedAvg"), ("fedprox_0.01", "FedProx(0.01)"))
 SEEDS = (42, 123, 456, 789, 1011)
+#: the declared families: cells, seeds, compared rounds, heterogeneous reference rounds
+FAMILIES = (
+    {"family": "rounds_1_3", "partitions": PARTITIONS, "strategies": STRATEGIES,
+     "seeds": SEEDS, "rounds": ROUNDS, "reference_rounds": 3},
+    {"family": "ten_rounds", "partitions": (("noniid", "non_iid_label"),),
+     "strategies": (("fedavg", "FedAvg"), ("fedbn", "FedBN")),
+     "seeds": (42, 123, 456), "rounds": tuple(range(1, 11)), "reference_rounds": 10},
+)
 MAXN_ROOT = os.path.join("pc_maxn")
 
 #: verdict phrases, fixed in docs/CROSS_CONFIG_COMPARISON.md
@@ -58,15 +71,23 @@ def maxn_dir(results_dir: str, tag: str, strategy: str, seed: int) -> str:
     return os.path.join(results_dir, MAXN_ROOT, "rev_%s_%s_r10_seed%d" % (tag, strategy, seed))
 
 
-def heterogeneous_dir(results_dir: str, tag: str, strategy: str, seed: int) -> str:
-    return os.path.join(results_dir, "rev_%s_%s_seed%d" % (tag, strategy, seed))
+def heterogeneous_dir(results_dir: str, tag: str, strategy: str, seed: int,
+                      rounds: int = 3) -> str:
+    """The heterogeneous matrix's run: 3-round default, or the ``_r10`` long-horizon run."""
+    suffix = "" if rounds == 3 else "_r%d" % rounds
+    return os.path.join(results_dir, "rev_%s_%s%s_seed%d" % (tag, strategy, suffix, seed))
+
+
+def selected_round_in(run_dir: str, rounds: Sequence[int]) -> Optional[int]:
+    """The declared selection rule restricted to ``rounds``."""
+    with open(os.path.join(run_dir, "results.json")) as f:
+        vl = (json.load(f).get("model_selection") or {}).get("val_loss_by_round") or {}
+    return select_round({int(r): v for r, v in vl.items() if int(r) in rounds})
 
 
 def selected_round_1_3(run_dir: str) -> Optional[int]:
     """The declared selection rule restricted to rounds 1-3."""
-    with open(os.path.join(run_dir, "results.json")) as f:
-        vl = (json.load(f).get("model_selection") or {}).get("val_loss_by_round") or {}
-    return select_round({int(r): v for r, v in vl.items() if int(r) in ROUNDS})
+    return selected_round_in(run_dir, ROUNDS)
 
 
 def pooled_unit(run_dir: str, rnd: int, groups: Dict[str, str]) -> Unit:
@@ -121,82 +142,96 @@ def compare(results_dir: str, groups_of, B: int = B):
     when both runs exist; a cell with no pair is left out and listed as missing.
     """
     run_rows, comp_rows = [], []
-    for tag, partition in PARTITIONS:
-        groups = None
-        for strategy, label in STRATEGIES:
-            pairs = {}
-            for seed in SEEDS:
-                m_dir = maxn_dir(results_dir, tag, strategy, seed)
-                h_dir = heterogeneous_dir(results_dir, tag, strategy, seed)
-                if not (os.path.isfile(os.path.join(m_dir, "results.json"))
-                        and os.path.isfile(os.path.join(h_dir, "results.json"))):
+    group_cache: Dict[str, Dict[str, str]] = {}
+    for fam in FAMILIES:
+        for tag, partition in fam["partitions"]:
+            for strategy, label in fam["strategies"]:
+                pairs = {}
+                for seed in fam["seeds"]:
+                    m_dir = maxn_dir(results_dir, tag, strategy, seed)
+                    h_dir = heterogeneous_dir(results_dir, tag, strategy, seed,
+                                              fam["reference_rounds"])
+                    if not (os.path.isfile(os.path.join(m_dir, "results.json"))
+                            and os.path.isfile(os.path.join(h_dir, "results.json"))):
+                        continue
+                    if partition not in group_cache:
+                        group_cache[partition] = groups_of(partition)
+                    groups = group_cache[partition]
+                    units = {}
+                    for side, d in (("maxn", m_dir), ("heterogeneous", h_dir)):
+                        rnd = selected_round_in(d, fam["rounds"])
+                        if rnd is None:
+                            raise ValueError("%s: no finite validation loss in rounds %s"
+                                             % (d, fam["rounds"]))
+                        units[side] = pooled_unit(d, rnd, groups)
+                        run_rows.append({"family": fam["family"], "partition": partition,
+                                         "strategy": label, "seed": seed, "power_config": side,
+                                         "run_dir": d, "selected_round": rnd,
+                                         "n_images": int(units[side].n.sum()),
+                                         METRIC: _ba(units[side])})
+                    pairs[seed] = units
+                base = {"family": fam["family"], "partition": partition, "strategy": label}
+                if not pairs:
+                    comp_rows.append(dict(base, n_pairs=0, paired_seeds="",
+                                          note="no seed pair yet"))
                     continue
-                groups = groups if groups is not None else groups_of(partition)
-                units = {}
-                for side, d in (("maxn", m_dir), ("heterogeneous", h_dir)):
-                    rnd = selected_round_1_3(d)
-                    if rnd is None:
-                        raise ValueError("%s: no finite validation loss in rounds 1-3" % d)
-                    units[side] = pooled_unit(d, rnd, groups)
-                    run_rows.append({"partition": partition, "strategy": label, "seed": seed,
-                                     "power_config": side, "run_dir": d, "selected_round": rnd,
-                                     "n_images": int(units[side].n.sum()),
-                                     METRIC: _ba(units[side])})
-                pairs[seed] = units
-            if not pairs:
-                comp_rows.append({"partition": partition, "strategy": label, "n_pairs": 0,
-                                  "paired_seeds": "", "note": "no seed pair yet"})
-                continue
-            seeds = sorted(pairs)
-            res = seed_paired_diff_ci([[pairs[s]["maxn"]] for s in seeds],
-                                      [[pairs[s]["heterogeneous"]] for s in seeds],
-                                      "crossconfig|%s|%s" % (partition, strategy), B=B)
-            comp_rows.append({"partition": partition, "strategy": label,
-                              "n_pairs": res["n_pairs"], "paired_seeds": " ".join(map(str, seeds)),
-                              "diff": res["diff"], "ci_low": res["ci_low"],
-                              "ci_high": res["ci_high"], "p_boot": res["p_boot"], "B": res["B"],
-                              "note": ""})
+                seeds = sorted(pairs)
+                res = seed_paired_diff_ci([[pairs[x]["maxn"]] for x in seeds],
+                                          [[pairs[x]["heterogeneous"]] for x in seeds],
+                                          "crossconfig|%s|%s|%s" % (fam["family"], partition,
+                                                                     strategy), B=B)
+                comp_rows.append(dict(base, n_pairs=res["n_pairs"],
+                                      paired_seeds=" ".join(map(str, seeds)), diff=res["diff"],
+                                      ci_low=res["ci_low"], ci_high=res["ci_high"],
+                                      p_boot=res["p_boot"], B=res["B"], note=""))
     runs = pd.DataFrame(run_rows)
     comps = pd.DataFrame(comp_rows)
     return runs, apply_rule(comps)
 
 
 def apply_rule(comps: pd.DataFrame) -> pd.DataFrame:
-    """Interval verdict per cell; Holm across all compared cells (one family)."""
+    """Interval verdict per cell; Holm across the compared cells of each family."""
     comps = comps.copy()
     if comps.empty or "diff" not in comps:
         return comps
-    done = comps["n_pairs"] > 0
     comps["verdict"] = None
     comps["p_holm"] = np.nan
-    comps["holm_m"] = int(done.sum())
+    comps["holm_m"] = 0
     comps["verdict_holm"] = None
-    if done.any():
+    for fam in comps["family"].unique():
+        done = (comps["family"] == fam) & (comps["n_pairs"] > 0)
+        if not done.any():
+            continue
         comps.loc[done, "verdict"] = [verdict_from_ci(lo, hi) for lo, hi in
                                       zip(comps.loc[done, "ci_low"], comps.loc[done, "ci_high"])]
         comps.loc[done, "p_holm"] = holm(comps.loc[done, "p_boot"].to_numpy())
+        comps.loc[done, "holm_m"] = int(done.sum())
         comps.loc[done, "verdict_holm"] = [verdict_from_holm(d, p) for d, p in
                                            zip(comps.loc[done, "diff"], comps.loc[done, "p_holm"])]
     return comps
 
 
 def comparisons_markdown(comps: pd.DataFrame) -> str:
-    lines = ["# Cross-configuration comparison: MAXN_SUPER - heterogeneous, rounds 1-3", "",
+    lines = ["# Cross-configuration comparison: MAXN_SUPER - heterogeneous", "",
              "Declared in docs/CROSS_CONFIG_COMPARISON.md. Balanced accuracy pooled over the "
-             "union of the clients' test splits at the round of rounds 1-3 with the lowest "
-             "aggregated validation loss; seed-paired difference in percentage points, 95 %% "
-             "stratified cluster-bootstrap interval (B = %d); Holm across the compared cells."
-             % B, "",
-             "| partition | strategy | seeds | diff | 95 % CI | p | p Holm | verdict | verdict (Holm) |",
-             "|---|---|---|---|---|---|---|---|---|"]
-    for r in comps.itertuples():
-        if not r.n_pairs:
-            lines.append("| %s | %s | none | | | | | %s | |" % (r.partition, r.strategy, r.note))
-            continue
-        lines.append("| %s | %s | %s | %+.1f | [%+.1f, %+.1f] | %.4f | %.4f | %s | %s |"
-                     % (r.partition, r.strategy, r.paired_seeds, 100 * r.diff, 100 * r.ci_low,
-                        100 * r.ci_high, r.p_boot, r.p_holm, r.verdict, r.verdict_holm))
-    return "\n".join(lines) + "\n"
+             "union of the clients' test splits at the selected round (rounds_1_3: among "
+             "rounds 1-3; ten_rounds: among rounds 1-10; lowest aggregated validation loss); "
+             "seed-paired difference in percentage points, 95 %% stratified cluster-bootstrap "
+             "interval (B = %d); Holm within each family." % B, ""]
+    for fam, g in comps.groupby("family", sort=False):
+        lines += ["## %s" % fam, "",
+                  "| partition | strategy | seeds | diff | 95 % CI | p | p Holm | verdict | verdict (Holm) |",
+                  "|---|---|---|---|---|---|---|---|---|"]
+        for r in g.itertuples():
+            if not r.n_pairs:
+                lines.append("| %s | %s | none | | | | | %s | |" % (r.partition, r.strategy, r.note))
+                continue
+            lines.append("| %s | %s | %s | %+.1f | [%+.1f, %+.1f] | %.4f | %.4f | %s | %s |"
+                         % (r.partition, r.strategy, r.paired_seeds, 100 * r.diff,
+                            100 * r.ci_low, 100 * r.ci_high, r.p_boot, r.p_holm, r.verdict,
+                            r.verdict_holm))
+        lines.append("")
+    return "\n".join(lines)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:

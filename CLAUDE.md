@@ -123,8 +123,9 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
 10. **MAXN block gate and cross-configuration comparison are declared**
    (2026-09-28, `docs/CROSS_CONFIG_COMPARISON.md`, committed before 5b relaunched). Hard
    gate: the two MAXN smoke runs named in `determinism_gate` must be bitwise identical.
-   MAXN vs heterogeneous (rounds 1-3, FedAvg/FedProx, IID/label skew) is a declared
-   analysis, `scripts/cross_config_comparison.py`, reported whatever it shows, never a
+   MAXN vs heterogeneous is a declared analysis in two Holm families -- rounds 1-3
+   (FedAvg/FedProx x IID/label skew) and all ten rounds (label skew x FedAvg/FedBN, seeds
+   42/123/456, vs long_horizon_fedbn; amendment committed before 5b launched) -- `scripts/cross_config_comparison.py`, reported whatever it shows, never a
    gate, never "equivalent". Do not change it after the first 5b run finishes.
 
 ## Model selection (declared rule — use this wording, do not paraphrase it)

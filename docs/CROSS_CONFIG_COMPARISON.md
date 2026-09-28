@@ -95,8 +95,20 @@ output `analysis/cross_config/`.
   The wording is fixed: never "equivalent" or "no effect" (this is not an equivalence
   test).
 
+**Amendment (2026-09-28, committed and pushed before 5b launched): a second family,
+`ten_rounds`.** For label skew x FedAvg and FedBN, seeds 42, 123 and 456, the MAXN run is
+also compared over all ten rounds with the heterogeneous `long_horizon_fedbn` run of the
+same cell and seed (`results/rev_noniid_<strategy>_r10_seed<S>`, node_a 15W, node_b
+MAXN_SUPER, node_c 7W). Each run's model is the round in {1, ..., 10} with the lowest
+aggregated validation loss (the declared selection rule, unrestricted; earlier round on
+ties). Same statistic (pooled balanced accuracy, seed-paired difference MAXN -
+heterogeneous, stratified cluster bootstrap, B = 10,000), same three verdict phrases, and
+its own Holm family (m = 2), never pooled with `rounds_1_3` (m = 4). The `rounds_1_3`
+comparison is unchanged and still covers these cells' rounds 1-3 for FedAvg; FedBN
+enters only this family. Reported whatever it shows.
+
 **What existed when this was declared.** The heterogeneous 3-round results of every cell
-(published in `analysis/`). Of the MAXN side: only the four smoke runs above (IID
+and the heterogeneous 10-round `long_horizon_fedbn` results (published in `analysis/`). Of the MAXN side: only the four smoke runs above (IID
 rho = 0.01, 2 rounds, not a 5b cell) and round 1 of the failed run, whose prediction
 files were compared with the reference (differences above) and whose node_a client log
 printed its round-1 metrics on node_a (val and test balanced accuracy 0.5000: the
