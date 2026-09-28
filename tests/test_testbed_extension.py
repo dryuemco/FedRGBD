@@ -56,21 +56,12 @@ def test_maxn_block_is_30_ten_round_runs_in_pc_maxn():
     assert all(r.power_config == "maxn" for r in runs)
 
 
-def test_identity_gates_are_exactly_the_two_declared_sets():
+def test_the_maxn_block_has_no_cross_configuration_identity_gate():
+    # replaced 2026-09-28 (docs/CROSS_CONFIG_COMPARISON.md): node_c's 7W mode in the
+    # heterogeneous matrix makes bitwise identity with MAXN impossible; the block is
+    # gated by within-configuration determinism instead (tests/test_cross_config_comparison.py)
     runs = prc.expand_all(_revision(), "maxn_long_horizon")["maxn_long_horizon"]
-    n = 0
-    for r in runs:
-        want = []
-        if r.strategy in ("fedavg", "fedprox_0.01"):
-            want.append(("results/rev_%s_%s_seed%d" % (r.dist, r.strategy, r.seed), [1, 2, 3]))
-        if r.strategy in ("fedavg", "fedbn") and r.dist == "noniid" and r.seed in (42, 123, 456):
-            want.append(("results/rev_noniid_%s_r10_seed%d" % (r.strategy, r.seed),
-                         list(range(1, 11))))
-        assert r.identity == want, r.output_dir
-        n += len(want)
-        for ref, _ in r.identity:                      # the references are committed runs
-            assert os.path.isfile(os.path.join(_REPO, ref, "results.json")), ref
-    assert n == 26
+    assert all(r.identity == [] for r in runs)
 
 
 def test_the_maxn_block_cannot_be_emitted_for_the_heterogeneous_testbed(capsys):
@@ -80,7 +71,7 @@ def test_the_maxn_block_cannot_be_emitted_for_the_heterogeneous_testbed(capsys):
     assert prc.main(["--all_seeds", "--block", "maxn_long_horizon", "--format", "bash",
                      "--no_skip_existing", "--power_config", "maxn"]) == 0
     out = capsys.readouterr().out
-    assert out.count(">>> IDENTITY GATE:") == 26
+    assert out.count(">>> IDENTITY GATE:") == 0
     assert "results/pc_maxn/pc_maxn" not in out
     # every block at once, heterogeneous named explicitly: the maxn block is left out
     assert prc.main(["--all_seeds", "--format", "bash", "--no_skip_existing",
@@ -97,11 +88,7 @@ def test_run_matrix_parses_the_gates_it_must_enforce(tmp_path, capsys):
     path.write_text(capsys.readouterr().out, encoding="utf-8")
     runs = run_matrix.parse_block(str(path))
     assert len(runs) == 30
-    by = {r["out_dir"]: r["gates"] for r in runs}
-    assert by["results/pc_maxn/rev_noniid_fedavg_r10_seed42"] == [
-        ("results/rev_noniid_fedavg_seed42", [1, 2, 3]),
-        ("results/rev_noniid_fedavg_r10_seed42", list(range(1, 11)))]
-    assert by["results/pc_maxn/rev_iid_fedbn_r10_seed42"] == []
+    assert all(r["gates"] == [] for r in runs)
     run_matrix.check_namespace(runs, "maxn")
 
 
@@ -424,13 +411,28 @@ def test_failed_gate_renames_results_and_is_found_by_a_namespace_scan(tmp_path, 
     out = "results/pc_maxn/rev_noniid_fedbn_r10_seed42"
     os.makedirs(out)
     _write_results(out, [1.0])
-    run_matrix.fail_gate({"out_dir": out, "gates": []}, "round 10 differs")
+    assert run_matrix.fail_gate({"out_dir": out, "gates": []}, "round 10 differs") is True
     assert not os.path.exists(os.path.join(out, "results.json"))        # not "existing"
     assert os.path.isfile(os.path.join(out, "results.gate_failed.json"))
     # a relaunch through --block regenerates the script without this run; the
     # namespace scan still finds it
     assert run_matrix.unresolved_gate_failures([], "results/pc_maxn") == [out]
     assert not block_report.is_finished(out)
+
+
+def test_gate_stop_message_says_what_happened_to_results_json(tmp_path, monkeypatch):
+    # 2026-09-28: the gate fired in round 1, before the server wrote results.json,
+    # and the STOP line still claimed a rename
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(run_matrix, "LOG_DIR", str(tmp_path / "logs"))
+    out = "results/pc_maxn/rev_iid_fedavg_r10_seed42"
+    os.makedirs(os.path.join(out, "predictions"))
+    renamed = run_matrix.fail_gate({"out_dir": out, "gates": []}, "round 1 differs")
+    assert renamed is False
+    assert not os.path.exists(os.path.join(out, "results.gate_failed.json"))
+    msg = run_matrix.gate_stop_message(out, "round 1 differs", renamed)
+    assert "no results.json had been written" in msg and "renamed" not in msg
+    assert "renamed to results.gate_failed.json" in run_matrix.gate_stop_message(out, "x", True)
 
 
 def test_block_report_never_counts_a_marked_run(tmp_path):

@@ -76,7 +76,9 @@ def test_maxn_long_horizon_spec(revision):
     assert b["seeds"] == [42, 123, 456, 789, 1011]
     assert b["rounds"] == 10
     assert b["total_runs"] == 30
-    assert len(b["identity_gates"]) == 2
+    assert "identity_gates" not in b          # replaced 2026-09-28, see CROSS_CONFIG_COMPARISON
+    assert b["determinism_gate"]["runs"] == ["results/diag_smoke_maxn",
+                                             "results/diag_smoke_maxn_r2"]
 
 
 def test_long_horizon_fedbn_spec(revision):

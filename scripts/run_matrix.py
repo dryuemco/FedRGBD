@@ -546,6 +546,73 @@ def check_namespace(runs, power_config):
                          % (len(bad), root, power_config, bad[0], power_config))
 
 
+# --- within-configuration determinism gate ------------------------------------
+# docs/CROSS_CONFIG_COMPARISON.md: a block may declare `determinism_gate: {runs: [a, b]}`,
+# two smoke runs of the same command under the block's power configuration.  The block
+# starts only if they are bitwise identical: every prediction file (same set of files,
+# every array with the same dtype, shape and bytes), every client's per-round training
+# loss and the aggregated validation loss of every round.
+EXPERIMENT_CONFIG = os.path.join('configs', 'experiment_matrix.yaml')
+
+
+def block_determinism_gate(block, config_path=EXPERIMENT_CONFIG):
+    """-> the `determinism_gate` a block declares, or None."""
+    import yaml
+    with open(config_path, encoding='utf-8') as f:
+        cfg = yaml.safe_load(f) or {}
+    return ((cfg.get('revision') or {}).get(block) or {}).get('determinism_gate')
+
+
+def _smoke_record(run_dir):
+    with open(os.path.join(run_dir, 'results.json')) as f:
+        d = json.load(f)
+    losses = {(int(r['round']), node): c.get('train_loss')
+              for r in d.get('rounds') or [] for node, c in (r.get('fit') or {}).get('clients', {}).items()}
+    val = {str(k): v for k, v in ((d.get('model_selection') or {}).get('val_loss_by_round') or {}).items()}
+    return losses, val
+
+
+def runs_bitwise_identical(dir_a, dir_b):
+    """-> (True, summary) if the two runs are bitwise identical, else (False, first difference)."""
+    import numpy as np
+    for d in (dir_a, dir_b):
+        if not os.path.isfile(os.path.join(d, 'results.json')):
+            return False, '%s: results.json missing' % d
+    la, va = _smoke_record(dir_a)
+    lb, vb = _smoke_record(dir_b)
+    if not la or not va:
+        return False, '%s: no per-round training or validation losses' % dir_a
+    if la != lb:
+        k = sorted(set(la) | set(lb))
+        first = next(x for x in k if la.get(x) != lb.get(x))
+        return False, 'train_loss round %d %s: %r vs %r' % (first[0], first[1], la.get(first), lb.get(first))
+    if va != vb:
+        return False, 'aggregated val loss differs: %r vs %r' % (va, vb)
+    pa, pb = os.path.join(dir_a, 'predictions'), os.path.join(dir_b, 'predictions')
+    fa = sorted(f for f in os.listdir(pa) if f.endswith('.npz')) if os.path.isdir(pa) else []
+    fb = sorted(f for f in os.listdir(pb) if f.endswith('.npz')) if os.path.isdir(pb) else []
+    if not fa or fa != fb:
+        return False, 'prediction file sets differ (%d vs %d files)' % (len(fa), len(fb))
+    for name in fa:
+        with np.load(os.path.join(pa, name)) as A, np.load(os.path.join(pb, name)) as B:
+            if sorted(A.files) != sorted(B.files):
+                return False, '%s: arrays differ' % name
+            for k in A.files:
+                x, y = A[k], B[k]
+                if x.dtype != y.dtype or x.shape != y.shape or x.tobytes() != y.tobytes():
+                    return False, '%s: array %r is not bitwise identical' % (name, k)
+    return True, '%d prediction files, %d client-round losses and %d validation losses identical' % (
+        len(fa), len(la), len(va))
+
+
+def check_determinism_gate(gate):
+    """-> (ok, why) for a declared `determinism_gate`."""
+    runs = list((gate or {}).get('runs') or [])
+    if len(runs) != 2:
+        return False, 'determinism_gate must name exactly two runs, got %r' % (runs,)
+    return runs_bitwise_identical(runs[0], runs[1])
+
+
 def result_ok(out_dir):
     path = os.path.join(out_dir, 'results.json')
     if not os.path.isfile(path):
@@ -684,11 +751,23 @@ def fail_gate(run, reason):
     """Record a gate failure so that nothing can mistake the run for a finished one:
     the marker is written and results.json (if any) becomes results.gate_failed.json,
     so the generator does not skip the run as existing, the fetch job does not take
-    it, block_report does not count it and analyze_results refuses the namespace."""
+    it, block_report does not count it and analyze_results refuses the namespace.
+    -> True if a results.json existed and was renamed, False if there was none."""
     write_gate_marker(run, reason)
     path = os.path.join(run['out_dir'], 'results.json')
     if os.path.isfile(path):
         os.replace(path, os.path.join(run['out_dir'], 'results.gate_failed.json'))
+        return True
+    return False
+
+
+def gate_stop_message(out_dir, reason, renamed):
+    """The STOPPING line of a gate failure; says what happened to results.json."""
+    kept = ('results.json renamed to results.gate_failed.json' if renamed else
+            'no results.json had been written; the per-round prediction files are kept')
+    return ('STOPPING the block: IDENTITY GATE FAILED for %s: %s. Not retried. The run '
+            'directory keeps its output (%s) and %s; the block will not start again until '
+            'a human has resolved it.' % (out_dir, reason, kept, GATE_MARKER))
 
 
 def set_aside_predictions(run, attempt):
@@ -1095,6 +1174,15 @@ def main():
             'must decide what they mean before the block may continue.' % ', '.join(failed_gates))
         sys.exit(1)
     check_gate_references(runs)
+    det_gate = block_determinism_gate(args.block) if args.block else None
+    if det_gate:
+        det_ok, det_why = check_determinism_gate(det_gate)
+        pair = ' vs '.join(map(str, det_gate.get('runs') or []))
+        if not det_ok:
+            log('PRE-FLIGHT FAIL -- determinism gate (%s): %s. The block does not start '
+                '(docs/CROSS_CONFIG_COMPARISON.md).' % (pair, det_why))
+            sys.exit(1)
+        log('determinism gate OK (%s): %s' % (pair, det_why))
     todo = [r for r in runs if not os.path.isfile(os.path.join(r['out_dir'], 'results.json'))]
     log('block script: %s (power_config %s: %s)'
         % (script, args.power_config, ', '.join('%s=%s' % (n, power[n]) for n in NODE_NAMES)))
@@ -1123,6 +1211,7 @@ def main():
         ok = False
         preflight_failed = False
         gate_failed = None
+        gate_renamed = False
         m = RE_ROUNDS.search(run['server'])
         timeout = args.run_timeout or int(m.group(1) if m else 3) * args.round_timeout
         for attempt in (1, 2):
@@ -1143,7 +1232,7 @@ def main():
                     reason = gated_rounds_on_disk_differ(run)
                     if reason:
                         log('    IDENTITY GATE FAIL in the failed attempt\'s rounds: %s' % reason)
-                        fail_gate(run, reason)
+                        gate_renamed = fail_gate(run, reason)
                         gate_failed = reason
                         ok = False
                         break
@@ -1167,7 +1256,7 @@ def main():
                     energy.stop()
             dt = time.time() - t0
             if rc == -5:
-                fail_gate(run, ended)
+                gate_renamed = fail_gate(run, ended)
                 gate_failed = ended
                 ok = False
                 break
@@ -1175,7 +1264,7 @@ def main():
             if ok and run.get('gates'):
                 gate_ok, gate_why = final_identity_check(run)
                 if not gate_ok:
-                    fail_gate(run, gate_why)
+                    gate_renamed = fail_gate(run, gate_why)
                     log('    IDENTITY GATE FAIL: %s' % gate_why)
                     gate_failed = gate_why
                     ok = False          # a finished run whose gate failed is NOT done
@@ -1204,10 +1293,7 @@ def main():
         else:
             failed += 1
             if gate_failed:
-                log('STOPPING the block: IDENTITY GATE FAILED for %s: %s. Not retried. The '
-                    'run directory keeps its output (results.json renamed to '
-                    'results.gate_failed.json) and %s; the block will not start again until '
-                    'a human has resolved it.' % (run['out_dir'], gate_failed, GATE_MARKER))
+                log(gate_stop_message(run['out_dir'], gate_failed, gate_renamed))
             elif preflight_failed:
                 log('STOPPING the block: pre-flight failed before %s (see above). Fix the '
                     'cause, then re-run this command; finished runs are skipped '

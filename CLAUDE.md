@@ -32,6 +32,16 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
   8 GB available, so they are comparable for timing.
 - **v1 ran over WiFi (802.11ac), the revision over wired GbE.** v1 and revision wall-clock numbers
   are not comparable; revision timings supersede the v1 ones.
+- **Sudo scope on the testbed (granted 2026-09-28).** The assistant may run exactly two
+  privileged commands, and only on node_c: `sudo -n nvpmodel -m 2` (MAXN_SUPER) and
+  `sudo -n nvpmodel -m 3` (7W), via `/etc/sudoers.d/nvpmodel`, and never while any
+  run_matrix or FL process is alive on any node. Switching reboots node_c; afterwards verify
+  `nvpmodel -q` on all three nodes and that WiFi is still disabled. No other sudo, ever --
+  every other power-mode change, reboot or system change is the user's.
+- **Power mode changes the numbers, not only the timing.** Training is bitwise
+  deterministic within a fixed power configuration, but node_c's 7W mode (2 of 4 GPU TPCs,
+  4 CPU cores) trains differently from MAXN_SUPER; clock changes alone (node_a 15W vs MAXN)
+  do not (`docs/CROSS_CONFIG_COMPARISON.md`, `analysis/determinism/`).
 - Tests: `python -m pytest tests -q -k "not end_to_end"` (~250 CPU tests, seconds).
   On the Jetson nodes the ROS 2 pytest plugins break collection; use
   `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest tests -q -k "not end_to_end" -p no:cacheprovider`.
@@ -109,6 +119,13 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
    baseline training (2026-09-19/20) and the FL/centralized global values are the known
    pooled figures; use the doc's Provenance wording. Never change them afterwards, never
    add or drop a comparison, never paraphrase the verdict phrases. `scripts/global_evaluation.py`.
+
+10. **MAXN block gate and cross-configuration comparison are declared**
+   (2026-09-28, `docs/CROSS_CONFIG_COMPARISON.md`, committed before 5b relaunched). Hard
+   gate: the two MAXN smoke runs named in `determinism_gate` must be bitwise identical.
+   MAXN vs heterogeneous (rounds 1-3, FedAvg/FedProx, IID/label skew) is a declared
+   analysis, `scripts/cross_config_comparison.py`, reported whatever it shows, never a
+   gate, never "equivalent". Do not change it after the first 5b run finishes.
 
 ## Model selection (declared rule — use this wording, do not paraphrase it)
 

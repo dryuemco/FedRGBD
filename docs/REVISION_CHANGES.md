@@ -1231,6 +1231,26 @@ All of the above was reviewed adversarially before it ran (five reviewers, two
 skeptics per finding); the sixteen confirmed findings are fixed and covered by
 `tests/test_testbed_extension.py`.
 
+## MAXN gate replaced: determinism gate + declared cross-configuration comparison (2026-09-28)
+
+5b's first run failed its identity gate in round 1 (04:58). Diagnosis and two smoke tests
+(`docs/CROSS_CONFIG_COMPARISON.md`, evidence in `analysis/determinism/`): training is
+bitwise deterministic within a power configuration, and node_c's 7W mode -- 2 of 4 GPU
+TPCs and 4 of 6 CPU cores -- trains differently from MAXN_SUPER, so a MAXN run can never be
+bitwise identical to the heterogeneous matrix. Changes:
+
+* `configs/experiment_matrix.yaml`: `maxn_long_horizon` drops its two `identity_gates` and
+  declares `determinism_gate: {runs: [results/diag_smoke_maxn, results/diag_smoke_maxn_r2]}`.
+* `scripts/run_matrix.py`: before a block that declares a determinism gate starts, the two
+  runs must be bitwise identical (prediction files, per-client training losses, aggregated
+  validation losses), else `PRE-FLIGHT FAIL -- determinism gate` and no start. The STOP
+  line of a gate failure now says whether a `results.json` was renamed; on 2026-09-28 none
+  existed and the line still claimed a rename.
+* `scripts/cross_config_comparison.py` (+ tests): the declared MAXN-vs-heterogeneous
+  analysis, rounds 1-3, pooled balanced accuracy at the round selected among 1-3,
+  seed-paired stratified cluster bootstrap, three-way verdict, Holm over the cells.
+* CLAUDE.md: rule 10 and the assistant's sudo scope on node_c.
+
 ## Balanced-accuracy aggregation, measured skew, stale paper items, 2-node removal (2026-09-28)
 
 **Aggregation (decision 1).** Until now every row of a reference table aggregated its
