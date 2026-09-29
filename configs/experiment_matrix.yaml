@@ -557,13 +557,19 @@ revision:
   #     every client; materialised by scripts/camera_fl_prepare.py into
   #     data/processed/camera_fold<f>/node_{a,b,c}.
   #     Declares its power configuration like maxn_long_horizon: all three
-  #     nodes at MAXN_SUPER, runs always in results/pc_maxn/, never emitted
-  #     for another configuration and never pooled with one.  It has no
-  #     determinism_gate of its own and is not covered by maxn_long_horizon's.
+  #     nodes at MAXN_SUPER (pre-flight power-mode lock), never emitted for
+  #     another configuration and never pooled with one.  Separate from FLAME
+  #     by dataset: runs in results/camera/maxn/, desktop baselines in
+  #     results/camera/desktop/; scripts/analyze_results.py never reads
+  #     results/camera/.  Its own determinism gate (prereg sec. 6, amended
+  #     2026-09-29 before any footage): the two smoke runs below, the same
+  #     command twice (--block camera_determinism_smoke), must be bitwise
+  #     identical before the block starts, as for maxn_long_horizon.
   #     Not in print_revision_commands.py's BLOCK_ORDER (not part of the FLAME
   #     matrix, not counted in grand_total_runs, like cross_sensor_loso):
-  #     emitted only with --block camera_sensor_skew (testbed, run_matrix.py)
-  #     and --block camera_sensor_skew_baselines (desktop GPU, never run_matrix).
+  #     emitted only with --block camera_sensor_skew and --block
+  #     camera_determinism_smoke (testbed, run_matrix.py) and --block
+  #     camera_sensor_skew_baselines (desktop GPU, never run_matrix).
   #     Analysis: scripts/camera_analysis_b.py -> analysis/camera/b/.
   # ------------------------------------------------------------------------
   camera_sensor_skew:
@@ -581,11 +587,15 @@ revision:
     lr: 0.001
     batch_size: 8
     modality: "rgb"
-    output_dir_convention: "results/pc_maxn/rev_camera_fold<f>_<strategy>_r10_seed<S>"
+    output_dir_convention: "results/camera/maxn/rev_camera_fold<f>_<strategy>_r10_seed<S>"
     total_runs: 45   # 3 strategies x 5 folds x 3 seeds
-    data_preparation:
-      - "python3 scripts/camera_fl_prepare.py --clean"
-      - "python3 scripts/camera_fl_prepare.py --verify"
+    determinism_gate:
+      runs: [results/camera/maxn/diag_camera_smoke, results/camera/maxn/diag_camera_smoke_r2]
+      smoke: {fold: 0, strategy: fedavg, seed: 42, rounds: 2}
+    data_preparation:   # on each node, its own sensor's frames only (prereg sec. 9)
+      - "node_a: python3 scripts/camera_fl_prepare.py --clean --nodes node_a && python3 scripts/camera_fl_prepare.py --verify --nodes node_a"
+      - "node_b: python3 scripts/camera_fl_prepare.py --clean --nodes node_b && python3 scripts/camera_fl_prepare.py --verify --nodes node_b"
+      - "node_c: python3 scripts/camera_fl_prepare.py --clean --nodes node_c && python3 scripts/camera_fl_prepare.py --verify --nodes node_c"
     desktop_baselines:
       description: >
         Local-only (each client alone, scripts/train_local.py --batch) and
@@ -595,6 +605,6 @@ revision:
         declared selection rule; then scripts/predict_from_checkpoint.py
         <run> for the per-image predictions the analysis reads.
       baseline_types: [centralized, local_only]
-      output_root: results/rev_baselines_camera
-      output_dir_convention: "results/rev_baselines_camera/rev_camera_fold<f>_<centralized|local>_r10_seed<S>"
+      output_root: results/camera/desktop
+      output_dir_convention: "results/camera/desktop/rev_camera_fold<f>_<centralized|local>_r10_seed<S>"
       total_runs: 30   # 2 types x 5 folds x 3 seeds (= 60 trainings: local-only trains one model per node)

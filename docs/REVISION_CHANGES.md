@@ -1420,4 +1420,57 @@ any footage exists. Nothing here is imported by the FLAME training path (`src/fl
 * **Open before the first camera FL run.** `scripts/analyze_results.py` walks all of
   `results/`, so `results/pc_maxn/rev_camera_*` would enter `analysis/summary_table.csv`
   next to the FLAME MAXN runs (as their own partitions `camera_fold<f>`, not pooled, but
-  in the FLAME tables). Exclude them there before those runs exist.
+  in the FLAME tables). Exclude them there before those runs exist. *Resolved the same
+  day, next section.*
+
+## Camera separated from FLAME by dataset; prereg Amendment 1; timing reporting rule (2026-09-29)
+
+Desktop only; 5b kept running and the nodes did not pull. No footage existed (checked
+read-only on all three nodes).
+
+* **Results tree.** Camera runs live only in `results/camera/`: testbed runs in
+  `results/camera/<power_config>/` (`rev_camera_fold<f>_*`, the gate's
+  `diag_camera_smoke{,_r2}`), desktop runs in `results/camera/desktop/` (baselines, and
+  LOSO under `loso/`; previously `results/pc_maxn/`, `results/rev_baselines_camera/` and
+  `results/camera_a/`, none of which ever held a run).
+  `print_revision_commands.py` places them there, and `--baseline_root` cannot move them.
+  `run_matrix.py` gains `namespace_root(power_config, block)`: a camera block must write to
+  `results/camera/<pc>/`, and no FLAME block may write there. A camera script is accepted
+  only with its `--block` named.
+* **FLAME analysis scoped to FLAME.** `analyze_results.py` (and so
+  `aggregation_sensitivity.py` and `global_evaluation.py`, which use `collect_runs`) skips the
+  `camera` tree, every `rev_camera_*` / `diag_camera_*` directory wherever it is, and any
+  run whose results.json records a `camera_fold` split. A camera identity-gate marker does
+  not block the FLAME analysis. `tests/test_camera_separation.py` places camera runs in
+  their own tree, in FLAME namespaces and under a FLAME-looking name, and checks that every
+  FLAME output file is byte-identical. On the real `results/` tree the analysis output of
+  5e3d11a and of this change is identical (8 files, `--no_plots`). The camera analyses read
+  only `results/camera/` (`camera_analysis_a.check_camera_root`; `camera_analysis_b` refuses
+  a config that places a run elsewhere).
+* **Pre-flight digests for camera folds.** Found on the way: the testbed pre-flight
+  compares every split's `manifest.csv` md5 with `P0_SUMMARY.md`, which lists only FLAME
+  splits, so run_matrix would have refused the camera block. `expected_digests` now also
+  reads `fold_manifest_md5` from `data/splits_camera/fl_materialised_manifest.csv` (written
+  by `camera_fl_prepare.py`). A fold listed with two digests is refused.
+* **Prereg Amendment 1** (`docs/CAMERA_EXPERIMENT_PREREG.md` section 9, before footage):
+  - each camera is captured on its own node, and its frames stay there for question (b);
+  - the 45 FL runs run at MAXN_SUPER on all three nodes with the power-mode lock;
+  - a hard determinism gate: two camera smoke runs (fold 0, FedAvg, seed 42, 2 rounds;
+    `configs/experiment_matrix.yaml` `camera_sensor_skew.determinism_gate`, emitted by
+    `--block camera_determinism_smoke`);
+  - LOSO and the baselines stay on the desktop GPU;
+  - data preparation per node (`--nodes <node>`).
+* **Timing reporting rule** (CLAUDE.md rule 12, paper section "Time- and
+  Communication-Normalised Comparison"):
+  - round 1 is reported separately as the cold start;
+  - steady-state per-round time is the median of `round_time_s` over rounds 2..R, the same
+    for both power configurations and every strategy;
+  - declared before the heterogeneous-vs-MAXN timing comparison was computed. Totals, and
+    a rough total/R figure, had been noted while 5b was monitored.
+
+  Evidence: in 5b, round 1 took 1062 s (seed 42, the first run after launch) and 1081 s
+  (seed 789, restarted after the outage), against 919-952 s in every other round of the
+  four IID FedAvg runs. Not yet implemented in `analyze_results.py` / `export_latex_tables.py`.
+* **Removed** `tests/test_camera_fl.py::test_every_other_block_is_byte_identical_to_the_committed_generator`:
+  it compared with HEAD and has been skipped permanently since the camera commit.
+  `tests/test_revision_commands_frozen.py` pins the same property against 2a565b3.

@@ -336,6 +336,11 @@ def load_all(root: str, config_path: str, labels_csv: str, folds_csv: str):
     """-> (preds {method: {seed: {node: arrays}}}, frames, folds, run dirs)."""
     frames, folds = read_scene_table(labels_csv, folds_csv)
     runs = expected_runs(config_path)
+    outside = [d for by in runs.values() for d in by.values()
+               if not d.replace("\\", "/").startswith("results/camera/")]
+    if outside:
+        raise SystemExit("camera analyses read only results/camera/, but the config places "
+                         "%d run(s) elsewhere (first: %s)" % (len(outside), outside[0]))
     missing = [d for by in runs.values() for d in by.values()
                if not os.path.isdir(os.path.join(root, d))]
     if missing:

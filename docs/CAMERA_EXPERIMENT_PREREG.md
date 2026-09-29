@@ -150,7 +150,8 @@ of evidence, never as sensor invariance.
   exactly one fold.
 * **Methods.** FedAvg, FedProx (mu = 0.01), FedBN: 10 rounds, 5 local epochs, Adam 1e-3,
   batch 8, all three clients every round, on the testbed with all three nodes at
-  MAXN_SUPER (its own power configuration; never pooled with any other). Local-only (each
+  MAXN_SUPER (its own power configuration; never pooled with any other; power-mode lock,
+  determinism gate and results location fixed by Amendment 1, section 9). Local-only (each
   client alone) and centralized (the three clients' training data pooled): 50 epochs
   (= 10 x 5), same optimiser, desktop GPU. Every method, fold and seed uses the declared
   selection rule.
@@ -193,3 +194,46 @@ nodes at a common time, per-frame metadata, `labels.csv`, the scene manifests (L
 and the five federated folds), the LOSO runner and its analysis, and the sensor-skew
 federated configuration. The manifests are generated from the scene ids alone, never from
 directory-walk order (CLAUDE.md rule 2), and are committed before any model is trained.
+
+## 9. Amendment 1 (2026-09-29, before any footage exists)
+
+Declared 2026-09-29 and committed and pushed before the first capture. On that day no
+footage of this experiment existed: `data/raw/camera`, `data/processed/camera_fold*` and
+`data/splits_camera` were absent on all three nodes (checked read-only), and the desktop
+held only the blank scene-sheet template. So this amendment is part of the
+pre-registration, not a change after data. It adds execution conditions and changes no
+question, split, model, metric, family, verdict phrase or interpretation rule above.
+
+* **Sensor to node.** Each camera is captured on its own node and its frames stay
+  there for the federated runs: D435if on node_a, D435i on node_b, ZED 2i on node_c. The
+  federated client on a node trains only on the frames that node's camera recorded
+  (`camera_fl_prepare.py --nodes <node>`). No node receives another camera's frames for
+  question (b).
+* **Where each training runs.** The 45 federated runs of question (b) run on the testbed
+  with all three nodes at MAXN_SUPER. Nothing else moves: question (a) (leave-one-scene-out)
+  and the local-only and centralized baselines of question (b) stay on the desktop GPU as
+  in sections 5 and 6, on copies of the same frames.
+* **Power-mode lock.** As for block 5b (`maxn_long_horizon`): the camera block declares
+  `power_config: maxn`. `scripts/run_matrix.py` refuses to start unless `nvpmodel -q`
+  reports MAXN_SUPER on all three nodes. It reads the modes again after every run, and a
+  run during which any mode changed is moved out of `results/`, never counted.
+* **Determinism gate (hard).** As for block 5b: before the block starts, two smoke runs of
+  one command must be bitwise identical -- every prediction file (same files, dtype, shape
+  and bytes), every client's per-round training loss and every round's aggregated
+  validation loss. The smoke command: camera fold 0, FedAvg, seed 42, 2 rounds, 5 local
+  epochs, Adam 1e-3, batch 8, all three nodes at MAXN_SUPER
+  (`--block camera_determinism_smoke`, runs `results/camera/maxn/diag_camera_smoke` and
+  `..._r2`). They run after the capture and before the block. If they differ, the block does
+  not start, and the failure is reported as it is, never explained away. The smoke runs are
+  never analysed. 5b's gate (FLAME smoke runs) does not cover the camera block.
+* **Separate from FLAME by dataset.** Camera testbed runs are written to
+  `results/camera/maxn/`, desktop runs to `results/camera/desktop/`. The FLAME analysis
+  (`scripts/analyze_results.py` and everything built on it) never reads `results/camera/`,
+  so no camera run appears in any FLAME table. The camera analyses
+  (`scripts/camera_analysis_a.py`, `scripts/camera_analysis_b.py`) read only
+  `results/camera/`. The camera MAXN_SUPER runs are never pooled or compared with the FLAME
+  MAXN_SUPER runs.
+* **Capture clock check (implementation of section 2).** A capture is not scheduled while
+  any node's clock differs from node_a's by more than 1 s or cannot be measured: the
+  second-level synchronisation of section 2, enforced. The measured offsets are logged
+  with every capture.

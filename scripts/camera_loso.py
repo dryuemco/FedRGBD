@@ -440,7 +440,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--img_size", type=int, default=224, help="224 = prereg; smaller only for tests")
     p.add_argument("--no_pretrained", action="store_true",
                    help="random init instead of ImageNet weights (tests only)")
-    p.add_argument("--output_root", default=os.path.join("results", "camera_a"))
+    p.add_argument("--output_root", default=os.path.join("results", "camera", "desktop", "loso"))
     p.add_argument("--force", action="store_true", help="re-run complete runs")
     return p
 

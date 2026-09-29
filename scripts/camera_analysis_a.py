@@ -27,7 +27,7 @@ Verdicts: interval rule (L > 0 positive phrase, U < 0 negative phrase, otherwise
 the direction of the point estimate) is the headline, the interval verdict is reported
 alongside.  A "no detectable difference" is absence of evidence, never sensor invariance.
 
-    python scripts/camera_analysis_a.py --results_root results/camera_a \
+    python scripts/camera_analysis_a.py --results_root results/camera/desktop/loso \
         --labels_csv data/raw/camera/labels.csv --output_dir analysis/camera/a
 """
 
@@ -100,8 +100,21 @@ def kept_ids(labels_csv: str) -> Dict[str, set]:
     return out
 
 
+def check_camera_root(path: str) -> None:
+    """Camera analyses read only results/camera/: a root inside the repository's results/
+    but outside results/camera/ is refused (FLAME and camera never mix, in either
+    direction; a root outside results/, e.g. a test fixture, is allowed)."""
+    results = os.path.normcase(os.path.realpath(os.path.join(REPO, "results")))
+    camera = os.path.join(results, "camera")
+    p = os.path.normcase(os.path.realpath(path))
+    inside = lambda root: p == root or p.startswith(root + os.sep)
+    if inside(results) and not inside(camera):
+        raise SystemExit("%s: camera analyses read only results/camera/" % path)
+
+
 def collect(results_root: str) -> Dict[Tuple[str, str, int], str]:
     """(modality, source, seed) -> run directory, from the runner's results.json."""
+    check_camera_root(results_root)
     runs = {}
     for path in sorted(glob.glob(os.path.join(results_root, "**", "results.json"),
                                  recursive=True)):
@@ -321,7 +334,7 @@ def markdown(pairs: pd.DataFrame, contrast: pd.DataFrame, matrix: pd.DataFrame, 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--results_root", default=os.path.join("results", "camera_a"))
+    ap.add_argument("--results_root", default=os.path.join("results", "camera", "desktop", "loso"))
     ap.add_argument("--labels_csv", default=os.path.join("data", "raw", "camera", "labels.csv"))
     ap.add_argument("--output_dir", default=os.path.join("analysis", "camera", "a"))
     ap.add_argument("--B", type=int, default=B)

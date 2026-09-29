@@ -1262,8 +1262,38 @@ def load_run(
     return load_fl_run(run_dir, data, payload_bytes, missing_seed, warn)
 
 
+#: This script analyses FLAME only.  The camera experiment (docs/CAMERA_EXPERIMENT_PREREG.md)
+#: writes to results/camera/ and has its own analysis (scripts/camera_analysis_{a,b}.py);
+#: none of its runs may enter a FLAME table, not even as rows of their own.  Excluded by
+#: path (the ``camera`` tree, ``rev_camera_*`` / ``diag_camera_*`` wherever they are) and,
+#: should one be misplaced under another name, by content (a ``camera_fold`` data split).
+CAMERA_TREE = "camera"
+CAMERA_RUN_PREFIXES = ("rev_camera_", "diag_camera_")
+CAMERA_CONTENT_MARKER = "camera_fold"
+
+
+def is_camera_entry(entry: str) -> bool:
+    """A directory name that belongs to the camera experiment."""
+    lowered = entry.lower()
+    return lowered == CAMERA_TREE or lowered.startswith(CAMERA_RUN_PREFIXES)
+
+
+def is_camera_run(run_dir: str) -> bool:
+    """A run directory of the camera experiment, by name or by its recorded data split."""
+    if is_camera_entry(os.path.basename(os.path.normpath(run_dir))):
+        return True
+    for name in ("results.json", "summary.json"):
+        path = os.path.join(run_dir, name)
+        if os.path.isfile(path):
+            with open(path, encoding="utf-8", errors="replace") as f:
+                if CAMERA_CONTENT_MARKER in f.read():
+                    return True
+    return False
+
+
 def iter_run_dirs(results_dir: str, include_test_runs: bool = False) -> Iterator[str]:
-    """Yield every run directory below ``results_dir`` (does not descend into runs)."""
+    """Yield every FLAME run directory below ``results_dir`` (does not descend into runs;
+    never yields a camera-experiment run, see ``CAMERA_TREE``)."""
     if not os.path.isdir(results_dir):
         return
     for entry in sorted(os.listdir(results_dir)):
@@ -1273,8 +1303,11 @@ def iter_run_dirs(results_dir: str, include_test_runs: bool = False) -> Iterator
         lowered = entry.lower()
         if not include_test_runs and (lowered.startswith("test_") or lowered == "test"):
             continue
+        if is_camera_entry(entry):
+            continue
         if any(os.path.isfile(os.path.join(path, n)) for n in ("results.json", "summary.json")):
-            yield path
+            if not is_camera_run(path):
+                yield path
         else:
             for nested in iter_run_dirs(path, include_test_runs):
                 yield nested
@@ -1293,6 +1326,7 @@ def collect_runs(
     # anywhere below results_dir, with or without a results.json: a gate that fails while
     # the run executes leaves the marker in a directory the loader would never visit
     for dirpath, _dirs, files in os.walk(results_dir):
+        _dirs[:] = [d for d in _dirs if not is_camera_entry(d)]   # FLAME only
         if IDENTITY_GATE_MARKER in files:
             raise IdentityGateError("{}: identity gate failed on the testbed ({}); resolve it "
                                     "before analysing".format(dirpath, IDENTITY_GATE_MARKER))

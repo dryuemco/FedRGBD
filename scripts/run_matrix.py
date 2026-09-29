@@ -103,6 +103,21 @@ def power_root(power_config):
     return 'results' if power_config == DEFAULT_POWER_CONFIG else 'results/pc_%s' % power_config
 
 
+#: the camera experiment (docs/CAMERA_EXPERIMENT_PREREG.md) is separate from FLAME by
+#: dataset: its testbed blocks write to results/camera/<power_config>/, never to a FLAME
+#: namespace, and no FLAME block may write there.  Must equal
+#: print_revision_commands.CAMERA_TESTBED_BLOCKS / CAMERA_RESULTS (tests/test_run_matrix.py).
+CAMERA_TESTBED_BLOCKS = ('camera_sensor_skew', 'camera_determinism_smoke')
+CAMERA_RESULTS = 'results/camera'
+
+
+def namespace_root(power_config, block=None):
+    """Where the runs of ``block`` under ``power_config`` must write."""
+    if block in CAMERA_TESTBED_BLOCKS:
+        return '%s/%s' % (CAMERA_RESULTS, power_config)
+    return power_root(power_config)
+
+
 def load_testbed(path=TESTBED_LOCAL):
     """-> (nodes, server_port) from the operator's local testbed file.
 
@@ -336,14 +351,37 @@ RE_SPLIT = re.compile(r'--data_dir data/processed/(\S+)/node_[abc](?:\s|$)')
 RE_ROUNDS = re.compile(r'--rounds (\d+)')
 
 
-def expected_digests(path=P0_SUMMARY):
-    """{split: md5} from the 'Split digests' table of P0_SUMMARY.md."""
+def expected_digests(path=P0_SUMMARY, camera_path=None):
+    """{split: md5} from the 'Split digests' table of P0_SUMMARY.md, plus -- once
+    scripts/camera_fl_prepare.py has written it -- ``camera_fold<f>`` from the
+    ``fold_manifest_md5`` column of data/splits_camera/fl_materialised_manifest.csv."""
     out = {}
     with open(path, encoding='utf-8') as f:
         for line in f:
             m = RE_DIGEST.match(line)
             if m:
                 out[m.group(1)] = m.group(2)
+    out.update(camera_digests(CAMERA_COUNTS if camera_path is None else camera_path))
+    return out
+
+
+#: committed by scripts/camera_fl_prepare.py: per fold / node / split / class counts and
+#: the md5 of data/processed/camera_fold<f>/manifest.csv (identical on every node)
+CAMERA_COUNTS = os.path.join('data', 'splits_camera', 'fl_materialised_manifest.csv')
+
+
+def camera_digests(path=CAMERA_COUNTS):
+    """{camera_fold<f>: md5}; {} if the file does not exist; a fold listed with two
+    different digests raises (the committed record would contradict itself)."""
+    import csv
+    if not os.path.isfile(path):
+        return {}
+    out = {}
+    with open(path, newline='', encoding='utf-8') as f:
+        for row in csv.DictReader(f):
+            split, md5 = 'camera_fold%d' % int(row['fold']), row['fold_manifest_md5'].strip()
+            if out.setdefault(split, md5) != md5:
+                raise SystemExit('%s lists two manifest md5s for %s' % (path, split))
     return out
 
 
@@ -533,13 +571,16 @@ def check_server_address(runs):
         raise SystemExit('clients dial %s but node_a is configured as %s (%s); fix '
                          'configs/testbed.local.yaml or the generator'
                          % (', '.join(bad), want, TESTBED_LOCAL))
-def check_namespace(runs, power_config):
+def check_namespace(runs, power_config, block=None):
     """Every run must write into the namespace of ``power_config`` -- a script
-    generated for another configuration (--script) would otherwise mix them."""
-    root = power_root(power_config) + '/'
+    generated for another configuration (--script) would otherwise mix them -- and of its
+    dataset: camera blocks only into results/camera/<power_config>/, FLAME never there."""
+    root = namespace_root(power_config, block) + '/'
+    camera = block in CAMERA_TESTBED_BLOCKS
     bad = [r['out_dir'] for r in runs
            if not r['out_dir'].startswith(root)
-           or (power_config == DEFAULT_POWER_CONFIG and r['out_dir'].startswith('results/pc_'))]
+           or (power_config == DEFAULT_POWER_CONFIG and r['out_dir'].startswith('results/pc_'))
+           or (not camera and r['out_dir'].startswith(CAMERA_RESULTS + '/'))]
     if bad:
         raise SystemExit('%d run(s) are outside %s, the namespace of power_config %s '
                          '(first: %s); regenerate the script with --power_config %s'
@@ -1172,8 +1213,8 @@ def main():
 
     runs = parse_block(script)
     check_server_address(runs)
-    check_namespace(runs, args.power_config)
-    failed_gates = unresolved_gate_failures(runs, power_root(args.power_config))
+    check_namespace(runs, args.power_config, args.block)
+    failed_gates = unresolved_gate_failures(runs, namespace_root(args.power_config, args.block))
     if failed_gates:
         log('PRE-FLIGHT FAIL -- unresolved identity-gate failure(s), not starting: %s. A human '
             'must decide what they mean before the block may continue.' % ', '.join(failed_gates))

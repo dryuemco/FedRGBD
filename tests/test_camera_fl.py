@@ -7,7 +7,6 @@ import json
 import os
 import random
 import shutil
-import subprocess
 import sys
 
 import numpy as np
@@ -276,7 +275,7 @@ def test_block_is_45_maxn_runs_with_unambiguous_dirs():
     for r in runs:
         assert r.kind == "fl" and r.power_config == "maxn"
         assert (r.rounds, r.local_epochs, r.lr, r.batch_size) == (10, 5, 0.001, 8)
-        assert r.output_dir == "results/pc_maxn/rev_%s_%s_r10_seed%d" % (r.split, r.strategy, r.seed)
+        assert r.output_dir == "results/camera/maxn/rev_%s_%s_r10_seed%d" % (r.split, r.strategy, r.seed)
         for node, cmd in zip(NODES, r.client_commands()):
             assert "--data_dir data/processed/%s/%s " % (r.split, node) in cmd
     assert len({r.output_dir for r in runs}) == 45
@@ -290,7 +289,15 @@ def test_block_is_outside_the_flame_matrix_and_its_gate():
     assert prc.CAMERA_BASELINE_BLOCK not in prc.BLOCK_ORDER
     maxn = prc.expand_all(_revision(), "maxn_long_horizon")["maxn_long_horizon"]
     assert len(maxn) == 30 and not any("camera" in r.output_dir for r in maxn)
-    assert run_matrix.block_determinism_gate(prc.CAMERA_BLOCK) is None
+    # its own gate (prereg amendment 2026-09-29): two camera smoke runs, not 5b's pair
+    assert run_matrix.block_determinism_gate(prc.CAMERA_BLOCK) == {
+        "runs": ["results/camera/maxn/diag_camera_smoke",
+                 "results/camera/maxn/diag_camera_smoke_r2"],
+        "smoke": {"fold": 0, "strategy": "fedavg", "seed": 42, "rounds": 2}}
+    assert prc.CAMERA_SMOKE_BLOCK not in prc.BLOCK_ORDER
+    assert run_matrix.block_determinism_gate(prc.CAMERA_SMOKE_BLOCK) is None
+    assert prc.block_power_config(_revision(), prc.CAMERA_SMOKE_BLOCK) == "maxn"
+    assert prc.block_power_config(_revision(), prc.CAMERA_BASELINE_BLOCK) is None
     assert run_matrix.block_determinism_gate("maxn_long_horizon") == {
         "runs": ["results/diag_smoke_maxn", "results/diag_smoke_maxn_r2"]}
 
@@ -312,9 +319,11 @@ def test_run_matrix_accepts_the_emitted_script(tmp_path, capsys):
         assert got["server"] == run.server_command()
         assert got["clients"] == dict(zip(NODES, run.client_commands()))
         assert got["gates"] == []
-    run_matrix.check_namespace(runs, "maxn")
+    run_matrix.check_namespace(runs, "maxn", prc.CAMERA_BLOCK)
     with pytest.raises(SystemExit):
-        run_matrix.check_namespace(runs, "heterogeneous")
+        run_matrix.check_namespace(runs, "heterogeneous", prc.CAMERA_BLOCK)
+    with pytest.raises(SystemExit):
+        run_matrix.check_namespace(runs, "maxn")          # the FLAME maxn namespace refuses them
     assert run_matrix.block_splits(runs) == ["camera_fold%d" % f for f in range(5)]
 
 
@@ -323,7 +332,7 @@ def test_block_without_power_config_defaults_to_maxn_and_refuses_heterogeneous(c
                      "--no_skip_existing"]) == 0
     out = capsys.readouterr().out
     assert "# power_config: maxn" in out
-    assert out.count("--output_dir results/pc_maxn/rev_camera_fold") == 45
+    assert out.count("--output_dir results/camera/maxn/rev_camera_fold") == 45
     with pytest.raises(SystemExit, match="declares power_config 'maxn'"):
         prc.main(["--all_seeds", "--block", prc.CAMERA_BLOCK, "--format", "bash",
                   "--power_config", "heterogeneous"])
@@ -338,7 +347,7 @@ def test_desktop_baselines(tmp_path, capsys):
     for r in runs:
         assert r.kind == "baseline" and r.epochs == 50 and r.lr == 0.001 and r.batch_size == 8
         name = "centralized" if r.baseline_type == "centralized" else "local"
-        assert r.output_dir == "results/rev_baselines_camera/rev_%s_%s_r10_seed%d" % (
+        assert r.output_dir == "results/camera/desktop/rev_%s_%s_r10_seed%d" % (
             r.split, name, r.seed)
         assert r.post_commands == ["python3 scripts/predict_from_checkpoint.py " + r.output_dir]
     assert prc.main(["--all_seeds", "--block", prc.CAMERA_BASELINE_BLOCK, "--format", "bash",
@@ -353,32 +362,8 @@ def test_desktop_baselines(tmp_path, capsys):
         run_matrix.parse_block(str(path))
 
 
-def test_every_other_block_is_byte_identical_to_the_committed_generator(tmp_path):
-    """The committed print_revision_commands.py (before the camera block) and the current
-    one print the same bytes for every existing block and for the default output."""
-    try:
-        old = subprocess.run(["git", "show", "HEAD:scripts/print_revision_commands.py"],
-                             cwd=_REPO, capture_output=True, text=True, encoding="utf-8")
-    except OSError:
-        pytest.skip("git not available")
-    if old.returncode != 0 or "CAMERA_BLOCK" in old.stdout:
-        pytest.skip("no pre-camera generator in HEAD to compare with")
-    scripts = tmp_path / "scripts"
-    scripts.mkdir()
-    (scripts / "print_revision_commands.py").write_text(old.stdout, encoding="utf-8")
-    cfg = os.path.join(_REPO, "configs", "experiment_matrix.yaml")
-
-    def out(script, *args):
-        r = subprocess.run([sys.executable, str(script), "--config", cfg, "--no_skip_existing"]
-                           + list(args), cwd=_REPO, capture_output=True, text=True)
-        assert r.returncode == 0, r.stderr
-        return r.stdout
-
-    new = os.path.join(_REPO, "scripts", "print_revision_commands.py")
-    variants = [("--format", "text"), ("--all_seeds", "--format", "bash")]
-    variants += [("--all_seeds", "--block", b, "--format", "bash") for b in prc.BLOCK_ORDER]
-    for args in variants:
-        assert out(new, *args) == out(scripts / "print_revision_commands.py", *args), args
+# The byte-identity of every existing block's commands is pinned permanently, against
+# the pre-camera commit 2a565b3, by tests/test_revision_commands_frozen.py.
 
 
 # --------------------------------------------------------------------------- analysis

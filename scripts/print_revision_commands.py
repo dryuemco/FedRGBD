@@ -34,9 +34,10 @@ matrix.  They are emitted into the bash script as ``>>> IDENTITY GATE:`` lines,
 which ``scripts/run_matrix.py`` parses and enforces.
 
 Camera experiment.  ``camera_sensor_skew`` (question (b) of
-docs/CAMERA_EXPERIMENT_PREREG.md, declared ``power_config: maxn``) and its desktop
-baselines ``camera_sensor_skew_baselines`` are not part of the FLAME matrix: they are
-not in the default output and are emitted only with ``--block``.
+docs/CAMERA_EXPERIMENT_PREREG.md, declared ``power_config: maxn``), the two smoke runs
+of its determinism gate ``camera_determinism_smoke`` and its desktop baselines
+``camera_sensor_skew_baselines`` are not part of the FLAME matrix: they are not in the
+default output, are emitted only with ``--block``, and write to results/camera/.
 
 Usage
 -----
@@ -401,18 +402,36 @@ def expand_baselines_extension(cfg: dict) -> List[Run]:
 
 # --------------------------------------------------------------------------- #
 # camera experiment, question (b): sensor-skewed clients (docs/CAMERA_EXPERIMENT_PREREG.md
-# section 6).  One yaml block, ``camera_sensor_skew``, expanded twice: its 45 federated
-# runs (testbed, MAXN_SUPER; the block declares ``power_config: maxn``) and, under the
-# separate name ``camera_sensor_skew_baselines``, its local-only / centralized desktop
-# baselines -- a separate name so that the bash run_matrix.py parses never contains a
-# ``scripts/train_*`` line (it refuses those: they run on the desktop GPU).  Neither is in
-# BLOCK_ORDER: the camera experiment is not part of the FLAME matrix, so the default
-# (all-block) output and every FLAME block stay exactly as they were; select them with
-# ``--block``.
+# section 6).  One yaml block, ``camera_sensor_skew``, expanded three times: its 45
+# federated runs (testbed, MAXN_SUPER; the block declares ``power_config: maxn``); under
+# ``camera_determinism_smoke`` the two smoke runs its determinism gate compares (testbed,
+# same configuration, run before the block); and under ``camera_sensor_skew_baselines``
+# its local-only / centralized desktop baselines -- a separate name so that the bash
+# run_matrix.py parses never contains a ``scripts/train_*`` line (it refuses those: they
+# run on the desktop GPU).  All camera runs live in results/camera/ (testbed:
+# results/camera/<power_config>/, desktop: results/camera/desktop/), separate from FLAME by
+# dataset.  None is in BLOCK_ORDER: the camera experiment is not part of the FLAME matrix,
+# so the default (all-block) output and every FLAME block stay exactly as they were
+# (tests/test_revision_commands_frozen.py); select them with ``--block``.
 # --------------------------------------------------------------------------- #
 CAMERA_BLOCK = "camera_sensor_skew"
 CAMERA_BASELINE_BLOCK = "camera_sensor_skew_baselines"
-CAMERA_BASELINE_ROOT = "results/rev_baselines_camera"
+CAMERA_SMOKE_BLOCK = "camera_determinism_smoke"
+#: the camera experiment's own results tree, separate from FLAME by dataset (not only by
+#: power configuration): testbed runs in results/camera/<power_config>/, desktop GPU runs
+#: in results/camera/desktop/.  scripts/analyze_results.py never reads it.
+CAMERA_RESULTS = "results/camera"
+CAMERA_BASELINE_ROOT = CAMERA_RESULTS + "/desktop"
+#: camera blocks that run on the testbed (namespace results/camera/<power_config>/)
+CAMERA_TESTBED_BLOCKS = (CAMERA_BLOCK, CAMERA_SMOKE_BLOCK)
+
+
+def camera_root(power_config: str) -> str:
+    """Results root of camera testbed runs under ``power_config``."""
+    if power_config not in POWER_CONFIGS:
+        raise SystemExit(f"Unknown power configuration {power_config!r}; "
+                         f"choices: {', '.join(POWER_CONFIGS)}")
+    return f"{CAMERA_RESULTS}/{power_config}"
 
 
 def camera_split(fold) -> str:
@@ -422,8 +441,7 @@ def camera_split(fold) -> str:
 
 def expand_camera_sensor_skew(cfg: dict) -> List[Run]:
     """45 federated runs: strategies x folds x seeds, ``rev_camera_fold<f>_<strategy>_r10_seed<S>``
-    (``camera_fold<f>`` is never a FLAME partition tag, so no name can collide with the
-    FLAME matrix; the declared power configuration moves them to results/pc_maxn/)."""
+    (the declared power configuration puts them in results/camera/<power_config>/)."""
     runs = []
     for strategy in cfg["strategies"]:
         for fold in cfg["folds"]:
@@ -434,12 +452,32 @@ def expand_camera_sensor_skew(cfg: dict) -> List[Run]:
     return runs
 
 
+def expand_camera_determinism_smoke(cfg: dict) -> List[Run]:
+    """The two smoke runs of the camera block's determinism gate: the same command twice
+    (``determinism_gate.smoke``: fold, strategy, seed, rounds; local epochs, lr and batch
+    size of the block), written to the two directories ``determinism_gate.runs`` names."""
+    gate = cfg["determinism_gate"]
+    smoke, names = gate["smoke"], list(gate["runs"])
+    if len(names) != 2:
+        raise SystemExit(f"{CAMERA_BLOCK}.determinism_gate must name two runs, got {names!r}")
+    split = camera_split(smoke["fold"])
+    runs = []
+    for name in names:
+        run = _fl_run(CAMERA_SMOKE_BLOCK, split, split, smoke["strategy"], smoke["seed"],
+                      smoke["rounds"], cfg["local_epochs"], cfg["lr"], cfg["batch_size"])
+        run.output_dir = "results/" + os.path.basename(name.replace("\\", "/").rstrip("/"))
+        runs.append(run)
+    return runs
+
+
 def expand_camera_sensor_skew_baselines(cfg: dict) -> List[Run]:
     """Desktop GPU baselines of the camera block: local-only (``train_local.py --batch``,
     one model per node) and centralized, epochs = rounds x local_epochs (10 x 5 = 50),
-    same optimiser, per fold and seed, under ``results/rev_baselines_camera/``."""
+    same optimiser, per fold and seed, under ``results/camera/desktop/``."""
     part = cfg["desktop_baselines"]
     root = part.get("output_root", CAMERA_BASELINE_ROOT).replace("\\", "/").rstrip("/")
+    if not root.startswith(CAMERA_RESULTS + "/"):
+        raise SystemExit(f"camera baselines must write under {CAMERA_RESULTS}/, not {root}")
     runs = []
     for baseline_type in part["baseline_types"]:
         for fold in cfg["folds"]:
@@ -482,11 +520,16 @@ BLOCK_EXPANDERS = {
     "baselines_extension": expand_baselines_extension,
     CAMERA_BLOCK: expand_camera_sensor_skew,
     CAMERA_BASELINE_BLOCK: expand_camera_sensor_skew_baselines,
+    CAMERA_SMOKE_BLOCK: expand_camera_determinism_smoke,
 }
 
 #: blocks expanded from another block's yaml entry (the camera baselines live in
-#: ``camera_sensor_skew.desktop_baselines``); they declare no power configuration
-BLOCK_CONFIG_KEYS = {CAMERA_BASELINE_BLOCK: CAMERA_BLOCK}
+#: ``camera_sensor_skew.desktop_baselines``, the gate's smoke runs in
+#: ``camera_sensor_skew.determinism_gate``)
+BLOCK_CONFIG_KEYS = {CAMERA_BASELINE_BLOCK: CAMERA_BLOCK, CAMERA_SMOKE_BLOCK: CAMERA_BLOCK}
+#: derived blocks that inherit their parent's power configuration (the desktop baselines
+#: declare none: they do not run on the testbed)
+POWER_CONFIG_KEYS = {CAMERA_SMOKE_BLOCK: CAMERA_BLOCK}
 
 # Order in which blocks are expanded/printed when no --block filter is given.
 BLOCK_ORDER = [
@@ -509,7 +552,7 @@ BLOCK_NOTES = {
 
 #: blocks outside the FLAME matrix: never part of the default (all-block) output, only
 #: emitted with ``--block``
-EXTRA_BLOCKS = [CAMERA_BLOCK, CAMERA_BASELINE_BLOCK]
+EXTRA_BLOCKS = [CAMERA_BLOCK, CAMERA_BASELINE_BLOCK, CAMERA_SMOKE_BLOCK]
 
 
 def expand_all(revision_cfg: dict, block: Optional[str] = None) -> Dict[str, List[Run]]:
@@ -521,7 +564,8 @@ def expand_all(revision_cfg: dict, block: Optional[str] = None) -> Dict[str, Lis
         runs = BLOCK_EXPANDERS[name](revision_cfg[BLOCK_CONFIG_KEYS.get(name, name)])
         declared = block_power_config(revision_cfg, name)
         if declared:
-            root = power_config_root(declared)
+            root = camera_root(declared) if name in CAMERA_TESTBED_BLOCKS \
+                else power_config_root(declared)
             for run in runs:
                 run.power_config = declared
                 if run.kind == "fl" and root != "results" and run.output_dir.startswith("results/"):
@@ -532,7 +576,7 @@ def expand_all(revision_cfg: dict, block: Optional[str] = None) -> Dict[str, Lis
 
 def block_power_config(revision_cfg: dict, block: str) -> Optional[str]:
     """The power configuration a block declares, or None."""
-    return (revision_cfg.get(block) or {}).get("power_config")
+    return (revision_cfg.get(POWER_CONFIG_KEYS.get(block, block)) or {}).get("power_config")
 
 
 def rebase_baselines(runs_by_block: Dict[str, List[Run]], root: str) -> None:
@@ -540,6 +584,8 @@ def rebase_baselines(runs_by_block: Dict[str, List[Run]], root: str) -> None:
     root = root.replace("\\", "/").rstrip("/")
     for runs in runs_by_block.values():
         for run in runs:
+            if run.output_dir.startswith(CAMERA_RESULTS + "/"):
+                continue            # the camera tree is fixed (results/camera/desktop)
             if run.kind == "baseline" and run.output_dir.startswith("results/"):
                 run.output_dir = root + "/" + run.output_dir[len("results/"):]
 

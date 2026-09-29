@@ -133,7 +133,28 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
    (b) sensor-skewed federated training, scene as the unit of every split, RGB primary,
    depth secondary, IR descriptive, fixed folds, families, verdict phrases and
    interpretation rules. Never change it once footage exists; never train on or select
-   with a held-out scene.
+   with a held-out scene. **Amendment 1** (2026-09-29, still before any footage, section 9):
+   each camera captured on its own node and its frames kept there (D435if node_a, D435i
+   node_b, ZED 2i node_c); the 45 federated runs at MAXN_SUPER on all three nodes with the
+   pre-flight power-mode lock and their own hard determinism gate (two camera smoke runs,
+   fold 0 FedAvg seed 42, 2 rounds, `--block camera_determinism_smoke`); LOSO and the
+   local-only/centralized baselines stay on the desktop GPU. **Camera and FLAME are
+   separated by dataset:** camera runs live only in `results/camera/<power_config>/` and
+   `results/camera/desktop/`; `analyze_results.py` never reads `results/camera/`
+   (`tests/test_camera_separation.py`), the camera analyses read nothing else.
+
+12. **Timing reporting rule** (declared 2026-09-29, before any heterogeneous-vs-MAXN
+   per-round-time comparison was computed; totals and a rough total/R figure had been seen
+   while monitoring 5b -- say it that way). Per run: round 1 reported separately as the
+   cold start; steady-state per-round time = median of the test-free round time
+   (`round_time_s`, T_round) over rounds 2..R; across seeds summarised like every other time
+   (mean, std, 95 % CI). Same rule for both power configurations, every strategy and
+   partition. Never a mean over all R rounds, never total/R as a per-round time; totals stay
+   totals. Why: in 5b, seed 42 (first run after launch) and seed 789 (restarted after the
+   2026-09-28 outage) had round-1 wall-clock 1062 s and 1081 s against 919-952 s in every
+   other round of the four IID FedAvg runs. All timers in results.json are monotonic
+   (`perf_counter`), so an NTP step after a reboot does not affect them; the `%.1f min` in
+   `logs/run_matrix.log` is wall-clock (`time.time`) and is not a reported number.
 
 ## Model selection (declared rule — use this wording, do not paraphrase it)
 
