@@ -460,6 +460,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--output_dir", default=None, help="default: <root>/analysis/camera/b")
     ap.add_argument("--B", type=int, default=B)
     args = ap.parse_args(argv)
+    from scripts.camera_labels import refuse_pilot
+    refuse_pilot(args.labels_csv, args.folds_csv)
     root = os.path.abspath(args.root)
     config = args.config or os.path.join(root, "configs", "experiment_matrix.yaml")
     labels_csv = args.labels_csv or os.path.join(root, "data", "raw", "camera", "labels.csv")

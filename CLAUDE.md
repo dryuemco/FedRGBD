@@ -143,6 +143,12 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
    separated by dataset:** camera runs live only in `results/camera/<power_config>/` and
    `results/camera/desktop/`; `analyze_results.py` never reads `results/camera/`
    (`tests/test_camera_separation.py`), the camera analyses read nothing else.
+   **Pilot** (section 10, before the pilot): footage only in `data/raw/camera_pilot/`, never
+   in a manifest, fold, training or analysis (the study scripts refuse it); only "runs end
+   to end without error" is checked -- never compute or look at accuracy, loss or
+   prediction quality on pilot data. Afterwards only technical changes (capture settings,
+   exposure, sync, file handling, resolution), each a dated amendment saying what the
+   pilot revealed; never the questions, metrics, splits, selection or interpretation rules.
 
 12. **Timing reporting rule** (declared 2026-09-29, before any heterogeneous-vs-MAXN
    per-round-time comparison was computed; totals and a rough total/R figure had been seen
@@ -159,6 +165,13 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
    Implemented: `analyze_results.round_time_rule` -> `round1_time_s`,
    `steady_round_time_s`; `tab:time` prints both, per power configuration
    (`export_latex_tables.py --power_config`, R = 3 heterogeneous, 10 maxn).
+   **The heterogeneous-vs-MAXN timing comparison** is declared in
+   `docs/CROSS_CONFIG_COMPARISON.md` (c) (2026-09-29, while 5b ran): seed-paired ratio
+   MAXN / heterogeneous (geometric mean over seeds, seed bootstrap), descriptive only, no
+   verdicts; primary rounds 2-3 in both, secondary MAXN 2-10; round 1 its own ratio;
+   label skew FedAvg/FedBN seeds 42/123/456 vs long_horizon rounds 2-10; straggler =
+   client with the largest `fit_wall_s` per round, counted per node. Compute it only
+   after 5b is committed (`docs/POST_5B_CHECKLIST.md` b4).
 
 ## Model selection (declared rule — use this wording, do not paraphrase it)
 

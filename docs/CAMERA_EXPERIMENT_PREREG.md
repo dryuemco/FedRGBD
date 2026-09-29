@@ -237,3 +237,32 @@ question, split, model, metric, family, verdict phrase or interpretation rule ab
   any node's clock differs from node_a's by more than 1 s or cannot be measured: the
   second-level synchronisation of section 2, enforced. The measured offsets are logged
   with every capture.
+
+## 10. The pilot (declared 2026-09-29, committed and pushed before the pilot)
+
+A pilot of one scene with all three cameras is run before the study captures begin.
+
+* **Outside the study.** Pilot footage is stored only under `data/raw/camera_pilot/`.
+  It is never used in any manifest, fold, training run or analysis of either question.
+  The study scripts refuse paths under it: `camera_manifests.py`, `camera_fl_prepare.py`,
+  `camera_loso.py` and `camera_analysis_{a,b}.py`. The pilot's frame table
+  (`camera_labels.py`) may only be written inside the pilot tree
+  (`scripts/camera_labels.refuse_pilot`, `tests/test_camera_separation.py`). If the
+  pilot's physical setup is later used as a study scene, it is captured fresh, and no
+  pilot frame enters the study.
+* **What the pilot may check.** Only that the pipeline runs end to end without error:
+  capture on all three nodes at the common start, the clock check, frame and metadata
+  files, the frame table and exclusions, transfer, and preprocessing. Technical image
+  properties may be looked at, for example exposure, framing, depth validity and
+  synchronisation. No accuracy, loss or prediction quality on pilot data is computed or
+  inspected.
+* **Changes permitted after the pilot.** Technical changes only: capture settings,
+  exposure handling, synchronisation, file handling and resolution. Each is recorded as a
+  dated amendment to this file that states what the pilot revealed and what changed, and
+  is committed before the first study capture.
+* **Not permitted after the pilot.** Changes to the questions, metrics, splits, selection
+  or interpretation rules, or anything else in sections 1-6 and 9 beyond the technical
+  items above. Such a change would be a change after footage exists, to be disclosed
+  in the paper and the response letter.
+* From the first pilot capture on, footage exists in the sense of this file's preamble.
+  The permitted technical amendments above are the only exception.

@@ -167,3 +167,40 @@ def test_camera_analyses_read_only_the_camera_tree():
     from scripts import camera_loso as cl
     assert cl.build_parser().parse_args([]).output_root.replace("\\", "/") \
         .startswith("results/camera/")
+
+
+# --------------------------------------------------------------------------- pilot footage
+PILOT = os.path.join("data", "raw", "camera_pilot")
+
+
+def test_pilot_paths_are_recognised():
+    from scripts.camera_labels import is_pilot_path
+    assert is_pilot_path(PILOT) and is_pilot_path(os.path.join(PILOT, "labels.csv"))
+    assert is_pilot_path(PILOT.replace(os.sep, "/") + "/node_a")
+    assert not is_pilot_path(os.path.join("data", "raw", "camera"))
+    assert not is_pilot_path(os.path.join("data", "raw", "camera_pilots_x"))
+    assert not is_pilot_path(None)
+
+
+@pytest.mark.parametrize("module,argv", [
+    ("camera_manifests", ["--labels_csv", os.path.join(PILOT, "labels.csv")]),
+    ("camera_fl_prepare", ["--raw_dir", PILOT, "--verify"]),
+    ("camera_fl_prepare", ["--labels_csv", os.path.join(PILOT, "labels.csv"), "--verify"]),
+    ("camera_loso", ["--data_dir", PILOT]),
+    ("camera_analysis_a", ["--labels_csv", os.path.join(PILOT, "labels.csv")]),
+    ("camera_analysis_b", ["--labels_csv", os.path.join(PILOT, "labels.csv")]),
+])
+def test_study_scripts_refuse_pilot_footage(module, argv):
+    import importlib
+    mod = importlib.import_module("scripts." + module)
+    with pytest.raises(SystemExit, match="pilot footage is outside the study"):
+        mod.main(argv)
+
+
+def test_pilot_frame_table_never_writes_into_the_study_splits(tmp_path):
+    from scripts import camera_labels as cl
+    with pytest.raises(SystemExit, match="--splits_dir must lie under camera_pilot"):
+        cl.main(["--data_dir", str(tmp_path / "camera_pilot")])       # default study splits
+    with pytest.raises(SystemExit, match="pilot footage is outside the study"):
+        cl.main(["--data_dir", str(tmp_path / "camera"),
+                 "--splits_dir", str(tmp_path / "camera_pilot" / "splits")])

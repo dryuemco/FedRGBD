@@ -118,6 +118,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--splits_dir", default=os.path.join("data", "splits_camera"))
     ap.add_argument("--check", action="store_true")
     args = ap.parse_args(argv)
+    from scripts.camera_labels import refuse_pilot
+    refuse_pilot(args.labels_csv, args.splits_dir)
 
     scenes = sorted(set(args.scenes)) if args.scenes else kept_scenes(read_labels(args.labels_csv))
     if args.check:

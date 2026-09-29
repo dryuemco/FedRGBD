@@ -249,6 +249,28 @@ def build(data_dir: str, nodes: Sequence[str] = NODES):
     return apply_exclusions(rows, sorted(captures), nodes)
 
 
+# --- pilot footage (docs/CAMERA_EXPERIMENT_PREREG.md section 10) -------------------------
+#: pilot captures live only under data/raw/camera_pilot/ and are outside the study: never in
+#: a manifest, a fold, a training run or an analysis.  The study scripts refuse them.
+PILOT_DIRNAME = "camera_pilot"
+
+
+def is_pilot_path(path: Optional[str]) -> bool:
+    """True if any component of ``path`` is the pilot directory."""
+    if not path:
+        return False
+    parts = os.path.normpath(os.path.abspath(str(path))).replace("\\", "/").split("/")
+    return PILOT_DIRNAME in parts
+
+
+def refuse_pilot(*paths: Optional[str]) -> None:
+    """SystemExit if any path points into the pilot footage."""
+    bad = [str(p) for p in paths if is_pilot_path(p)]
+    if bad:
+        raise SystemExit("%s: pilot footage is outside the study (prereg section 10); it is "
+                         "never used in a manifest, fold, training run or analysis" % bad[0])
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--data_dir", default=os.path.join("data", "raw", "camera"))
@@ -256,6 +278,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     help="default: <data_dir>/labels.csv")
     ap.add_argument("--splits_dir", default=os.path.join("data", "splits_camera"))
     args = ap.parse_args(argv)
+    # a pilot frame table (pipeline check only) never writes into the study's splits
+    if is_pilot_path(args.data_dir) and not is_pilot_path(args.splits_dir):
+        raise SystemExit("pilot footage: --splits_dir must lie under %s too (prereg section "
+                         "10), not %s" % (PILOT_DIRNAME, args.splits_dir))
+    if not is_pilot_path(args.data_dir):
+        refuse_pilot(args.labels_csv, args.splits_dir)
 
     rows, exclusions, summary = build(args.data_dir)
     labels_csv = args.labels_csv or os.path.join(args.data_dir, "labels.csv")

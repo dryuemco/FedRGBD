@@ -340,6 +340,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--verify", action="store_true",
                     help="recompute and check manifests, counts and files; write nothing")
     args = ap.parse_args(argv)
+    from scripts.camera_labels import refuse_pilot
+    refuse_pilot(args.labels_csv, args.folds_csv, args.raw_dir)
     if args.clean and args.verify:
         ap.error("--clean and --verify are exclusive")
     bad = [f for f in args.folds if not 0 <= f < N_FOLDS]

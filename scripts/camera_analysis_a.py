@@ -339,6 +339,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--output_dir", default=os.path.join("analysis", "camera", "a"))
     ap.add_argument("--B", type=int, default=B)
     args = ap.parse_args(argv)
+    from scripts.camera_labels import refuse_pilot
+    refuse_pilot(args.results_root, args.labels_csv)
     pairs, contrast, matrix = analyze(args.results_root, args.labels_csv, B=args.B)
     os.makedirs(args.output_dir, exist_ok=True)
     pairs.to_csv(os.path.join(args.output_dir, "pairs.csv"), index=False)

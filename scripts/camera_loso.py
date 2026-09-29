@@ -449,6 +449,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     import torch
 
     args = build_parser().parse_args(argv)
+    from scripts.camera_labels import refuse_pilot
+    refuse_pilot(args.data_dir, args.labels_csv, args.splits_dir)
     args.labels_csv = args.labels_csv or os.path.join(args.data_dir, "labels.csv")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     folds = loso_folds_for(args.splits_dir, args.labels_csv)

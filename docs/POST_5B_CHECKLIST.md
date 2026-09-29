@@ -19,29 +19,23 @@ no commit of a partial block.
 
 ## Before 5b ends (can be done now)
 
-**P1 [YOU] DECISION -- the statistic of the timing comparison.** CLAUDE.md rule 12 fixes
-the per-run quantities (round-1 time, and the median test-free round time over rounds
-2..R). It does not fix how the two configurations are compared. Declare that before any
-MAXN timing value is looked at side by side with a heterogeneous one. Recommendation:
-per strategy x partition, the seed-paired ratio MAXN / heterogeneous of the steady-state
-per-round time, with a seed bootstrap interval, reported for every cell, no verdicts; and
-round 1 the same way, as a separate table. Heterogeneous side:
-- rounds 1-3 family: the three-round runs;
-- ten-round family: `long_horizon_fedbn`, the same pairs as `docs/CROSS_CONFIG_COMPARISON.md`.
+**P1 -- DONE (2026-09-29, pushed).** The statistic of the timing comparison is declared
+in `docs/CROSS_CONFIG_COMPARISON.md` (c):
+- seed-paired ratio MAXN / heterogeneous (geometric mean over seeds, seed bootstrap),
+  descriptive only, no verdicts;
+- primary: rounds 2-3 in both configurations; secondary: MAXN over rounds 2-10; round 1
+  as its own ratio;
+- label skew FedAvg and FedBN, seeds 42/123/456: ten rounds against `long_horizon_fedbn`,
+  rounds 2-10 in both;
+- the straggler of each configuration is reported.
 
-Commit and push the declaration before step (b4).
-*Verify:* the commit that declares it is older than any file in `analysis/cross_config_timing/`.
-
-**P2 [YOU] DECISION -- pilot footage and the pre-registration.** The camera
-pre-registration says nothing may change "after footage exists", and pilot frames are
-footage. Recommendation, committed and pushed before the pilot as a short note in
-`docs/CAMERA_EXPERIMENT_PREREG.md`:
-- the pilot is outside the study: written only under `data/raw/camera_pilot/`, never used
-  to train, select or evaluate any model of the study, and not a scene of it;
-- the freeze starts with the first pilot capture.
-
-Any problem the pilot reveals in pre-registered content then needs a disclosed
-amendment, like any change after data.
+**P2 -- DONE (2026-09-29, pushed).** Pilot footage is declared outside the study in
+`docs/CAMERA_EXPERIMENT_PREREG.md` section 10:
+- it is stored only under `data/raw/camera_pilot/`, and the study scripts refuse it;
+- the pilot only checks that the pipeline runs end to end without error. No accuracy,
+  loss or prediction quality on pilot data is computed or looked at;
+- afterwards, only technical changes are allowed, each as a dated amendment committed
+  before the first study capture.
 
 ---
 
@@ -128,9 +122,13 @@ on a view without `pc_maxn`.
 - the heterogeneous family's rows are byte-identical to `dce6f54`;
 - the maxn family has 4 + 4 comparisons with the fixed verdict phrases.
 
-**b4 [CLAUDE]** Timing comparison, exactly as declared in P1 (not before P1 is pushed).
-Round 1 and steady state are reported separately, the same rule for both configurations
-and every strategy (CLAUDE.md rule 12). Output goes to `analysis/cross_config_timing/`.
+**b4 [CLAUDE]** Timing comparison, exactly as declared in `docs/CROSS_CONFIG_COMPARISON.md`
+(c), with its code written now and committed in the same commit as its output:
+- both families;
+- primary, secondary and round-1 ratios, each on its own;
+- straggler counts per configuration.
+
+Output goes to `analysis/cross_config_timing/`.
 *Verify:*
 - every per-run value equals an independent recomputation from `results.json`
   (`rounds[].timing.round_time_s`: round 1, and the median of rounds 2..R);
@@ -215,7 +213,9 @@ If a mode is wrong: node_c you may ask the assistant to switch
 
 ## (e) Camera pilot: one scene, all three cameras, end to end
 
-Only after P2 is decided and pushed.
+Under `docs/CAMERA_EXPERIMENT_PREREG.md` section 10: pilot footage only under
+`data/raw/camera_pilot/`. The pilot checks only that the pipeline runs without error; no
+accuracy, loss or prediction quality is computed or looked at.
 
 **e1 [YOU]**
 - mount the rig: D435if on node_a, D435i on node_b, ZED 2i on node_c, side by side,
@@ -241,7 +241,8 @@ capture when you say "ready". Four captures:
 
 **e4 [CLAUDE]** Copy the pilot frames of all three nodes to the desktop under
 `data/raw/camera_pilot/`, then:
-- `python scripts/camera_labels.py --data_dir data/raw/camera_pilot --splits_dir <scratch>`;
+- `python scripts/camera_labels.py --data_dir data/raw/camera_pilot --splits_dir data/raw/camera_pilot/splits`
+  (the script refuses a splits directory outside the pilot tree);
 - load every valid frame through `CustomRGBDDataset(preprocess="camera")`.
 
 *Verify:*
@@ -251,14 +252,16 @@ capture when you say "ready". Four captures:
 - depth aligned to RGB (same size);
 - IR present on the RealSense nodes only;
 - every preprocessed tensor 224 x 224 with finite values;
-- a contact sheet of one frame per camera and class, for you to look at.
+- a contact sheet of one frame per camera and class, for you to check technical image
+  properties only: exposure, framing, depth validity. Any technical change that follows
+  is a dated amendment (prereg section 10) committed before the first study capture.
 
 **What one scene cannot test.** The leave-one-scene-out manifests need at least 3 scenes,
 and the five federated folds are dealt from the complete set of kept scenes. So
 `camera_manifests.py`, `camera_fl_prepare.py`, `camera_loso.py` and the FL runs cannot be
-exercised on the real pilot. They are covered by the synthetic end-to-end tests in
-`tests/test_camera_*`. If you want them on real frames, a throwaway multi-scene pilot is
-possible, **[YOU] DECISION**.
+exercised on the pilot. They also refuse pilot paths by declaration. They are covered
+by the synthetic end-to-end tests in `tests/test_camera_*`, and first meet real frames in
+step f.
 
 ---
 

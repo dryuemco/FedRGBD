@@ -1507,3 +1507,36 @@ read-only on all three nodes).
   - It moves the camera smoke pair after the full capture: fold 0 exists only once all
     scenes are captured and the folds are generated.
 
+## Timing comparison and pilot declared (2026-09-29, while 5b ran)
+
+* **Timing comparison, MAXN vs heterogeneous** (`docs/CROSS_CONFIG_COMPARISON.md` (c)),
+  declared at 03:30 with 4 of 5b's 30 runs finished, before any ratio was computed:
+  - seed-paired ratio MAXN / heterogeneous (geometric mean over seeds, seed bootstrap,
+    B = 10,000), descriptive, no verdicts;
+  - `rounds_1_3`: primary rounds 2-3 in both configurations, secondary MAXN rounds 2-10;
+  - `ten_rounds`: label skew FedAvg/FedBN, seeds 42/123/456, against
+    `long_horizon_fedbn`, rounds 2-10 in both;
+  - round 1 gets its own ratio in both families;
+  - the straggler (the client with the largest `fit_wall_s` in a round) is counted per
+    node and configuration.
+
+  The declaration lists which timing values had been seen before it (heterogeneous
+  totals; a rough total / R; the round wall-clock of the four finished IID FedAvg MAXN
+  runs; the heterogeneous IID FedAvg / FedProx round-1 and rounds-2-3 values in a scratch
+  export). The paper's power-configuration section describes the comparison without
+  numbers.
+* **Pilot** (`docs/CAMERA_EXPERIMENT_PREREG.md` section 10), before the pilot:
+  - pilot footage is outside the study, only under `data/raw/camera_pilot/`, never in a
+    manifest, fold, training run or analysis;
+  - a setup reused as a study scene is captured fresh;
+  - only "runs end to end without error" is checked, never accuracy, loss or prediction
+    quality;
+  - afterwards only technical changes are allowed, each a dated amendment saying what the
+    pilot revealed.
+
+  Enforced in code: `camera_labels.refuse_pilot` / `is_pilot_path`. The manifests,
+  FL-prepare, LOSO and both analyses refuse pilot paths, and a pilot frame table cannot
+  write into `data/splits_camera/` (`tests/test_camera_separation.py`, 8 new tests).
+* `docs/POST_5B_CHECKLIST.md`: P1 and P2 marked done. b4 and the pilot steps follow the
+  declarations.
+
