@@ -175,3 +175,15 @@ value is a median of T_round over the stated rounds. Output
     scratch export of `tab:time` the same day.
 
   No MAXN / heterogeneous ratio, straggler count or bootstrap had been computed.
+
+**Amendment to (c) (2026-09-29, before any ratio existed).**
+- **Per-seed ratios:** every reported ratio (primary, secondary, round 1, both families)
+  is always shown with its per-seed ratios r_s, one per paired seed, next to the
+  geometric mean and the interval.
+- **The interval is indicative:** a percentile bootstrap over n paired seeds can only
+  produce the resamples of n seeds drawn with replacement. That is at most C(2n-1, n)
+  distinct resamples: 10 for the three seeds of `ten_rounds`, 126 for five. With three
+  seeds the interval is therefore set by a handful of distinct values, and the report
+  says so wherever it prints one.
+
+Nothing else in (c) changes.

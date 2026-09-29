@@ -170,7 +170,9 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
    MAXN / heterogeneous (geometric mean over seeds, seed bootstrap), descriptive only, no
    verdicts; primary rounds 2-3 in both, secondary MAXN 2-10; round 1 its own ratio;
    label skew FedAvg/FedBN seeds 42/123/456 vs long_horizon rounds 2-10; straggler =
-   client with the largest `fit_wall_s` per round, counted per node. Compute it only
+   client with the largest `fit_wall_s` per round, counted per node; always print the
+   per-seed ratios next to the geometric mean, and call the interval indicative (3 seeds:
+   at most 10 distinct bootstrap resamples). Compute it only
    after 5b is committed (`docs/POST_5B_CHECKLIST.md` b4).
 
 ## Model selection (declared rule — use this wording, do not paraphrase it)

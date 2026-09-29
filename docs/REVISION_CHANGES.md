@@ -1539,4 +1539,7 @@ read-only on all three nodes).
   write into `data/splits_camera/` (`tests/test_camera_separation.py`, 8 new tests).
 * `docs/POST_5B_CHECKLIST.md`: P1 and P2 marked done. b4 and the pilot steps follow the
   declarations.
-
+* Amendment to the timing comparison (same day, before any ratio existed): the per-seed
+  ratios are always reported next to the geometric mean and the interval. The interval
+  is labelled indicative: with 3 seeds the percentile bootstrap has at most 10 distinct
+  resamples (126 with 5).
