@@ -124,3 +124,54 @@ namespace, and its directory is the first run's output directory). It stays on n
 the fetch job copies only `results/rev_*` and `results/pc_<name>/rev_*`, and the
 analysis runs on the desktop copy (were it ever copied, its marker would make
 `analyze_results.py` refuse to run).
+
+## (c) Declared analysis: timing, MAXN vs heterogeneous (2026-09-29)
+
+Declared 2026-09-29 and committed and pushed while 5b was still running (26 of its 30 runs
+unfinished), before any ratio below had been computed. Descriptive only: **no verdicts,
+no tests, no Holm**, and no ratio is ever described as "equal", "equivalent" or
+"no difference". Per-run quantities follow the timing reporting rule (CLAUDE.md rule 12):
+T_round is the test-free round time `rounds[].timing.round_time_s`, and a steady-state
+value is a median of T_round over the stated rounds. Output
+`analysis/cross_config_timing/`.
+
+* **Statistic.** For a cell and a quantity, per paired seed s,
+  r_s = T_MAXN,s / T_het,s. The reported ratio is the geometric mean of r_s over the paired
+  seeds, exp(mean_s log r_s), so MAXN / het and het / MAXN are exact reciprocals. Its
+  interval is a bootstrap over seeds: the paired seeds are resampled with replacement,
+  keeping each seed's pair together, B = 10,000, 95 % percentile interval, generator keyed
+  like the other bootstraps (`BASE_SEED + crc32("timing|" + cell + "|" + quantity)`).
+  Every cell is reported with its number of paired seeds; a seed enters a cell only when
+  both runs exist.
+* **Family `rounds_1_3` (cells as in (b)).** IID and label skew x FedAvg and FedProx
+  (mu = 0.01), seeds 42/123/456/789/1011. The MAXN run is the ten-round 5b run, and the
+  heterogeneous run is the three-round main-matrix run.
+  - *Primary:* steady state over rounds 2-3 in BOTH configurations (the median of T_round
+    over rounds 2 and 3, i.e. the same round positions).
+  - *Secondary:* MAXN steady state over rounds 2-10 against heterogeneous rounds 2-3.
+  - *Round 1:* the ratio of the round-1 T_round (the cold start), reported on its own and
+    never combined with the steady-state ratios.
+* **Family `ten_rounds`.** Label skew x FedAvg and FedBN, seeds 42/123/456: the MAXN
+  ten-round run against the heterogeneous ten-round `long_horizon_fedbn` run
+  (`results/rev_noniid_<strategy>_r10_seed<S>`).
+  - *Steady state:* rounds 2-10 in both configurations.
+  - *Round 1:* its own ratio.
+* **Straggler.** In each round, the straggler is the client with the largest
+  `fit_wall_s`, because the fit phase ends when the slowest client returns. For each
+  configuration and cell, the report counts how often each node is the straggler:
+  - over the rounds entering the steady state, i.e. rounds 2-3 for the primary of
+    `rounds_1_3` and rounds 2-10 otherwise;
+  - separately in round 1;
+  - with the median fit_wall_s of each node over the same rounds.
+
+  The straggler is reported, never tested.
+* **What had been seen when this was declared.** Nothing below was computed. Seen before:
+  - the heterogeneous totals in `tab:time`;
+  - a rough per-round figure for both configurations (total / R, noted while 5b was
+    monitored);
+  - the round wall-clock of the four finished IID FedAvg MAXN runs (all ten rounds,
+    printed during the clock-jump check of 2026-09-29);
+  - the heterogeneous round-1 and rounds-2-3 values of IID FedAvg and IID FedProx in a
+    scratch export of `tab:time` the same day.
+
+  No MAXN / heterogeneous ratio, straggler count or bootstrap had been computed.
