@@ -335,7 +335,7 @@ def test_time_table_reports_both_aggregations_from_the_summary():
             continue
         dist = "iid" if m.group(1) == "IID" else "non_iid_label"
         strategy = names[m.group(2)][0]
-        cis = _ci_cells(line)[1:]            # the first is the time interval
+        cis = _ci_cells(line)[-2:]           # the last two; time intervals come first
         assert len(cis) == 2, line
         for cell, metric in zip(cis, (PRIMARY_BA, SECONDARY_BA)):
             sel = summary[(summary.distribution == dist) & (summary.kind == "fl")

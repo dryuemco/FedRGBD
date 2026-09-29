@@ -652,6 +652,24 @@ def full_metrics_tex(df: pd.DataFrame, distribution: str, metrics: Sequence[str]
 #: the default operating point of the main comparison (Section III-J)
 TIME_TABLE_POINT = {"num_rounds": 3, "local_epochs": 5, "lr": 0.001}
 TIME_TABLE_DISTS = ("iid", "non_iid_label")
+#: rounds of the time table per power configuration: the main matrix at its default
+#: point (3), the MAXN_SUPER block (10).  One table never holds two configurations.
+TIME_TABLE_ROUNDS = {"heterogeneous": 3, "maxn": 10}
+#: the timing reporting rule (CLAUDE.md rule 12): round 1 = cold start, reported
+#: separately; steady state = median test-free round time over rounds 2..R
+ROUND1_TIME = "round1_time_s"
+STEADY_ROUND_TIME = "steady_round_time_s"
+
+
+def _seconds_cell(row: Any, siunitx: bool = False) -> str:
+    """``mean $\\pm$ std [95% CI] (n)`` in seconds, one decimal, ``--`` without the metric."""
+    if row is None:
+        return MISSING
+    n_seeds = _as_float(row.get("n_seeds"))
+    return "{} {} ({})".format(
+        fmt_mean_std(row.get("mean"), row.get("std"), 1, siunitx),
+        fmt_ci(row.get("ci_low"), row.get("ci_high"), 1, siunitx),
+        int(n_seeds) if n_seeds else 0).replace(" -- (", " (")
 
 
 def _protocol_of(row: Any) -> str:
@@ -675,16 +693,22 @@ def _at_point(row: Any, field: str, target: float) -> bool:
     return value is None or math.isclose(value, target, rel_tol=1e-9, abs_tol=1e-12)
 
 
-def time_tex(df: pd.DataFrame, siunitx: bool = False) -> Optional[str]:
+def time_tex(df: pd.DataFrame, siunitx: bool = False,
+             power_config: str = DEFAULT_POWER_CONFIG) -> Optional[str]:
     """``tab:time``: wall-clock time and communication of the revision FL runs.
 
     Only group-level-split (revision) federated runs at the default operating
-    point are included.  v1 runs are excluded on purpose: they were timed over
-    WiFi and under the image-level split, so their wall-clock times are not
-    comparable with the revision runs (wired Gigabit Ethernet).
+    point of ``power_config`` (``TIME_TABLE_ROUNDS``) are included; the caller passes
+    one configuration's rows only.  Per-round time follows the timing reporting rule:
+    round 1 (cold start) and the median over rounds 2..R, never total / R.  v1 runs are
+    excluded on purpose: they were timed over WiFi and under the image-level split, so
+    their wall-clock times are not comparable with the revision runs (wired Gigabit
+    Ethernet).
     """
     if df.empty or "metric" not in df.columns:
         return None
+    n_rounds = TIME_TABLE_ROUNDS.get(power_config, TIME_TABLE_POINT["num_rounds"])
+    point = dict(TIME_TABLE_POINT, num_rounds=n_rounds)
     rows: Dict[Tuple[int, str, str], Dict[str, Any]] = {}
     seen: Dict[Any, str] = {}
     for _, row in df.iterrows():
@@ -693,7 +717,7 @@ def time_tex(df: pd.DataFrame, siunitx: bool = False) -> Optional[str]:
         dist = str(row.get("distribution"))
         if dist not in TIME_TABLE_DISTS:
             continue
-        if not all(_at_point(row, f, v) for f, v in TIME_TABLE_POINT.items()):
+        if not all(_at_point(row, f, v) for f, v in point.items()):
             continue
         n_nodes = _as_float(row.get("n_nodes"))
         name = config_name(row.get("label"), dist).replace(" (group-level)", "")
@@ -705,8 +729,9 @@ def time_tex(df: pd.DataFrame, siunitx: bool = False) -> Optional[str]:
     if not rows:
         return None
 
-    header = [_row(["Configuration", "Time (min)", "Comm.\\ (MB)", "Bal.\\ acc.\\ (\\%)",
-                    "Bal.\\ acc., client mean (\\%)"])]
+    header = [_row(["Configuration", "Time (min)", "Round 1 (s)",
+                    "Rounds 2--{}, median (s)".format(n_rounds), "Comm.\\ (MB)",
+                    "Bal.\\ acc.\\ (\\%)", "Bal.\\ acc., client mean (\\%)"])]
     body: List[str] = []
     for (n_nodes, dist, name) in sorted(rows, key=lambda k: (k[0], TIME_TABLE_DISTS.index(k[1]),
                                                               k[2])):
@@ -732,19 +757,26 @@ def time_tex(df: pd.DataFrame, siunitx: bool = False) -> Optional[str]:
                 row = None
             ba_cells.append(_pct_ci(row))
         short = {"iid": "IID", "non_iid_label": "Label skew"}.get(dist, dist_label(dist))
+        rule_cells = [_seconds_cell(metrics.get(m), siunitx)
+                      for m in (ROUND1_TIME, STEADY_ROUND_TIME)]
         body.append(_row(["{}N {} {}".format(n_nodes, short, name),
-                          time_cell, comm_cell] + ba_cells))
+                          time_cell] + rule_cells + [comm_cell] + ba_cells))
 
     text = latex_table(
-        column_spec="lcccc",
+        column_spec="lcccccc",
         header_lines=header,
         body_lines=body,
-        caption="Measured Total Training Time, Group-Level Split, Wired Gigabit Ethernet "
-                "(3 Rounds)",
+        caption="Measured Training Time, Group-Level Split, Wired Gigabit Ethernet "
+                "({} Rounds{})".format(n_rounds, ", All Nodes at MAXN\\_SUPER"
+                                       if power_config == "maxn" else ""),
         label="tab:time",
         small=True,
         note="Time: mean $\\pm$ std [95\\% CI] ($n$ seeds) of the server wall-clock time "
-             "excluding the report-only test evaluation. "
+             "excluding the report-only test evaluation. Round~1 is the cold start (process "
+             "and CUDA initialisation, first read of the partition) and is reported "
+             "separately; the steady-state per-round time is the median test-free round "
+             "time over rounds 2 to {}, per run, summarised over seeds in the same way "
+             "(timing reporting rule, Section~\\ref{{sec:timecomm}}). ".format(n_rounds) +
              "Communication: measured cumulative payload over the run. Balanced accuracy: "
              "test set at the round selected by the lowest weighted validation loss, pooled "
              "over all held-out images and as the unweighted mean over the clients, mean "
@@ -1055,7 +1087,7 @@ def export(analysis_dir: str, output_dir: str, metrics: Optional[Sequence[str]] 
            "per_round_{}.tex".format(_safe_label(per_round_metric)))
     _write(pairwise_tex(tables["pairwise"], digits, siunitx), "pairwise_tests.tex")
     _write(friedman_tex(tables["friedman"], digits, siunitx), "friedman.tex")
-    _write(time_tex(summary, siunitx), "time.tex")
+    _write(time_tex(summary, siunitx, power_config), "time.tex")
 
     # the leakage-definition sensitivity table, generated by scripts/clean_subset.py
     nn_table = os.path.join(analysis_dir, "leakage", "clean_subset", "nearest_train_distance.tex")

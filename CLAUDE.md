@@ -12,6 +12,7 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
 | `docs/REVISION_CHANGES.md` | File-by-file record of every change made for the revision (English) |
 | `docs/RESPONSE_TO_REVIEWERS.md` | Per-reviewer-comment answers; says what is DONE and what is PENDING EXPERIMENT |
 | `docs/DESKTOP_GPU_BASELINES.md` | Desktop GPU environment and the baseline block that already ran |
+| `docs/POST_5B_CHECKLIST.md` | Ordered steps for the day 5b ends (commit, analyses, fixes, node pull, camera pilot), each with its verification and who runs it |
 
 ## Environment
 
@@ -155,6 +156,9 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
    other round of the four IID FedAvg runs. All timers in results.json are monotonic
    (`perf_counter`), so an NTP step after a reboot does not affect them; the `%.1f min` in
    `logs/run_matrix.log` is wall-clock (`time.time`) and is not a reported number.
+   Implemented: `analyze_results.round_time_rule` -> `round1_time_s`,
+   `steady_round_time_s`; `tab:time` prints both, per power configuration
+   (`export_latex_tables.py --power_config`, R = 3 heterogeneous, 10 maxn).
 
 ## Model selection (declared rule — use this wording, do not paraphrase it)
 

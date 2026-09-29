@@ -673,6 +673,36 @@ def _round_timing_and_comm(data: Dict[str, Any]) -> Dict[int, Dict[str, float]]:
     return out
 
 
+def round_time_rule(data: Dict[str, Any]) -> Tuple[Optional[float], Optional[float]]:
+    """The declared timing reporting rule (CLAUDE.md rule 12, paper sec:timecomm).
+
+    -> ``(round1_time_s, steady_round_time_s)``: the test-free round time T_round
+    (``rounds[].timing.round_time_s``) of round 1 -- the cold start, reported separately --
+    and the median of T_round over rounds 2..R.  Only computed when every round 1..R
+    carries a measured T_round (R = ``num_rounds``, or the number of rounds logged);
+    otherwise None, never an estimate (no mean over all rounds, no total / R).  The
+    steady-state value needs R >= 2.
+    """
+    rounds = data.get("rounds")
+    if not isinstance(rounds, (list, tuple)) or not rounds:
+        return None, None
+    times: Dict[int, float] = {}
+    for i, entry in enumerate(rounds):
+        if not isinstance(entry, dict):
+            return None, None
+        timing = entry.get("timing") if isinstance(entry.get("timing"), dict) else {}
+        value = _as_float(timing.get("round_time_s"))
+        if value is None or not math.isfinite(value):
+            return None, None
+        times[int(entry.get("round", i + 1))] = value
+    n_rounds = data.get("num_rounds")
+    R = int(n_rounds) if n_rounds is not None else max(times)
+    if sorted(times) != list(range(1, R + 1)):
+        return None, None
+    steady = float(np.median([times[r] for r in range(2, R + 1)])) if R >= 2 else None
+    return times[1], steady
+
+
 # --------------------------------------------------------------------------- #
 # loaders
 # --------------------------------------------------------------------------- #
@@ -913,6 +943,7 @@ def load_fl_run(
             by_round.setdefault(rnd, {}).setdefault(key, val)
 
     timing = _round_timing_and_comm(data)
+    record["round1_time_s"], record["steady_round_time_s"] = round_time_rule(data)
     total_time = record.get("total_time_s")
     num_rounds = record.get("num_rounds") or (max(by_round) if by_round else 0)
 
@@ -1365,6 +1396,8 @@ def runs_dataframe(runs: Sequence[Dict[str, Any]]) -> pd.DataFrame:
         row["pred_check_max_diff"] = record.get("pred_check_max_diff")
         row["total_time_s"] = record.get("total_time_s")
         row["total_time_raw_s"] = record.get("total_time_raw_s")
+        row["round1_time_s"] = record.get("round1_time_s")
+        row["steady_round_time_s"] = record.get("steady_round_time_s")
         row["final_elapsed_s"] = record.get("final_elapsed_s")
         row["final_cumulative_mb"] = record.get("final_cumulative_mb")
         rows.append(row)
@@ -1373,7 +1406,8 @@ def runs_dataframe(runs: Sequence[Dict[str, Any]]) -> pd.DataFrame:
     ] + ["selected_test_" + name for name in SELECTED_RUN_COLUMNS] + [
         "v1_final_round_accuracy", "selected_test_clean_accuracy",
         "selected_test_clean_balanced_accuracy", "clean_excluded_n", "pred_check_max_diff",
-        "total_time_s", "total_time_raw_s", "final_elapsed_s", "final_cumulative_mb",
+        "total_time_s", "total_time_raw_s", "round1_time_s", "steady_round_time_s",
+        "final_elapsed_s", "final_cumulative_mb",
     ]
     df = pd.DataFrame(rows, columns=columns)
     if not df.empty:
@@ -1403,8 +1437,9 @@ def _run_metric_values(record: Dict[str, Any]) -> Dict[str, float]:
     * v1 FL runs            -> ``v1_final_round_accuracy`` / ``v1_final_round_loss``
     * centralized/local-only -> ``final_<m>`` (final-epoch test metrics)
 
-    ``round1_accuracy`` (validation), ``total_time_s`` and ``final_cumulative_mb``
-    are reported for every run that has them.
+    ``round1_accuracy`` (validation), ``total_time_s``, the timing rule's
+    ``round1_time_s`` / ``steady_round_time_s`` (:func:`round_time_rule`) and
+    ``final_cumulative_mb`` are reported for every run that has them.
     """
     values: Dict[str, float] = {}
     source = record.get("headline_source")
@@ -1442,7 +1477,8 @@ def _run_metric_values(record: Dict[str, Any]) -> Dict[str, float]:
             fval = _as_float(record.get(key))
             if fval is not None:
                 values[key] = fval
-    for key in ("round1_accuracy", "total_time_s", "final_cumulative_mb"):
+    for key in ("round1_accuracy", "total_time_s", "round1_time_s", "steady_round_time_s",
+                "final_cumulative_mb"):
         fval = _as_float(record.get(key))
         if fval is not None:
             values[key] = fval

@@ -1474,3 +1474,36 @@ read-only on all three nodes).
 * **Removed** `tests/test_camera_fl.py::test_every_other_block_is_byte_identical_to_the_committed_generator`:
   it compared with HEAD and has been skipped permanently since the camera commit.
   `tests/test_revision_commands_frozen.py` pins the same property against 2a565b3.
+
+## Timing reporting rule implemented; post-5b checklist (2026-09-29)
+
+* `scripts/analyze_results.py`: `round_time_rule(data)` gives, per FL run:
+  - `round1_time_s`: the test-free `rounds[].timing.round_time_s` of round 1;
+  - `steady_round_time_s`: the median of the same quantity over rounds 2..R.
+
+  Both are computed only when every round 1..R has a measured value, otherwise None
+  (never estimated, never total / R). Both appear in `runs.csv` and, summarised over
+  seeds (mean, std, 95 % CI), in `summary_table.csv`.
+* `scripts/export_latex_tables.py`: `tab:time` gains the columns "Round 1 (s)" and
+  "Rounds 2--R, median (s)" and takes the round count from the exported power
+  configuration (3 heterogeneous, 10 maxn; the caption says which). One export still
+  holds one configuration only. `tests/test_paper_numbers.py` now reads the two balanced
+  accuracy intervals from the end of each row.
+* Checked on the real results (scratch output only, nothing committed; `analysis/` and
+  `paper/tables/` are regenerated after 5b, `docs/POST_5B_CHECKLIST.md` b1):
+  - all 118 group-level FL runs (114 heterogeneous, the 4 finished 5b runs) get both
+    values, each equal to an independent recomputation from its results.json;
+  - round 1 is the slowest in 114 of the 118. The other 4 are heterogeneous three-round
+    Dirichlet runs, where the round-to-round spread exceeds the cold-start cost;
+  - the heterogeneous `tab:time` keeps its other columns unchanged.
+
+  No heterogeneous-vs-MAXN timing comparison was computed or looked at.
+  `tests/test_timing_rule.py` (11 tests).
+* `docs/POST_5B_CHECKLIST.md`: the ordered steps for the day 5b ends, each with its
+  verification and who runs it.
+  - It adds two decisions needed first: the statistic of the timing comparison (rule 12
+    fixes only the per-run quantities), and whether pilot footage starts the camera
+    pre-registration's freeze.
+  - It moves the camera smoke pair after the full capture: fold 0 exists only once all
+    scenes are captured and the folds are generated.
+
