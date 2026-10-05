@@ -69,7 +69,13 @@ RHO_SUFFIX = {"": "1.00", "_sub0.05": "0.05", "_sub0.01": "0.01"}
 
 
 def _name(record):
-    return record.get("variant") or record.get("strategy_display") or record.get("strategy")
+    name = record.get("variant") or record.get("strategy_display") or record.get("strategy")
+    # federated runs of another power configuration (e.g. maxn) share their variant name
+    # with the heterogeneous matrix; tag them so every row of the flip list is unambiguous
+    power = record.get("power_config")
+    if record.get("kind") == "fl" and power not in (None, "heterogeneous", "unrecorded"):
+        name = "%s [%s]" % (name, power)
+    return name
 
 
 def _verdict(lo, hi):

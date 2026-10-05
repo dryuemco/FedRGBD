@@ -86,6 +86,21 @@ Paired by seed within each partitioning protocol and data distribution. Headline
 | FedAvg vs Local-only | 5 | 0.8640 | 0.8525 | 0.0115 | 0.125 | 0.164 | 0.8125 | 0.7944 |  |
 | FedProx(mu=0.01) vs Local-only | 5 | 0.9294 | 0.8525 | 0.0769 | 3.117 | 4.608 | 0.0625 | 0.0022 |  |
 
+## `balanced_accuracy` — distribution `iid` — protocol `group` — power `maxn`
+
+| comparison | n | mean A | mean B | diff | d_paired | d_unpaired | Wilcoxon p | t-test p | notes |
+|---|---|---|---|---|---|---|---|---|---|
+| Centralized vs FedAvg (R=10) | 5 | 0.9374 | 0.9426 | -0.0051 | -0.140 | -0.244 | 0.8125 | 0.7702 |  |
+| Centralized vs FedBN (R=10) | 5 | 0.9374 | 0.7897 | 0.1477 | 1.470 | 2.346 | 0.0625 | 0.0303 |  |
+| Centralized vs FedProx(mu=0.01) (R=10) | 5 | 0.9374 | 0.9569 | -0.0194 | -1.739 | -1.760 | 0.0625 | 0.0177 |  |
+| Centralized vs Local-only | 5 | 0.9374 | 0.8525 | 0.0849 | 5.304 | 6.109 | 0.0625 | 0.0003 |  |
+| FedAvg (R=10) vs FedBN (R=10) | 5 | 0.9426 | 0.7897 | 0.1528 | 2.310 | 2.352 | 0.0625 | 0.0067 |  |
+| FedAvg (R=10) vs FedProx(mu=0.01) (R=10) | 5 | 0.9426 | 0.9569 | -0.0143 | -0.470 | -0.734 | 0.4375 | 0.3525 |  |
+| FedAvg (R=10) vs Local-only | 5 | 0.9426 | 0.8525 | 0.0901 | 2.291 | 4.241 | 0.0625 | 0.0069 |  |
+| FedBN (R=10) vs FedProx(mu=0.01) (R=10) | 5 | 0.7897 | 0.9569 | -0.1671 | -1.792 | -2.676 | 0.0625 | 0.0160 |  |
+| FedBN (R=10) vs Local-only | 5 | 0.7897 | 0.8525 | -0.0628 | -0.649 | -0.996 | 0.3125 | 0.2206 |  |
+| FedProx(mu=0.01) (R=10) vs Local-only | 5 | 0.9569 | 0.8525 | 0.1044 | 6.230 | 9.166 | 0.0625 | 0.0002 |  |
+
 ## `balanced_accuracy` — distribution `iid_sub0.01` — protocol `group` — power `heterogeneous`
 
 | comparison | n | mean A | mean B | diff | d_paired | d_unpaired | Wilcoxon p | t-test p | notes |
@@ -233,6 +248,21 @@ Paired by seed within each partitioning protocol and data distribution. Headline
 | FedProx(mu=0.1) vs Local-only | 3 | 0.9390 | 0.9546 | -0.0156 | -0.801 | -0.908 | 0.2500 | 0.2996 |  |
 | FedProx(mu=0.5) vs Local-only | 3 | 0.8848 | 0.9546 | -0.0697 | -6.615 | -12.161 | 0.2500 | 0.0075 |  |
 
+## `balanced_accuracy` — distribution `non_iid_label` — protocol `group` — power `maxn`
+
+| comparison | n | mean A | mean B | diff | d_paired | d_unpaired | Wilcoxon p | t-test p | notes |
+|---|---|---|---|---|---|---|---|---|---|
+| Centralized vs FedAvg (R=10) | 5 | 0.9471 | 0.9660 | -0.0189 | -0.544 | -0.709 | 0.4375 | 0.2905 |  |
+| Centralized vs FedBN (R=10) | 5 | 0.9471 | 0.9526 | -0.0055 | -0.425 | -0.548 | 0.3125 | 0.3957 |  |
+| Centralized vs FedProx(mu=0.01) (R=10) | 5 | 0.9471 | 0.9677 | -0.0206 | -1.249 | -2.272 | 0.1250 | 0.0492 |  |
+| Centralized vs Local-only | 5 | 0.9471 | 0.9528 | -0.0057 | -0.501 | -0.715 | 0.4375 | 0.3251 |  |
+| FedAvg (R=10) vs FedBN (R=10) | 5 | 0.9660 | 0.9526 | 0.0134 | 0.317 | 0.495 | 0.6250 | 0.5172 |  |
+| FedAvg (R=10) vs FedProx(mu=0.01) (R=10) | 5 | 0.9660 | 0.9677 | -0.0017 | -0.043 | -0.063 | 0.6250 | 0.9282 |  |
+| FedAvg (R=10) vs Local-only | 5 | 0.9660 | 0.9528 | 0.0132 | 0.344 | 0.503 | 0.6250 | 0.4847 |  |
+| FedBN (R=10) vs FedProx(mu=0.01) (R=10) | 5 | 0.9526 | 0.9677 | -0.0150 | -1.528 | -1.499 | 0.0625 | 0.0268 |  |
+| FedBN (R=10) vs Local-only | 5 | 0.9526 | 0.9528 | -0.0001 | -0.010 | -0.015 | 0.8125 | 0.9841 |  |
+| FedProx(mu=0.01) (R=10) vs Local-only | 5 | 0.9677 | 0.9528 | 0.0149 | 1.161 | 1.899 | 0.1250 | 0.0603 |  |
+
 ## `balanced_accuracy` — distribution `non_iid_label_sub0.01` — protocol `group` — power `heterogeneous`
 
 | comparison | n | mean A | mean B | diff | d_paired | d_unpaired | Wilcoxon p | t-test p | notes |
@@ -352,6 +382,21 @@ Paired by seed within each partitioning protocol and data distribution. Headline
 | FedAvg vs FedProx(mu=0.01) | 5 | 0.8639 | 0.9287 | -0.0647 | -0.623 | -0.917 | 0.3125 | 0.2359 |  |
 | FedAvg vs Local-only | 5 | 0.8639 | 0.8449 | 0.0191 | 0.207 | 0.272 | 0.6250 | 0.6671 |  |
 | FedProx(mu=0.01) vs Local-only | 5 | 0.9287 | 0.8449 | 0.0838 | 3.328 | 4.825 | 0.0625 | 0.0017 |  |
+
+## `clientmean_balanced_accuracy` — distribution `iid` — protocol `group` — power `maxn`
+
+| comparison | n | mean A | mean B | diff | d_paired | d_unpaired | Wilcoxon p | t-test p | notes |
+|---|---|---|---|---|---|---|---|---|---|
+| Centralized vs FedAvg (R=10) | 5 | 0.9368 | 0.9425 | -0.0057 | -0.153 | -0.268 | 0.8125 | 0.7490 |  |
+| Centralized vs FedBN (R=10) | 5 | 0.9368 | 0.7897 | 0.1471 | 1.453 | 2.332 | 0.0625 | 0.0314 |  |
+| Centralized vs FedProx(mu=0.01) (R=10) | 5 | 0.9368 | 0.9567 | -0.0198 | -1.674 | -1.695 | 0.0625 | 0.0201 |  |
+| Centralized vs Local-only | 5 | 0.9368 | 0.8449 | 0.0920 | 5.300 | 6.146 | 0.0625 | 0.0003 |  |
+| FedAvg (R=10) vs FedBN (R=10) | 5 | 0.9425 | 0.7897 | 0.1528 | 2.311 | 2.352 | 0.0625 | 0.0067 |  |
+| FedAvg (R=10) vs FedProx(mu=0.01) (R=10) | 5 | 0.9425 | 0.9567 | -0.0141 | -0.462 | -0.723 | 0.4375 | 0.3596 |  |
+| FedAvg (R=10) vs Local-only | 5 | 0.9425 | 0.8449 | 0.0977 | 2.410 | 4.516 | 0.0625 | 0.0057 |  |
+| FedBN (R=10) vs FedProx(mu=0.01) (R=10) | 5 | 0.7897 | 0.9567 | -0.1669 | -1.788 | -2.673 | 0.0625 | 0.0162 |  |
+| FedBN (R=10) vs Local-only | 5 | 0.7897 | 0.8449 | -0.0551 | -0.563 | -0.873 | 0.4375 | 0.2764 |  |
+| FedProx(mu=0.01) (R=10) vs Local-only | 5 | 0.9567 | 0.8449 | 0.1118 | 6.303 | 9.179 | 0.0625 | 0.0001 |  |
 
 ## `clientmean_balanced_accuracy` — distribution `iid_sub0.01` — protocol `group` — power `heterogeneous`
 
@@ -499,6 +544,21 @@ Paired by seed within each partitioning protocol and data distribution. Headline
 | FedProx(mu=0.1) vs FedProx(mu=0.5) | 3 | 0.9194 | 0.8625 | 0.0569 | 1.041 | 2.045 | 0.2500 | 0.2131 |  |
 | FedProx(mu=0.1) vs Local-only | 3 | 0.9194 | 0.8870 | 0.0324 | 1.684 | 1.187 | 0.2500 | 0.1002 |  |
 | FedProx(mu=0.5) vs Local-only | 3 | 0.8625 | 0.8870 | -0.0246 | -0.593 | -1.063 | 0.5000 | 0.4122 |  |
+
+## `clientmean_balanced_accuracy` — distribution `non_iid_label` — protocol `group` — power `maxn`
+
+| comparison | n | mean A | mean B | diff | d_paired | d_unpaired | Wilcoxon p | t-test p | notes |
+|---|---|---|---|---|---|---|---|---|---|
+| Centralized vs FedAvg (R=10) | 5 | 0.9375 | 0.9554 | -0.0179 | -0.464 | -0.478 | 0.4375 | 0.3583 |  |
+| Centralized vs FedBN (R=10) | 5 | 0.9375 | 0.9289 | 0.0086 | 0.277 | 0.540 | 0.8125 | 0.5686 |  |
+| Centralized vs FedProx(mu=0.01) (R=10) | 5 | 0.9375 | 0.9604 | -0.0229 | -0.794 | -1.404 | 0.1875 | 0.1504 |  |
+| Centralized vs Local-only | 5 | 0.9375 | 0.8864 | 0.0511 | 2.060 | 2.963 | 0.0625 | 0.0100 |  |
+| FedAvg (R=10) vs FedBN (R=10) | 5 | 0.9554 | 0.9289 | 0.0265 | 0.442 | 0.715 | 0.6250 | 0.3794 |  |
+| FedAvg (R=10) vs FedProx(mu=0.01) (R=10) | 5 | 0.9554 | 0.9604 | -0.0050 | -0.097 | -0.134 | 0.6250 | 0.8397 |  |
+| FedAvg (R=10) vs Local-only | 5 | 0.9554 | 0.8864 | 0.0690 | 1.195 | 1.833 | 0.1250 | 0.0557 |  |
+| FedBN (R=10) vs FedProx(mu=0.01) (R=10) | 5 | 0.9289 | 0.9604 | -0.0315 | -2.846 | -2.051 | 0.0625 | 0.0031 |  |
+| FedBN (R=10) vs Local-only | 5 | 0.9289 | 0.8864 | 0.0425 | 2.027 | 2.597 | 0.0625 | 0.0106 |  |
+| FedProx(mu=0.01) (R=10) vs Local-only | 5 | 0.9604 | 0.8864 | 0.0740 | 2.776 | 4.431 | 0.0625 | 0.0034 |  |
 
 ## `clientmean_balanced_accuracy` — distribution `non_iid_label_sub0.01` — protocol `group` — power `heterogeneous`
 
