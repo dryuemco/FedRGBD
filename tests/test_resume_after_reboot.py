@@ -123,3 +123,105 @@ def test_a_finished_block_is_reported_not_restarted(tmp_path, monkeypatch):
         _log(_start(), "[t] block finished: 30 ok, 0 failed, 0 not attempted"))
     assert rar.main([]) == 0
     assert "no restart: last block state is finished" in (tmp_path / "logs" / "resume.log").read_text()
+
+
+# --------------------------------------------------------------------------- #
+# clock synchronisation before the pre-flight (POST_5B_CHECKLIST c1)
+# --------------------------------------------------------------------------- #
+FAKE_NODES = {"node_a": {"local": True, "venv": "/v"}, "node_b": {"local": False},
+              "node_c": {"local": False}}
+
+
+def _interrupted_repo(tmp_path, monkeypatch, sync_answers, offsets=None):
+    """An interrupted block with fake nodes.  ``sync_answers[node]`` is the list of
+    successive NTPSynchronized answers (the last one repeats).  Records every
+    subprocess.run (the pre-flight and tmux) instead of running it."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(rar, "REPO", str(tmp_path))
+    os.makedirs(tmp_path / "logs")
+    (tmp_path / "logs" / "run_matrix.log").write_text(_log(_start(), "[t] pre-flight OK"))
+    monkeypatch.setattr(rar, "run_matrix_alive", lambda: False)
+    monkeypatch.setattr(run_matrix, "load_testbed", lambda path: (FAKE_NODES, 8080))
+    monkeypatch.setattr(rar, "wait_for_nodes", lambda *a: True)
+    monkeypatch.setattr(rar.time, "sleep", lambda s: None)
+    polls = {n: 0 for n in FAKE_NODES}
+    events = []
+
+    def ntp(node):
+        answers = sync_answers[node]
+        a = answers[min(polls[node], len(answers) - 1)]
+        polls[node] += 1
+        events.append(("ntp", node, a))
+        return a
+
+    def run(argv, **kw):
+        events.append(("run", argv))
+        class R:                                  # the pre-flight fails: stop right there
+            returncode, stdout = 1, "PRE-FLIGHT FAIL -- fake"
+        return R()
+
+    monkeypatch.setattr(rar, "ntp_synchronised", ntp)
+    monkeypatch.setattr(rar, "measure_offset",
+                        lambda n: (offsets or {"node_b": 0.0123, "node_c": -0.004})[n])
+    monkeypatch.setattr(rar.subprocess, "run", run)
+    return events
+
+
+def test_no_preflight_or_restart_before_every_clock_says_yes(tmp_path, monkeypatch):
+    k = 3
+    events = _interrupted_repo(tmp_path, monkeypatch, {
+        "node_a": ["yes"], "node_b": ["yes"], "node_c": ["no"] * k + ["yes"]})
+    assert rar.main(["--poll", "1"]) == 1               # stops at the fake failing pre-flight
+    runs = [i for i, e in enumerate(events) if e[0] == "run"]
+    assert len(runs) == 1 and "--check_only" in events[runs[0]][1]
+    before = [e for e in events[:runs[0]] if e[0] == "ntp" and e[1] == "node_c"]
+    assert [e[2] for e in before] == ["no"] * k + ["yes"]
+    log = (tmp_path / "logs" / "resume.log").read_text()
+    assert "waiting for synchronised clocks" in log
+    assert "clocks: node_a sync=yes, node_b +12 ms, node_c -4 ms" in log
+    assert log.index("clocks: node_a") < log.index("no restart: pre-flight failed")
+
+
+def test_clock_timeout_means_no_restart_and_a_log_line(tmp_path, monkeypatch):
+    events = _interrupted_repo(tmp_path, monkeypatch, {
+        "node_a": ["yes"], "node_b": ["no"], "node_c": ["yes"]})
+    assert rar.main(["--clock_timeout", "0", "--poll", "1"]) == 1
+    assert not [e for e in events if e[0] == "run"]       # no pre-flight, no tmux
+    log = (tmp_path / "logs" / "resume.log").read_text()
+    assert "clocks not synchronised after 0 s: node_a sync=yes, node_b sync=no, node_c sync=yes" in log
+    assert "no restart: clocks not synchronised" in log
+    assert "restarted" not in log
+
+
+def test_clocks_line_format_and_unmeasurable_offset():
+    line = rar.clocks_line("yes", {"node_b": 0.0004, "node_c": None})
+    assert line == "clocks: node_a sync=yes, node_b +0 ms, node_c offset n/a"
+    assert rar.clocks_line("yes", {"node_b": 1.25, "node_c": -0.3}) == \
+        "clocks: node_a sync=yes, node_b +1250 ms, node_c -300 ms"
+
+
+def test_offset_is_the_best_of_the_round_trips(monkeypatch):
+    # three samples; the one with the shortest round trip decides
+    clock = iter([0.0, 0.5,   10.0, 10.1,   20.0, 20.9])
+    remote = iter(["0.30", "10.25", "21.0"])
+    monkeypatch.setattr(rar.time, "time", lambda: next(clock))
+    monkeypatch.setattr(rar, "_node_command", lambda node, cmd: next(remote) + "\n")
+    off = rar.measure_offset("node_b", n_samples=3)
+    assert abs(off - (10.25 - 10.05)) < 1e-9
+
+
+def test_dry_run_reports_clocks_without_waiting(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(rar, "REPO", str(tmp_path))
+    os.makedirs(tmp_path / "logs")
+    (tmp_path / "logs" / "run_matrix.log").write_text(
+        _log(_start(), "[t] block finished: 30 ok, 0 failed, 0 not attempted"))
+    monkeypatch.setattr(run_matrix, "load_testbed", lambda path: (FAKE_NODES, 8080))
+    monkeypatch.setattr(rar, "ntp_synchronised", lambda n: "no" if n == "node_c" else "yes")
+    monkeypatch.setattr(rar, "measure_offset", lambda n: 0.002)
+    monkeypatch.setattr(rar.time, "sleep", lambda s: pytest.fail("a dry run never waits"))
+    assert rar.main(["--dry_run"]) == 0
+    log = (tmp_path / "logs" / "resume.log").read_text()
+    assert "dry run: no restart: last block state is finished" in log
+    assert "dry run: NTPSynchronized node_a=yes, node_b=yes, node_c=no" in log
+    assert "clocks: node_a sync=yes, node_b +2 ms, node_c +2 ms" in log

@@ -8,7 +8,9 @@ failed pre-flight, an identity-gate failure, ``nothing to do`` -- means a human
 decides, and nothing is restarted.
 
     1. classify the last invocation (the lines after the last ``run_matrix start``);
-    2. wait until all three nodes answer over SSH;
+    2. wait until all three nodes answer over SSH, then until all three report a
+       synchronised clock (``timedatectl show -p NTPSynchronized --value`` = ``yes``),
+       and log each node's clock offset against node_a;
     3. run the pre-flight (``run_matrix.py --check_only`` with the invocation's
        power configuration);
     4. move every run directory of the block that has no valid results.json and no
@@ -19,7 +21,11 @@ Every decision is a line starting with ``RESUME`` in ``logs/resume.log``, which 
 desktop fetch task scans and raises as a pop-up.
 
     python3 scripts/resume_after_reboot.py            # what the @reboot entry runs
-    python3 scripts/resume_after_reboot.py --dry_run  # classify and report only
+    python3 scripts/resume_after_reboot.py --dry_run  # classify, one clock check, report only
+
+Why the clock wait: after the outage of 2026-09-28 node_a came up ~22 min off until NTP
+synchronised; a restart inside that window writes wrong wall-clock times to the logs (the
+results' timers are monotonic and are not affected).
 """
 
 from __future__ import annotations
@@ -38,8 +44,11 @@ from typing import List, Optional, Tuple
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
 from scripts import run_matrix  # noqa: E402
+from scripts.camera_capture_session import CLOCK_CMD, clock_offset  # noqa: E402
 
 START = 'run_matrix start'
+NTP_CMD = 'timedatectl show -p NTPSynchronized --value'
+CLOCK_SAMPLES = 5
 RESUME_LOG = os.path.join('logs', 'resume.log')
 INTERRUPTED_ROOT = os.path.join('results', '_interrupted')
 
@@ -159,6 +168,82 @@ def wait_for_nodes(timeout: int, poll: int, say) -> bool:
         time.sleep(poll)
 
 
+def _node_command(node: str, command: str, timeout: int = 20) -> Optional[str]:
+    """stdout of ``command`` on the node (node_a runs it locally), None on failure."""
+    try:
+        if run_matrix.NODES[node]['local']:
+            r = subprocess.run(['bash', '-c', command], stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT, text=True, timeout=timeout)
+        else:
+            r = run_matrix.ssh(node, command, timeout=timeout)
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    return r.stdout if r.returncode == 0 else None
+
+
+def ntp_synchronised(node: str) -> str:
+    """'yes', 'no', or what else the node said ('unreachable' when nothing came back)."""
+    out = _node_command(node, NTP_CMD)
+    return out.strip().splitlines()[-1].strip() if out and out.strip() else 'unreachable'
+
+
+def wait_for_clock_sync(timeout: int, poll: int, say, query=None) -> bool:
+    """Poll all three nodes until each reports NTPSynchronized=yes, up to ``timeout`` s."""
+    query = query or ntp_synchronised
+    deadline = time.time() + timeout
+    while True:
+        status = {n: query(n) for n in run_matrix.NODE_NAMES}
+        if all(v == 'yes' for v in status.values()):
+            return True
+        if time.time() > deadline:
+            say('clocks not synchronised after %d s: %s' % (
+                timeout, ', '.join('%s sync=%s' % (n, v) for n, v in status.items())))
+            return False
+        time.sleep(poll)
+
+
+def measure_offset(node: str, n_samples: int = CLOCK_SAMPLES) -> Optional[float]:
+    """Clock offset of ``node`` against node_a in seconds: the best of ``n_samples`` SSH
+    round trips, as ``camera_capture_session`` measures it.  None if not measurable."""
+    samples = []
+    for _ in range(n_samples):
+        t0 = time.time()
+        out = _node_command(node, CLOCK_CMD)
+        t1 = time.time()
+        try:
+            samples.append((t0, float(out.strip().splitlines()[-1]), t1))
+        except (AttributeError, IndexError, ValueError):
+            continue
+    return clock_offset(samples)[0] if samples else None
+
+
+def clocks_line(sync: str, offsets: dict) -> str:
+    """'clocks: node_a sync=yes, node_b +x ms, node_c +y ms'."""
+    parts = ['node_a sync=%s' % sync]
+    for n, off in offsets.items():
+        parts.append('%s %s' % (n, 'offset n/a' if off is None else '%+.0f ms' % (1000 * off)))
+    return 'clocks: ' + ', '.join(parts)
+
+
+def report_clocks(say, query=None, offset=None) -> None:
+    query, offset = query or ntp_synchronised, offset or measure_offset
+    remote = [n for n in run_matrix.NODE_NAMES if not run_matrix.NODES[n]['local']]
+    say(clocks_line(query('node_a'), {n: offset(n) for n in remote}))
+
+
+def dry_run_clocks(say, testbed: str) -> None:
+    """One read-only clock check (no waiting) for --dry_run; never raises."""
+    try:
+        nodes, _port = run_matrix.load_testbed(testbed)
+        run_matrix.NODES.clear()
+        run_matrix.NODES.update(nodes)
+        status = {n: ntp_synchronised(n) for n in run_matrix.NODE_NAMES}
+        say('dry run: NTPSynchronized %s' % ', '.join('%s=%s' % kv for kv in status.items()))
+        report_clocks(say, query=lambda n: status[n])
+    except (SystemExit, Exception) as e:  # a dry run reports, it never fails on this
+        say('dry run: clock check not possible: %s' % str(e).splitlines()[0])
+
+
 def run_matrix_alive() -> bool:
     r = subprocess.run(['pgrep', '-f', 'scripts/run_matrix.py'], stdout=subprocess.PIPE, text=True)
     return any(int(p) != os.getpid() for p in r.stdout.split())
@@ -170,6 +255,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument('--wait_timeout', type=int, default=3600,
                     help='seconds to wait for all three nodes to answer')
     ap.add_argument('--poll', type=int, default=30)
+    ap.add_argument('--clock_timeout', type=int, default=3600,
+                    help='seconds to wait for all three nodes to report NTPSynchronized=yes')
     args = ap.parse_args(argv)
     os.chdir(REPO)
     say = Reporter()
@@ -177,7 +264,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     text = open(log_path, encoding='utf-8', errors='replace').read() if os.path.isfile(log_path) else ''
     state, inv, why = classify(text)
     if state != 'interrupted':
-        say('no restart: last block state is %s (%s)' % (state, why))
+        say('%sno restart: last block state is %s (%s)'
+            % ('dry run: ' if args.dry_run else '', state, why))
+        if args.dry_run:
+            dry_run_clocks(say, run_matrix.TESTBED_LOCAL)
         return 0
     if run_matrix_alive():
         say('no restart: a run_matrix.py process is already running')
@@ -185,8 +275,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     opts = invocation_options(inv)
     say('last block state is interrupted: run_matrix.py %s' % ' '.join(inv))
     if args.dry_run:
-        say('dry run: would wait for the nodes, run the pre-flight, move partial run dirs '
-            'and restart; nothing done')
+        dry_run_clocks(say, opts.testbed)
+        say('dry run: would wait for the nodes and their clocks, run the pre-flight, move '
+            'partial run dirs and restart; nothing done')
         return 0
 
     nodes, _port = run_matrix.load_testbed(opts.testbed)
@@ -197,6 +288,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         say('no restart: nodes unreachable')
         return 1
     say('all three nodes answer')
+    say('waiting for synchronised clocks on all three nodes (up to %d s)' % args.clock_timeout)
+    if not wait_for_clock_sync(args.clock_timeout, args.poll, say):
+        say('no restart: clocks not synchronised')
+        return 1
+    report_clocks(say)
 
     check = [sys.executable, 'scripts/run_matrix.py', '--check_only', '--testbed', opts.testbed]
     if opts.power_config:
