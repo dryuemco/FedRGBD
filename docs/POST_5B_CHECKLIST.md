@@ -202,8 +202,13 @@ Commit c1-c3 (one commit each, tests passing) and push.
   NTP offsets are all under 4 ms; node_b's figure is an SSH-setup artifact (see below).
 
 **Before the pilot (2026-10-05):**
-- [YOU] node_b sshd: `PermitEmptyPasswords yes` makes every key login wait ~2-4 s on a
-  failed empty-password PAM attempt. Set it to `no` (command in the session report).
+- DONE (2026-10-05 21:54, by you) node_b sshd: `PermitEmptyPasswords yes` had made every
+  key login wait ~2-4 s on a failed empty-password PAM attempt.
+  - Now `PermitEmptyPasswords no`, PermitRootLogin and StrictModes at their defaults,
+    `~/.ssh` 700 and `authorized_keys` 600.
+  - Afterwards: key logins from node_a take 0.27-0.28 s (from ~4.2 s), with 0
+    `pam_unix(sshd:auth)` failures in 14 logins. The resume script measures node_b
+    +130 ms and node_c +116 ms (it was +1134 ms for node_b).
 - DECISION: the FLAME train-transform difference between Pillow 9.0.1 (nodes) and 12.3
   (desktop baselines). It affects 7 of 300 images and 0.0024 % of pixels; the eval
   transform is bitwise identical. How it is disclosed is still to decide.
