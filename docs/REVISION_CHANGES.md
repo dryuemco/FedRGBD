@@ -1614,3 +1614,20 @@ read-only on all three nodes).
   - rounded mm;
   - the contract file layout;
   - exposure, gain and white balance recorded per frame.
+
+## Library-version disclosure and prereg Amendment 3 (2026-10-05)
+
+* **Paper.** A "Library versions" paragraph in the Statistical Analysis subsection:
+  - the evaluation inputs are bitwise identical between Pillow 9.0.1 (Jetson) and 12.3
+    (desktop);
+  - the training-time augmentation differs in 7 of 300 FLAME images: 0.0024 % of pixels,
+    at most 15/255 levels, at most 0.70 % of one image.
+
+  One sentence in the cross-sensor protocol says that camera inputs are identical by
+  construction (Amendment 2) and that their augmentation is subject to the same
+  difference. The rotation and colour-jitter steps were not measured separately.
+* **Prereg Amendment 3** (`4802ebe`), before any footage:
+  - every capture records RGB and depth intrinsics with distortion, stereo baseline,
+    depth scale, SDK and firmware, and is refused without them;
+  - the ZED depth range is set to 0.3-20 m as in v1;
+  - the depth-PNG test now checks values, not the Pillow-dependent dtype.
