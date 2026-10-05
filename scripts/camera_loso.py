@@ -58,6 +58,7 @@ if REPO not in sys.path:
 from scripts.camera_labels import NODES, SENSORS, kept_scenes, read_labels  # noqa: E402
 from scripts.camera_manifests import LOSO_FILE, check as check_manifests  # noqa: E402
 from scripts.camera_manifests import read_loso_folds  # noqa: E402
+from src.data.camera_preprocess import PREPROCESSED_DIR, PREPROCESSED_MANIFEST  # noqa: E402
 
 EXPERIMENT = "camera_loso"
 RESULTS_SCHEMA_VERSION = 1
@@ -150,7 +151,8 @@ def _dataset(records, cfg, train: bool):
     return CustomRGBDDataset(root=cfg["data_dir"], ids=[r["uid"] for r in records],
                              modality=cfg["modality"], img_size=cfg["img_size"], train=train,
                              index=records, class_to_idx=CLASS_TO_IDX, seed=cfg["seed"],
-                             preprocess="camera", cache=cfg.get("cache"))
+                             preprocess="camera", cache=cfg.get("cache"),
+                             preprocessed=cfg["preprocessed"])
 
 
 def _loader(records, cfg, train: bool):
@@ -371,7 +373,8 @@ def _complete(res: Dict[str, object], out_dir: str, source: str, modality: str,
         for t in target_nodes(modality))
 
 
-def run_one(source: str, modality: str, seed: int, args, device, folds, cache) -> str:
+def run_one(source: str, modality: str, seed: int, args, device, folds, cache,
+            preprocessed) -> str:
     out_dir = os.path.join(args.output_root, run_dir_name(modality, source, seed))
     os.makedirs(out_dir, exist_ok=True)
     res_path = os.path.join(out_dir, "results.json")
@@ -382,7 +385,8 @@ def run_one(source: str, modality: str, seed: int, args, device, folds, cache) -
     index, missing = camera_index(args.data_dir, args.labels_csv, modality)
     cfg = {"data_dir": args.data_dir, "modality": modality, "seed": seed,
            "img_size": args.img_size, "batch_size": args.batch_size, "epochs": args.epochs,
-           "lr": args.lr, "pretrained": not args.no_pretrained, "cache": cache}
+           "lr": args.lr, "pretrained": not args.no_pretrained, "cache": cache,
+           "preprocessed": preprocessed}
     res.update({
         "experiment": EXPERIMENT, "results_schema_version": RESULTS_SCHEMA_VERSION,
         "config": {"source": source, "source_sensor": SENSORS[source], "modality": modality,
@@ -395,6 +399,9 @@ def run_one(source: str, modality: str, seed: int, args, device, folds, cache) -
                    "data_dir": args.data_dir, "labels_csv": args.labels_csv,
                    "labels_csv_sha256": _sha256(args.labels_csv),
                    "loso_folds_sha256": _sha256(os.path.join(args.splits_dir, LOSO_FILE)),
+                   "preprocessed_dir": args.preprocessed_dir,
+                   "preprocessed_manifest": args.preprocessed_manifest,
+                   "preprocessed_manifest_sha256": _sha256(args.preprocessed_manifest),
                    "random_folds": args.random_folds},
         "n_frames": {t: sum(1 for r in index if r["node"] == t) for t in target_nodes(modality)},
         "n_valid_frames_missing_modality_stream": missing,
@@ -428,6 +435,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--data_dir", default=os.path.join("data", "raw", "camera"))
     p.add_argument("--labels_csv", default=None, help="default: <data_dir>/labels.csv")
     p.add_argument("--splits_dir", default=os.path.join("data", "splits_camera"))
+    p.add_argument("--preprocessed_dir", default=PREPROCESSED_DIR,
+                   help="the frames preprocessed once (scripts/camera_preprocess_frames.py)")
+    p.add_argument("--preprocessed_manifest", default=PREPROCESSED_MANIFEST)
     p.add_argument("--sources", nargs="+", default=list(NODES), choices=list(NODES))
     p.add_argument("--modalities", nargs="+", default=["rgb"], choices=list(MODALITIES))
     p.add_argument("--seeds", nargs="+", type=int, default=list(SEEDS))
@@ -450,20 +460,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     args = build_parser().parse_args(argv)
     from scripts.camera_labels import refuse_pilot
-    refuse_pilot(args.data_dir, args.labels_csv, args.splits_dir)
+    refuse_pilot(args.data_dir, args.labels_csv, args.splits_dir, args.preprocessed_dir,
+                 args.preprocessed_manifest)
     args.labels_csv = args.labels_csv or os.path.join(args.data_dir, "labels.csv")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     folds = loso_folds_for(args.splits_dir, args.labels_csv)
     print("camera LOSO: %d folds, device %s, modalities %s, seeds %s"
           % (len(folds), device, args.modalities, args.seeds))
     cache: Dict = {}
+    from src.data.camera_preprocess import PreprocessedStore
+    preprocessed = PreprocessedStore(args.preprocessed_dir, args.preprocessed_manifest)
     for modality in args.modalities:
         for source in args.sources:
             if source not in target_nodes(modality):
                 print("  %s has no %s stream, skipped" % (source, modality))
                 continue
             for seed in args.seeds:
-                run_one(source, modality, seed, args, device, folds, cache)
+                run_one(source, modality, seed, args, device, folds, cache, preprocessed)
     return 0
 
 

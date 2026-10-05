@@ -266,3 +266,47 @@ A pilot of one scene with all three cameras is run before the study captures beg
   in the paper and the response letter.
 * From the first pilot capture on, footage exists in the sense of this file's preamble.
   The permitted technical amendments above are the only exception.
+
+## 11. Amendment 2 (2026-10-05, before any footage exists)
+
+Declared 2026-10-05 and committed and pushed before the pilot. On that day no footage of
+this experiment existed: `data/raw/camera`, `data/raw/camera_pilot` and
+`data/processed/camera_*` were absent on all three nodes (checked read-only), and the
+desktop held only the blank scene-sheet template. So this amendment is part of the
+pre-registration, not a change after data. It changes where the preprocessing of
+section 3 runs, not what it computes, and no question, split, model, metric, family,
+verdict phrase or interpretation rule.
+
+* **Why.** The preprocessing of section 3 is a fixed set of functions
+  (`src/data/camera_preprocess.py`). Until now each consumer ran them itself: every node
+  on its own frames for the federated folds, with the nodes' Pillow 9.0.1, and the desktop
+  for the leave-one-scene-out runs, the RGB-D and IR comparisons and the federated
+  baselines, with Pillow 12.x. Two library versions are not guaranteed to give the same
+  pixels. On FLAME the deterministic decode and resize happen to agree bitwise between
+  the two, but the camera frames are larger and resized by a different path, and nothing
+  checked them.
+* **Preprocessed once, on one machine.** After the frame table (`camera_labels.py`),
+  the desktop runs `scripts/camera_preprocess_frames.py` once on its copy of all three
+  nodes' frames. It writes every valid frame's preprocessed streams:
+  - RGB and IR as 224 x 224 uint8 PNG (lossless);
+  - depth as a float32 `.npy` of the section-3 values (exact).
+
+  It also writes their md5 manifest, `data/splits_camera/preprocessed_manifest.csv`, with
+  the machine and library versions in `preprocessed_info.json`. Both are committed before
+  any model is trained.
+* **Every consumer reads those files, md5-verified.**
+  - The federated folds (`camera_fl_prepare.py`) are byte-for-byte copies of the RGB
+    files, checked against the manifest when written and by `--verify`. Each node
+    receives only its own camera's preprocessed files, so section 9's "no node receives
+    another camera's frames" still holds. No node decodes or resizes a native frame.
+  - The desktop baselines of question (b) train on the same fold files.
+  - Question (a) and the RGB-D/IR analyses read the files through
+    `CustomRGBDDataset(preprocess="camera", preprocessed=...)`. That dataset refuses to
+    run without the manifest and refuses any file whose md5 differs.
+* **What stays as it was.** Training-time augmentation is still computed by the training
+  code on each machine (federated: `FlameDataset`'s train transform on the nodes;
+  desktop: `CustomRGBDDataset`'s numpy augmentation). It is part of training, not of the
+  section-3 preprocessing.
+* **The pilot** (section 10) exercises this path: the pilot frames are preprocessed with
+  the same script into the pilot tree only (the script refuses any other destination for
+  pilot frames, and any pilot destination for study frames).

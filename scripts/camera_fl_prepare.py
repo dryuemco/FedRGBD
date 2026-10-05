@@ -9,8 +9,13 @@
   other three folds -- the same scenes on every client (``data/splits_camera/fl_folds.csv``);
 * each node gets ONLY its own sensor's valid frames (node_a D435if, node_b D435i,
   node_c ZED 2i; ``valid == 1`` in ``data/raw/camera/labels.csv``);
-* every image is written already preprocessed with ``camera_preprocess.rgb_224``
-  (shorter side 224, centre crop), so ``FlameDataset``'s own 224 x 224 resize is a no-op.
+* every image is the RGB file preprocessed ONCE on the desktop
+  (``scripts/camera_preprocess_frames.py``: ``camera_preprocess.rgb_224``, shorter side 224,
+  centre crop), copied byte for byte and md5-checked against
+  ``data/splits_camera/preprocessed_manifest.csv`` (prereg Amendment 2): no node decodes or
+  resizes a native frame, so the nodes and the desktop baselines train on identical files.
+  ``FlameDataset``'s own 224 x 224 resize of a 224 x 224 image is a no-op.  A node needs
+  only its own camera's preprocessed files (``data/processed/camera_224/<node>/``).
 
 Everything is derived from ``labels.csv`` and ``fl_folds.csv`` alone, sorted by
 (node, split, class, id) -- never from directory-walk order (CLAUDE.md rule 2).  Before
@@ -29,7 +34,8 @@ Outputs besides the images:
 Idempotent: existing images are kept; a fold directory holding a file that is not in
 its manifest is refused (stale partition, it would leak) unless ``--clean`` rebuilds it.
 ``--verify`` recomputes everything and checks manifest bytes, counts and the sorted file
-list on disk (and that every image is a 224 x 224 PNG); it writes nothing.
+list on disk, and that every image is byte for byte (md5) the file preprocessed on the
+desktop; it writes nothing.
 
     python scripts/camera_fl_prepare.py --clean            # build all five folds
     python scripts/camera_fl_prepare.py --verify           # check, exit 1 on any problem
@@ -52,6 +58,8 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO not in sys.path:
     sys.path.insert(0, REPO)
 
+from src.data.camera_preprocess import PREPROCESSED_DIR, PREPROCESSED_MANIFEST  # noqa: E402
+
 NODES = ("node_a", "node_b", "node_c")
 SENSORS = {"node_a": "D435if", "node_b": "D435i", "node_c": "ZED 2i"}
 SPLITS = ("train", "val", "test")
@@ -60,7 +68,6 @@ N_FOLDS = 5
 IMG_SIZE = 224
 
 DEFAULT_LABELS = os.path.join("data", "raw", "camera", "labels.csv")
-DEFAULT_RAW = os.path.join("data", "raw", "camera")
 DEFAULT_FOLDS = os.path.join("data", "splits_camera", "fl_folds.csv")
 DEFAULT_OUT = os.path.join("data", "processed")
 DEFAULT_COUNTS = os.path.join("data", "splits_camera", "fl_materialised_manifest.csv")
@@ -229,20 +236,17 @@ def _write_bytes(path: str, blob: bytes) -> None:
     os.replace(tmp, path)
 
 
-def preprocess_to(src: str, dst: str) -> None:
-    from PIL import Image
+def copy_preprocessed(store, e: Dict[str, str], dst: str) -> None:
+    """The frame's preprocessed RGB file, byte for byte; md5-checked before and after."""
+    from src.data.camera_preprocess import md5_of
 
-    from src.data.camera_preprocess import rgb_224
-
-    with Image.open(src) as img:
-        out = rgb_224(img)
-    os.makedirs(os.path.dirname(dst), exist_ok=True)
-    tmp = dst + ".tmp.png"
-    out.save(tmp, format="PNG")
-    os.replace(tmp, dst)
+    blob = store.read_bytes(e["node"], e["id"], "rgb")          # raises on an md5 mismatch
+    _write_bytes(dst, blob)
+    if md5_of(dst) != store.rows[(e["node"], e["id"], "rgb")]["md5"]:
+        raise SystemExit("%s: written copy differs from the preprocessed file" % dst)
 
 
-def materialise_fold(fold: int, entries: Sequence[Dict[str, str]], raw_dir: str,
+def materialise_fold(fold: int, entries: Sequence[Dict[str, str]], store,
                      out_root: str, nodes: Sequence[str], clean: bool) -> Dict[str, int]:
     """Write one fold's images of ``nodes`` and its manifest.csv -> {node: images written}."""
     fold_dir = os.path.join(out_root, fold_dir_name(fold))
@@ -260,11 +264,13 @@ def materialise_fold(fold: int, entries: Sequence[Dict[str, str]], raw_dir: str,
     missing_src = []
     for n in nodes:
         for rel, e in wanted[n].items():
-            src = os.path.join(raw_dir, n, "%s_rgb.png" % e["id"])
-            if not os.path.isfile(src):
-                missing_src.append(src)
+            if not store.has(n, e["id"], "rgb"):
+                missing_src.append("%s/%s (not in %s)" % (n, e["id"], store.manifest_path))
+            elif not os.path.isfile(store.path(n, e["id"], "rgb")):
+                missing_src.append(store.path(n, e["id"], "rgb"))
     if missing_src:
-        raise SystemExit("%d source image(s) missing (first: %s)" % (len(missing_src), missing_src[0]))
+        raise SystemExit("%d preprocessed image(s) missing (first: %s)"
+                         % (len(missing_src), missing_src[0]))
     written = {}
     for n in nodes:
         k = 0
@@ -272,7 +278,7 @@ def materialise_fold(fold: int, entries: Sequence[Dict[str, str]], raw_dir: str,
             dst = os.path.join(fold_dir, *rel.split("/"))
             if os.path.isfile(dst):
                 continue
-            preprocess_to(os.path.join(raw_dir, n, "%s_rgb.png" % e["id"]), dst)
+            copy_preprocessed(store, e, dst)
             k += 1
         written[n] = k
     _write_bytes(os.path.join(fold_dir, "manifest.csv"), manifest_bytes(entries))
@@ -281,7 +287,7 @@ def materialise_fold(fold: int, entries: Sequence[Dict[str, str]], raw_dir: str,
 
 # --------------------------------------------------------------------------- verify
 def verify_fold(fold: int, entries: Sequence[Dict[str, str]], out_root: str,
-                nodes: Sequence[str], check_images: bool = True) -> List[str]:
+                nodes: Sequence[str], store=None) -> List[str]:
     """Problems of one materialised fold (empty list = OK)."""
     problems = []
     fold_dir = os.path.join(out_root, fold_dir_name(fold))
@@ -299,16 +305,17 @@ def verify_fold(fold: int, entries: Sequence[Dict[str, str]], out_root: str,
             problems.append("fold %d %s: %d file(s) missing, %d not in the manifest (first: %s)"
                             % (fold, n, len(missing), len(extra), (missing or extra)[0]))
             continue
-        if check_images:
-            from PIL import Image
+        if store is not None:
+            # every image must be, byte for byte, the file preprocessed on the desktop
+            from src.data.camera_preprocess import md5_of
+            by_rel = {rel_path(e): e for e in entries if e["node"] == n}
             for rel in got:
-                try:
-                    with Image.open(os.path.join(fold_dir, *rel.split("/"))) as img:
-                        if img.format != "PNG" or img.size != (IMG_SIZE, IMG_SIZE):
-                            problems.append("%s: %s %s, not a %dx%d PNG"
-                                            % (rel, img.format, img.size, IMG_SIZE, IMG_SIZE))
-                except OSError as exc:
-                    problems.append("%s: unreadable (%s)" % (rel, exc))
+                e = by_rel[rel]
+                row = store.rows.get((n, e["id"], "rgb"))
+                if row is None:
+                    problems.append("%s: %s/%s not in %s" % (rel, n, e["id"], store.manifest_path))
+                elif md5_of(os.path.join(fold_dir, *rel.split("/"))) != row["md5"]:
+                    problems.append("%s: not the file preprocessed on the desktop (md5)" % rel)
     return problems
 
 
@@ -328,7 +335,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--labels_csv", default=DEFAULT_LABELS)
     ap.add_argument("--folds_csv", default=DEFAULT_FOLDS)
-    ap.add_argument("--raw_dir", default=DEFAULT_RAW, help="<raw_dir>/<node>/<id>_rgb.png")
+    ap.add_argument("--preprocessed_dir", default=PREPROCESSED_DIR,
+                    help="<dir>/<node>/<id>_rgb.png, written once on the desktop by "
+                         "scripts/camera_preprocess_frames.py")
+    ap.add_argument("--preprocessed_manifest", default=PREPROCESSED_MANIFEST)
     ap.add_argument("--output_root", default=DEFAULT_OUT,
                     help="folds go to <output_root>/camera_fold<f>/")
     ap.add_argument("--counts_csv", default=DEFAULT_COUNTS)
@@ -341,7 +351,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     help="recompute and check manifests, counts and files; write nothing")
     args = ap.parse_args(argv)
     from scripts.camera_labels import refuse_pilot
-    refuse_pilot(args.labels_csv, args.folds_csv, args.raw_dir)
+    refuse_pilot(args.labels_csv, args.folds_csv, args.preprocessed_dir, args.preprocessed_manifest)
     if args.clean and args.verify:
         ap.error("--clean and --verify are exclusive")
     bad = [f for f in args.folds if not 0 <= f < N_FOLDS]
@@ -350,6 +360,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     plans, counts = plan_all(args.labels_csv, args.folds_csv, sorted(set(args.folds)))
     nodes = [n for n in NODES if n in args.nodes]
+    from src.data.camera_preprocess import PreprocessedStore
+    try:
+        store = PreprocessedStore(args.preprocessed_dir, args.preprocessed_manifest)
+    except FileNotFoundError as exc:
+        raise SystemExit(str(exc))
+    if store.img_size not in (None, IMG_SIZE):
+        raise SystemExit("%s holds %d px files; the folds are %d px"
+                         % (args.preprocessed_manifest, store.img_size, IMG_SIZE))
 
     if args.verify:
         problems = []
@@ -360,7 +378,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 if f.read() != counts_bytes(counts):
                     problems.append("%s differs from the recomputed counts" % args.counts_csv)
         for f, entries in plans.items():
-            problems.extend(verify_fold(f, entries, args.output_root, nodes))
+            problems.extend(verify_fold(f, entries, args.output_root, nodes, store))
         for p in problems:
             print("PROBLEM:", p)
         print("camera folds %s, nodes %s: %s" % (" ".join(map(str, plans)), " ".join(nodes),
@@ -369,7 +387,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0 if not problems else 1
 
     for f, entries in plans.items():
-        written = materialise_fold(f, entries, args.raw_dir, args.output_root, nodes, args.clean)
+        written = materialise_fold(f, entries, store, args.output_root, nodes, args.clean)
         md5 = hashlib.md5(manifest_bytes(entries)).hexdigest()
         print("fold %d: %d images (all nodes), manifest md5 %s; written now: %s"
               % (f, len(entries), md5, ", ".join("%s %d" % kv for kv in written.items())))

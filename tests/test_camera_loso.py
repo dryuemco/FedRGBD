@@ -31,12 +31,19 @@ def tree(tmp_path_factory):
     assert cl.main(["--data_dir", root, "--splits_dir", splits]) == 0
     assert cm.main(["--labels_csv", os.path.join(root, "labels.csv"),
                     "--splits_dir", splits]) == 0
+    from scripts import camera_preprocess_frames as cpf
+    from src.data.camera_preprocess import PreprocessedStore
+    pre, manifest = str(base / "camera_224"), str(base / "preprocessed_manifest.csv")
+    assert cpf.main(["--raw_dir", root, "--output_dir", pre, "--manifest", manifest,
+                     "--img_size", str(IMG)]) == 0
     return {"root": root, "splits": splits, "labels": os.path.join(root, "labels.csv"),
-            "base": base}
+            "base": base, "pre": pre, "manifest": manifest,
+            "store": PreprocessedStore(pre, manifest)}
 
 
 def _argv(tree, out, *extra):
     return ["--data_dir", tree["root"], "--splits_dir", tree["splits"], "--output_root", out,
+            "--preprocessed_dir", tree["pre"], "--preprocessed_manifest", tree["manifest"],
             "--epochs", "1", "--img_size", str(IMG), "--no_pretrained", *extra]
 
 
@@ -60,9 +67,10 @@ def test_camera_preprocess_option_shapes_and_cache(tree):
     for modality, ch in (("rgb", 3), ("rgb_d", 4)):
         cache = {}
         a = CustomRGBDDataset(tree["root"], ids=uids, modality=modality, img_size=IMG,
-                              index=index, preprocess="camera", cache=cache)
+                              index=index, preprocess="camera", cache=cache,
+                              preprocessed=tree["store"])
         b = CustomRGBDDataset(tree["root"], ids=uids, modality=modality, img_size=IMG,
-                              index=index, preprocess="camera")
+                              index=index, preprocess="camera", preprocessed=tree["store"])
         x, y = a[0]
         assert tuple(x.shape) == (ch, IMG, IMG) and y in (0, 1)
         assert torch.equal(a[1][0], b[1][0]) and torch.equal(a[1][0], a[1][0])  # cache exact
@@ -70,7 +78,7 @@ def test_camera_preprocess_option_shapes_and_cache(tree):
     ir_index, _ = loso.camera_index(tree["root"], tree["labels"], "ir")
     assert {r["node"] for r in ir_index} == {"node_a", "node_b"}
     ds = CustomRGBDDataset(tree["root"], ids=[ir_index[0]["uid"]], modality="ir", img_size=IMG,
-                           index=ir_index, preprocess="camera")
+                           index=ir_index, preprocess="camera", preprocessed=tree["store"])
     assert tuple(ds[0][0].shape) == (1, IMG, IMG)
     with pytest.raises(ValueError, match="preprocess"):
         CustomRGBDDataset(tree["root"], ids=uids, modality="rgb", index=index, preprocess="x")
@@ -82,9 +90,37 @@ def test_camera_depth_channel_uses_camera_preprocess(tree):
     index, _ = loso.camera_index(tree["root"], tree["labels"], "rgb_d")
     rec = index[0]
     ds = CustomRGBDDataset(tree["root"], ids=[rec["uid"]], modality="rgb_d", img_size=IMG,
-                           index=index, preprocess="camera")
+                           index=index, preprocess="camera", preprocessed=tree["store"])
     want = depth_224(np.asarray(Image.open(rec["path_depth"])), size=IMG)
     assert np.allclose(ds[0][0][3].numpy(), (want - 0.5) / 0.25, atol=1e-6)
+
+
+def test_camera_mode_reads_only_the_preprocessed_files(tree, tmp_path):
+    """Amendment 2: no native frame is decoded; no manifest, no data; a changed file is refused."""
+    import shutil
+    from src.data.camera_preprocess import PreprocessedStore, rgb_224
+    from PIL import Image
+    index, _ = loso.camera_index(tree["root"], tree["labels"], "rgb")
+    rec = index[0]
+    with pytest.raises(ValueError, match="Amendment 2"):
+        CustomRGBDDataset(tree["root"], ids=[rec["uid"]], index=index, img_size=IMG,
+                          preprocess="camera")
+    with pytest.raises(ValueError, match="px"):
+        CustomRGBDDataset(tree["root"], ids=[rec["uid"]], index=index, img_size=IMG * 2,
+                          preprocess="camera", preprocessed=tree["store"])
+    ds = CustomRGBDDataset(tree["root"], ids=[rec["uid"]], index=index, img_size=IMG,
+                           preprocess="camera", preprocessed=tree["store"])
+    want = np.asarray(rgb_224(Image.open(rec["path_rgb"]), size=IMG), dtype=np.float32) / 255.0
+    got = ds[0][0].numpy().transpose(1, 2, 0) * np.array([0.229, 0.224, 0.225]) +         np.array([0.485, 0.456, 0.406])
+    assert np.allclose(got, want, atol=1e-6)
+    pre = str(tmp_path / "pre")
+    shutil.copytree(tree["pre"], pre)
+    store = PreprocessedStore(pre, tree["manifest"])
+    Image.fromarray(np.zeros((IMG, IMG, 3), np.uint8)).save(store.path(rec["node"], rec["id"], "rgb"))
+    bad = CustomRGBDDataset(tree["root"], ids=[rec["uid"]], index=index, img_size=IMG,
+                            preprocess="camera", preprocessed=store)
+    with pytest.raises(ValueError, match="md5"):
+        bad[0]
 
 
 def test_single_channel_adaptation_equals_grey_rgb():
@@ -167,7 +203,8 @@ def test_selection_never_reads_test_frames(tree, monkeypatch):
     index, _ = loso.camera_index(tree["root"], tree["labels"], "rgb")
     folds = loso.loso_folds_for(tree["splits"], tree["labels"])
     cfg = {"data_dir": tree["root"], "modality": "rgb", "seed": 42, "img_size": IMG,
-           "batch_size": 8, "epochs": 2, "lr": 1e-3, "pretrained": False, "cache": {}}
+           "batch_size": 8, "epochs": 2, "lr": 1e-3, "pretrained": False, "cache": {},
+           "preprocessed": tree["store"]}
     loaded, phase = [], {"on": False}
     orig_get = CustomRGBDDataset.__getitem__
 

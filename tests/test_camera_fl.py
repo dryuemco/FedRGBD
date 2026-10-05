@@ -72,10 +72,26 @@ def _write_inputs(root, rows=None, image_order=None):
     return labels, folds
 
 
+def _preprocessed(root):
+    return (os.path.join(root, "data", "processed", "camera_224"),
+            os.path.join(root, "data", "splits_camera", "preprocessed_manifest.csv"))
+
+
+def _preprocess(root):
+    """The desktop's one preprocessing step (prereg Amendment 2)."""
+    from scripts import camera_preprocess_frames as cpf
+    out, manifest = _preprocessed(root)
+    return cpf.main(["--raw_dir", os.path.join(root, "data", "raw", "camera"),
+                     "--output_dir", out, "--manifest", manifest])
+
+
 def _prepare(root, *extra):
+    out, manifest = _preprocessed(root)
+    if not os.path.isfile(manifest):
+        assert _preprocess(root) == 0
     return prep.main(["--labels_csv", os.path.join(root, "data", "raw", "camera", "labels.csv"),
                       "--folds_csv", os.path.join(root, "data", "splits_camera", FL_FILE),
-                      "--raw_dir", os.path.join(root, "data", "raw", "camera"),
+                      "--preprocessed_dir", out, "--preprocessed_manifest", manifest,
                       "--output_root", os.path.join(root, "data", "processed"),
                       "--counts_csv", os.path.join(root, "data", "splits_camera",
                                                    "fl_materialised_manifest.csv")] + list(extra))
@@ -161,6 +177,40 @@ def test_pixels_are_camera_preprocess_rgb_224(built):
     assert np.array_equal(np.asarray(out), np.asarray(rgb_224(src)))
 
 
+def test_fold_images_are_the_desktop_preprocessed_files_byte_for_byte(built):
+    """Amendment 2: no fold image is re-encoded; each is the file preprocessed once."""
+    from src.data.camera_preprocess import read_manifest
+    out, manifest = _preprocessed(built)
+    rows = read_manifest(manifest)
+    n = 0
+    for f in range(5):
+        base = os.path.join(built, "data", "processed", "camera_fold%d" % f)
+        for dirpath, _d, files in os.walk(base):
+            for name in files:
+                if not name.endswith(".png"):
+                    continue
+                node = os.path.relpath(dirpath, base).replace("\\", "/").split("/")[0]
+                with open(os.path.join(dirpath, name), "rb") as fh:
+                    assert hashlib.md5(fh.read()).hexdigest() == rows[(node, name[:-4], "rgb")]["md5"]
+                n += 1
+    assert n == 5 * sum(1 for r in _label_rows() if r["valid"])
+
+
+def test_a_tampered_preprocessed_file_is_refused(built, tmp_path):
+    root = str(tmp_path / "t")
+    shutil.copytree(built, root)
+    out, _ = _preprocessed(root)
+    victim = os.path.join(out, "node_b", "s01_fire_d100_0000_rgb.png")
+    Image.new("RGB", (224, 224)).save(victim)                     # same size, other pixels
+    with pytest.raises(ValueError, match="md5"):
+        _prepare(root, "--clean")
+    shutil.copytree(built, str(tmp_path / "t2"))
+    fold_img = next(os.path.join(d, n) for d, _s, fs in os.walk(os.path.join(
+        str(tmp_path / "t2"), "data", "processed", "camera_fold0", "node_a")) for n in fs)
+    Image.new("RGB", (224, 224)).save(fold_img)
+    assert _prepare(str(tmp_path / "t2"), "--verify") == 1
+
+
 def test_counts_manifest_matches_disk(built):
     df = pd.read_csv(os.path.join(built, "data", "splits_camera", "fl_materialised_manifest.csv"))
     assert len(df) == 5 * 3 * 3 * 2
@@ -214,7 +264,12 @@ def test_verify_and_idempotence(built, tmp_path, capsys):
 def test_a_node_can_materialise_only_its_own_frames(built, tmp_path):
     root = str(tmp_path / "nb")
     _write_inputs(root)
-    shutil.rmtree(os.path.join(root, "data", "raw", "camera", "node_a"))   # node_b has no A frames
+    assert _preprocess(root) == 0                                   # on the desktop
+    out, _ = _preprocessed(root)
+    for n in NODES:                                                 # a node needs no raw frame
+        shutil.rmtree(os.path.join(root, "data", "raw", "camera", n))
+    for other in ("node_a", "node_c"):                              # and only its own files
+        shutil.rmtree(os.path.join(out, other))
     assert _prepare(root, "--nodes", "node_b") == 0
     assert _prepare(root, "--verify", "--nodes", "node_b") == 0
     for f in range(5):

@@ -184,7 +184,10 @@ def test_pilot_paths_are_recognised():
 
 @pytest.mark.parametrize("module,argv", [
     ("camera_manifests", ["--labels_csv", os.path.join(PILOT, "labels.csv")]),
-    ("camera_fl_prepare", ["--raw_dir", PILOT, "--verify"]),
+    ("camera_fl_prepare", ["--preprocessed_dir", PILOT, "--verify"]),
+    ("camera_preprocess_frames", ["--output_dir", os.path.join(PILOT, "camera_224")]),
+    ("camera_preprocess_frames", ["--manifest", os.path.join(PILOT, "m.csv"), "--verify"]),
+    ("camera_loso", ["--preprocessed_dir", PILOT]),
     ("camera_fl_prepare", ["--labels_csv", os.path.join(PILOT, "labels.csv"), "--verify"]),
     ("camera_loso", ["--data_dir", PILOT]),
     ("camera_analysis_a", ["--labels_csv", os.path.join(PILOT, "labels.csv")]),
@@ -195,6 +198,14 @@ def test_study_scripts_refuse_pilot_footage(module, argv):
     mod = importlib.import_module("scripts." + module)
     with pytest.raises(SystemExit, match="pilot footage is outside the study"):
         mod.main(argv)
+
+
+def test_pilot_frames_are_preprocessed_only_into_the_pilot_tree():
+    from scripts import camera_preprocess_frames as cpf
+    with pytest.raises(SystemExit, match="only into the pilot tree"):
+        cpf.main(["--raw_dir", PILOT])                     # study output paths by default
+    with pytest.raises(SystemExit, match="only into the pilot tree"):
+        cpf.main(["--raw_dir", PILOT, "--output_dir", os.path.join(PILOT, "camera_224")])
 
 
 def test_pilot_frame_table_never_writes_into_the_study_splits(tmp_path):

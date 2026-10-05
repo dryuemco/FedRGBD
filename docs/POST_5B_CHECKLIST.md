@@ -250,7 +250,10 @@ capture when you say "ready". Four captures:
 `data/raw/camera_pilot/`, then:
 - `python scripts/camera_labels.py --data_dir data/raw/camera_pilot --splits_dir data/raw/camera_pilot/splits`
   (the script refuses a splits directory outside the pilot tree);
-- load every valid frame through `CustomRGBDDataset(preprocess="camera")`.
+- preprocess them once, into the pilot tree only (prereg Amendment 2):
+  `python scripts/camera_preprocess_frames.py --raw_dir data/raw/camera_pilot --output_dir data/raw/camera_pilot/camera_224 --manifest data/raw/camera_pilot/preprocessed_manifest.csv`,
+  then `--verify` with the same paths;
+- load every valid frame through `CustomRGBDDataset(preprocess="camera", preprocessed=PreprocessedStore(<those paths>))`.
 
 *Verify:*
 - no exclusion fires, or each one is explained;
@@ -281,8 +284,16 @@ before the block").
 **f1 [CLAUDE]** Build the study data:
 - `camera_labels.py`, then `camera_manifests.py`: commit `data/splits_camera/` and the
   manifests before any model is trained;
-- then, on each node,
-  `camera_fl_prepare.py --clean --nodes <own node>` and `--verify --nodes <own node>`;
+- on the desktop, preprocess every valid frame once (prereg Amendment 2):
+  `camera_preprocess_frames.py`, then `--verify`; commit
+  `data/splits_camera/preprocessed_manifest.csv` and `preprocessed_info.json` with the
+  manifests, before any model is trained;
+- copy each node ONLY its own camera's preprocessed files,
+  `data/processed/camera_224/<node>/`, and `labels.csv`; on the node,
+  `camera_preprocess_frames.py --verify --nodes <own node>` must report "identical";
+- then, on each node, and on the desktop for the baselines,
+  `camera_fl_prepare.py --clean --nodes <own node>` and `--verify --nodes <own node>`
+  (`--verify` checks every fold image's md5 against the preprocessed manifest);
 - commit `fl_materialised_manifest.csv`.
 
 *Verify:*

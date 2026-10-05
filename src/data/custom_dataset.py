@@ -454,10 +454,16 @@ class CustomRGBDDataset(Dataset):
             (``src/data/camera_preprocess.py``: shorter side + centre crop, depth
             clipped to 0.3-10 m and scaled to [0, 1] with invalid pixels 0, then
             normalised with ``normalize_depth``; ``max_depth_m`` is not used).
+            "camera" never decodes a native-resolution frame: it reads the files
+            written once by ``scripts/camera_preprocess_frames.py`` through
+            ``preprocessed`` (prereg Amendment 2), and refuses to run without it.
+        preprocessed: a ``camera_preprocess.PreprocessedStore`` (required with
+            ``preprocess="camera"``); every file read is md5-checked against its
+            manifest, whose image size must equal ``img_size``.
         cache: optional dict shared between datasets; with ``preprocess="camera"`` the
             preprocessed streams (before augmentation and normalisation; RGB/IR as
             uint8, depth as float32) are memoised in it per ``(uid, stream, img_size)``,
-            so native-resolution PNGs are decoded once per process.  The tensors are
+            so each preprocessed file is read and md5-checked once per process.  The tensors are
             identical with or without it.  Ignored for ``preprocess="resize"``.
 
     Each item is ``(tensor[C, H, W] float32, label int)`` where ``C`` is
@@ -482,6 +488,7 @@ class CustomRGBDDataset(Dataset):
         seed: int = 42,
         preprocess: str = "resize",
         cache: Optional[Dict] = None,
+        preprocessed=None,
     ):
         if modality not in MODALITY_CHANNELS:
             raise ValueError(f"unknown modality {modality!r}; choose from {MODALITIES}")
@@ -489,6 +496,16 @@ class CustomRGBDDataset(Dataset):
             raise ValueError(f"unknown preprocess {preprocess!r}; choose from {PREPROCESS_MODES}")
         self.preprocess = preprocess
         self.cache = cache
+        self.preprocessed = preprocessed
+        if preprocess == "camera":
+            if preprocessed is None:
+                raise ValueError(
+                    'preprocess="camera" reads the frames preprocessed once on the desktop '
+                    "(scripts/camera_preprocess_frames.py, prereg Amendment 2); pass "
+                    "preprocessed=PreprocessedStore(<dir>, <manifest>)")
+            if preprocessed.img_size is not None and preprocessed.img_size != int(img_size):
+                raise ValueError("the preprocessed files are %d px, img_size is %d"
+                                 % (preprocessed.img_size, int(img_size)))
 
         self.root = root
         self.modality = modality
@@ -567,12 +584,12 @@ class CustomRGBDDataset(Dataset):
         return rgb, depth, ir
 
     def _camera_stream(self, rec, stream: str) -> np.ndarray:
-        """One camera-preprocessed stream (RGB/IR uint8, depth float32), memoised."""
+        """One preprocessed stream (RGB/IR uint8, depth float32), read from the files written
+        once on the desktop (md5-checked), memoised."""
         key = (str(rec["uid"]), stream, self.img_size)
         if self.cache is not None and key in self.cache:
             return self.cache[key]
-        loader = {"rgb": _rgb_camera_u8, "depth": load_depth_camera, "ir": _ir_camera_u8}[stream]
-        arr = loader(str(rec["path_" + stream]), self.img_size)
+        arr = self.preprocessed.load(str(rec["node"]), str(rec["id"]), stream)
         if self.cache is not None:
             arr.setflags(write=False)
             self.cache[key] = arr

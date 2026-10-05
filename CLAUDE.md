@@ -149,6 +149,14 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
    prediction quality on pilot data. Afterwards only technical changes (capture settings,
    exposure, sync, file handling, resolution), each a dated amendment saying what the
    pilot revealed; never the questions, metrics, splits, selection or interpretation rules.
+   **Amendment 2** (2026-10-05, before any footage, section 11): the section-3
+   preprocessing runs ONCE, on the desktop (`scripts/camera_preprocess_frames.py`), into
+   `data/processed/camera_224/` with a committed md5 manifest
+   (`data/splits_camera/preprocessed_manifest.csv`). The federated folds are byte copies
+   of those files (each node gets only its own camera's), and
+   `CustomRGBDDataset(preprocess="camera")` reads only them, md5-checked -- never re-run
+   the preprocessing on a node or per consumer (Pillow 9.0.1 on the nodes, 12.x on the
+   desktop).
 
 12. **Timing reporting rule** (declared 2026-09-29, before any heterogeneous-vs-MAXN
    per-round-time comparison was computed; totals and a rough total/R figure had been seen
