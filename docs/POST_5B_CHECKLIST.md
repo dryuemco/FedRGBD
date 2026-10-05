@@ -41,6 +41,8 @@ in `docs/CROSS_CONFIG_COMPARISON.md` (c):
 
 ## (a) Close 5b: completeness, checksums, commit
 
+**DONE (2026-10-05, `7cb0f9a`, pushed).**
+
 **a1 [CLAUDE]** Confirm the block ended cleanly on node_a:
 - `logs/run_matrix.log`: the last invocation ends with `block finished: N ok, 0 failed,
   0 not attempted`;
@@ -83,6 +85,8 @@ non-zero.
 ---
 
 ## (b) Analyses -- each in its own commit, in this order
+
+**DONE (2026-10-05: b1 `bc2dda3`, b2 `d80665f`, b3 `aa2fe8a`, b4 `c144397`, pushed).**
 
 Each step reruns the tests (`python -m pytest tests -q -k "not end_to_end"`) and
 `python scripts/clean_subset.py --check` (must print "identical") before committing.
@@ -137,6 +141,9 @@ Output goes to `analysis/cross_config_timing/`.
 ---
 
 ## (c) Post-5b fixes (desktop code; the nodes get them in step d)
+
+**DONE (2026-10-05: c1 `2c31a9c`, c2 `3cca463`, c3 `de924db`, pushed). Still open from
+c1: the dry run on node_a after step d.**
 
 **c1 [CLAUDE]** `scripts/resume_after_reboot.py` waits for synchronised clocks. Before the
 pre-flight, it polls all three nodes until each reports

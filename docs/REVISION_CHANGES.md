@@ -1543,3 +1543,38 @@ read-only on all three nodes).
   ratios are always reported next to the geometric mean and the interval. The interval
   is labelled indicative: with 3 seeds the percentile bootstrap has at most 10 distinct
   resamples (126 with 5).
+
+## Block 5b closed: commit, declared analyses, post-5b fixes (2026-10-05)
+
+`docs/POST_5B_CHECKLIST.md` steps (a)-(c); the nodes are still on the 5b commit
+(`b7918c3`) until step (d).
+
+* **(a) Closed** (`7cb0f9a`). The last invocation ended 2026-10-02 14:32:32 "block
+  finished: 12 ok, 0 failed, 0 not attempted", with no restart after it. No FL process
+  was running on any node, and all three were at MAXN_SUPER. block_report: 30/30
+  COMPLETE. Every run has its selected round, 10 rounds, 60 prediction files, and
+  MAXN_SUPER before and after on all three nodes. The md5 of all 1860 files was
+  identical on node_a and the desktop. Only the 30 `results.json` are committed. The
+  two interrupted attempts stay on node_a.
+* **(b1) `analysis/`, `paper/tables/`** (`bc2dda3`). The six maxn cells were added with
+  5 seeds each; every earlier row is unchanged apart from the two timing-rule metrics.
+  The MAXN tables are in `paper/tables/maxn/`. Fix found on the way: in
+  `aggregation_flips` the maxn FL configurations had the same names as the heterogeneous
+  long-horizon ones. They are now `<variant> [maxn]`; only the names changed.
+* **(b2) Cross-configuration comparison** (`d80665f`). The code is unchanged since
+  `b7918c3`. All six cells (rounds_1_3 m = 4, ten_rounds m = 2) give "no detectable
+  difference". The output is byte-identical on rerun.
+* **(b3) Global evaluation, maxn family** (`aa2fe8a`). The heterogeneous rows are
+  byte-identical to `dce6f54`. On the full set, three of four comparisons give
+  "federation improves generalisation beyond the client's own distribution"; label skew
+  FedAvg gives "no detectable difference". The clean subset gives the same verdicts.
+* **(b4) Timing comparison** (`c144397`). `scripts/cross_config_timing.py` was written
+  and committed with its output, `analysis/cross_config_timing/`. Every per-run value
+  equals an independent recomputation, and none is a total / R.
+* **(c1)** `resume_after_reboot.py` waits for `NTPSynchronized=yes` on all three nodes
+  before the pre-flight, and logs each node's clock offset against node_a (`2c31a9c`).
+* **(c2)** `run_matrix.py` measures the logged per-run duration with
+  `time.monotonic()` (`3cca463`).
+* **(c3)** `fetch_results.ps1` also fetches `results/camera/<config>/{rev,diag}_camera_*`.
+  The alert scan is unchanged; a 600-character alert line was tested on both pop-up
+  paths (`de924db`).
