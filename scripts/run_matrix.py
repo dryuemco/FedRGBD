@@ -1088,7 +1088,10 @@ def execute_run(run, attempt, ready_timeout, run_timeout, poll=5.0, finish_grace
             handles.append(h)
             log('    client up on %s (pid %d)' % (node, p.pid))
 
-        start = time.time()
+        # run timeout and finish grace on the monotonic clock: an NTP step after a reboot
+        # (2026-09-28: ~22 min) must not end a run early; server_start/server_exit stay
+        # wall-clock because the energy log is aligned to tegrastats timestamps
+        start = time.monotonic()
         all_done_at = None
         while server.poll() is None:
             for node, p, lp in clients:
@@ -1099,13 +1102,13 @@ def execute_run(run, attempt, ready_timeout, run_timeout, poll=5.0, finish_grace
                         '(%s):\n%s' % (why, lp, log_tail(lp)))
                     return -3, why
             if all_done_at is None and all(p.poll() == 0 for _, p, _ in clients):
-                all_done_at = time.time()
+                all_done_at = time.monotonic()
                 log('    all clients finished; waiting for the server to exit')
-            if all_done_at is not None and time.time() - all_done_at > finish_grace:
+            if all_done_at is not None and time.monotonic() - all_done_at > finish_grace:
                 why = 'server still running %ds after every client finished' % finish_grace
                 log('    %s\n%s' % (why, log_tail(slog)))
                 return -4, why
-            if time.time() - start > run_timeout:
+            if time.monotonic() - start > run_timeout:
                 why = 'TIMEOUT after %ds' % run_timeout
                 log('    %s -- killing the run' % why)
                 return -1, why

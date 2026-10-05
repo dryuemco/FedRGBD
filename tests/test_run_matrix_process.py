@@ -228,3 +228,52 @@ def test_client_server_address_must_match_the_configured_node_a(monkeypatch):
     bad = [{"clients": {"node_a": "python3 src/fl/client.py --server 192.168.1.4:8080 --x"}}]
     with pytest.raises(SystemExit, match="192.168.1.4:8080"):
         run_matrix.check_server_address(bad)
+
+
+# --------------------------------------------------------------------------- #
+# a wall-clock step during a run (NTP after a reboot) must not end it
+# --------------------------------------------------------------------------- #
+def _jump_wall_clock_once_running(harness, monkeypatch, jump_s=22 * 60):
+    """time.time() jumps by ``jump_s`` at the run loop's first sleep after all three
+    clients are up, i.e. after the loop took its start time."""
+    real_time, real_sleep = time.time, time.sleep
+    state = {"armed": False, "offset": 0.0}
+    run_on = run_matrix.run_on
+
+    def arming_run_on(node, inner, log_path):
+        out = run_on(node, inner, log_path)
+        if node == "node_c":
+            state["armed"] = True
+        return out
+
+    def sleep(s):
+        if state["armed"]:
+            state["offset"] = jump_s
+        real_sleep(s)
+    monkeypatch.setattr(run_matrix, "run_on", arming_run_on)
+    monkeypatch.setattr(run_matrix.time, "time", lambda: real_time() + state["offset"])
+    monkeypatch.setattr(run_matrix.time, "sleep", sleep)
+    return state
+
+
+def test_a_22_minute_clock_step_does_not_end_a_normal_run(harness, monkeypatch):
+    """POST_5B_CHECKLIST, finding after c2: run timeout and finish grace are monotonic."""
+    harness["server"] = ("0", "3", "0")
+    harness["clients"] = {"node_a": "0.5", "node_b": "0.5", "node_c": "0.5"}
+    jump = _jump_wall_clock_once_running(harness, monkeypatch)
+    rc, why = run_matrix.execute_run(harness["run"], 1, ready_timeout=30, run_timeout=60,
+                                     poll=0.2, finish_grace=30)
+    assert jump["offset"] == 22 * 60                        # the step really happened
+    assert (rc, why) == (0, "server exited")
+    log = _runner_log(harness)
+    assert "TIMEOUT" not in log and "after every client finished" not in log
+
+
+def test_after_a_clock_step_the_timeout_and_grace_still_fire_on_real_time(harness, monkeypatch):
+    harness["server"] = ("0", "600", "0")
+    harness["clients"] = {"node_a": "0.2", "node_b": "0.2", "node_c": "0.2"}
+    _jump_wall_clock_once_running(harness, monkeypatch)
+    t0 = time.monotonic()
+    rc, why = run_matrix.execute_run(harness["run"], 1, ready_timeout=30, run_timeout=3600,
+                                     poll=0.2, finish_grace=2)
+    assert rc == -4 and 1.5 < time.monotonic() - t0 < 20
