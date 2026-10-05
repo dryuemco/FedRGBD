@@ -47,3 +47,21 @@ Pre-registered in docs/GLOBAL_EVALUATION.md. Difference in percentage points, se
 | non_iid_label_sub0.05 | FedProx(0.01) | 42 123 456 | +2.1 | [-3.2, +7.7] | 0.3668 | 1.0000 | no detectable difference | no detectable difference |
 | non_iid_label_sub0.01 | FedAvg | 42 123 456 | +12.6 | [-2.6, +27.9] | 0.1172 | 1.0000 | no detectable difference | no detectable difference |
 | non_iid_label_sub0.01 | FedProx(0.01) | 42 123 456 | +16.8 | [+5.4, +25.5] | 0.0062 | 0.1054 | federation improves generalisation beyond the client's own distribution | no detectable difference |
+
+## maxn, full set (Holm m = 4)
+
+| partition | strategy | seeds | diff | 95 % CI | p | p Holm | verdict | verdict (Holm) |
+|---|---|---|---|---|---|---|---|---|
+| iid | FedAvg | 42 123 456 789 1011 | +6.9 | [+1.1, +17.7] | 0.0218 | 0.0436 | federation improves generalisation beyond the client's own distribution | federation improves generalisation beyond the client's own distribution |
+| iid | FedProx(0.01) | 42 123 456 789 1011 | +8.4 | [+3.5, +18.3] | 0.0006 | 0.0018 | federation improves generalisation beyond the client's own distribution | federation improves generalisation beyond the client's own distribution |
+| non_iid_label | FedAvg | 42 123 456 789 1011 | +3.6 | [-0.2, +8.3] | 0.0566 | 0.0566 | no detectable difference | no detectable difference |
+| non_iid_label | FedProx(0.01) | 42 123 456 789 1011 | +3.8 | [+1.9, +7.7] | 0.0002 | 0.0008 | federation improves generalisation beyond the client's own distribution | federation improves generalisation beyond the client's own distribution |
+
+## maxn, clean set (Holm m = 4)
+
+| partition | strategy | seeds | diff | 95 % CI | p | p Holm | verdict | verdict (Holm) |
+|---|---|---|---|---|---|---|---|---|
+| iid | FedAvg | 42 123 456 789 1011 | +7.2 | [+1.0, +18.2] | 0.0224 | 0.0448 | federation improves generalisation beyond the client's own distribution | federation improves generalisation beyond the client's own distribution |
+| iid | FedProx(0.01) | 42 123 456 789 1011 | +8.7 | [+3.8, +19.1] | 0.0004 | 0.0012 | federation improves generalisation beyond the client's own distribution | federation improves generalisation beyond the client's own distribution |
+| non_iid_label | FedAvg | 42 123 456 789 1011 | +3.6 | [-0.4, +8.7] | 0.0700 | 0.0700 | no detectable difference | no detectable difference |
+| non_iid_label | FedProx(0.01) | 42 123 456 789 1011 | +3.8 | [+1.9, +7.9] | 0.0002 | 0.0008 | federation improves generalisation beyond the client's own distribution | federation improves generalisation beyond the client's own distribution |
