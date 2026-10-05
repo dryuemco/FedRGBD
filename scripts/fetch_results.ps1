@@ -22,9 +22,10 @@
     is never fetched. A run still being written fails these tests and is skipped
     until the next pass.
 
-    Runs are looked for in results/rev_* (the heterogeneous-power matrix) and in
-    every power-configuration namespace results/pc_<name>/rev_*; the local copy goes
-    to the same relative path.
+    Runs are looked for in results/rev_* (the heterogeneous-power matrix), in
+    every power-configuration namespace results/pc_<name>/rev_*, and in the camera
+    namespace results/camera/<config>/{rev,diag}_camera_* (camera runs live only
+    there, separate from FLAME); the local copy goes to the same relative path.
 
     Every pass runs scripts/block_report.py, which prints "COMPLETE <block> <n>" for
     every complete block. A pop-up is shown for each (block, n) not yet in
@@ -95,8 +96,9 @@ foreach ($exe in @($SshExe, $ScpExe)) {
 }
 
 $MinAgeMinutes = if ($cfg.min_age_minutes) { [int]$cfg.min_age_minutes } else { 15 }
-# results/rev_<run>  or  results/pc_<config>/rev_<run>
-$RunPathRegex = '^results/((?:pc_[A-Za-z0-9_-]+/)?rev_[^/]+)/results\.json$'
+# results/rev_<run>, results/pc_<config>/rev_<run>, or
+# results/camera/<config>/rev_camera_<run> | diag_camera_<run>
+$RunPathRegex = '^results/((?:pc_[A-Za-z0-9_-]+/)?rev_[^/]+|camera/[A-Za-z0-9_-]+/(?:rev|diag)_camera_[^/]+)/results\.json$'
 
 $Remote = '{0}@{1}' -f $cfg.user, $cfg.host
 $RemoteRepo = $cfg.remote_repo.TrimEnd('/')
@@ -307,7 +309,7 @@ if (-not (Test-Reachable)) {
 # One call for every candidate's checksum, restricted to results.json files that have
 # not changed for $MinAgeMinutes minutes. `md5sum` on a file being written still
 # returns something, so the JSON validity check below is what actually gates a fetch.
-$remoteList = Invoke-Remote ("cd '{0}' && find results -maxdepth 3 -name results.json -mmin +{1} -regextype posix-extended -regex 'results/(pc_[A-Za-z0-9_-]+/)?rev_[^/]+/results[.]json' -exec md5sum {{}} + 2>/dev/null" -f $RemoteRepo, $MinAgeMinutes)
+$remoteList = Invoke-Remote ("cd '{0}' && find results -maxdepth 4 -name results.json -mmin +{1} -regextype posix-extended -regex 'results/((pc_[A-Za-z0-9_-]+/)?rev_[^/]+|camera/[A-Za-z0-9_-]+/(rev|diag)_camera_[^/]+)/results[.]json' -exec md5sum {{}} + 2>/dev/null" -f $RemoteRepo, $MinAgeMinutes)
 if ($script:LastExit -ne 0 -and -not $remoteList) {
     Write-Log 'INFO' 'no rev_* runs on the node yet'
     exit 0
