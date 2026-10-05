@@ -417,6 +417,33 @@ def _option(sensor, key):
     return None
 
 
+def stereo_baseline_mm(depth_sensor):
+    """Distance between the two IR imagers in mm (prereg Amendment 3): the D400 option
+    ``stereo_baseline`` (mm), else the translation between the left and right infrared
+    stream profiles (m).  None if neither is available."""
+    v = _option(depth_sensor, "stereo_baseline")
+    if v:
+        return float(v)
+    try:
+        profiles = [p for p in depth_sensor.get_stream_profiles()
+                    if p.stream_type() == rs.stream.infrared]
+        left = next(p for p in profiles if p.stream_index() == 1)
+        right = next(p for p in profiles if p.stream_index() == 2)
+        return abs(float(left.get_extrinsics_to(right).translation[0])) * 1000.0
+    except Exception:  # noqa: BLE001 - recorded as missing; the capture then refuses
+        return None
+
+
+def extrinsics_depth_to_color(profile):
+    """Rotation (row-major 3x3) and translation (m) from the depth to the colour stream."""
+    try:
+        e = profile.get_stream(rs.stream.depth).get_extrinsics_to(profile.get_stream(rs.stream.color))
+        return {"rotation": [float(x) for x in e.rotation],
+                "translation_m": [float(x) for x in e.translation]}
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _safe_info(device, key):
     try:
         return device.get_info(getattr(rs.camera_info, key))
@@ -471,6 +498,10 @@ class RealSenseBackend(CameraBackend):
             "depth_resolution": [int(dw), int(dh)],
             "stream_fps": float(self.stream_fps),
             "depth_scale_m": scale_m,
+            "depth_scale_mm": scale_m * 1000.0,
+            "depth_range_mm": None,          # not a RealSense setting; z16 is recorded as is
+            "stereo_baseline_mm": stereo_baseline_mm(self.depth_sensor),
+            "extrinsics_depth_to_color": extrinsics_depth_to_color(profile),
             "emitter_enabled": None if emitter is None else bool(emitter),
             "usb_type": _safe_info(device, "usb_type_descriptor"),
             "intrinsics": get_camera_intrinsics(profile),

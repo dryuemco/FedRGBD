@@ -3,7 +3,9 @@
 Writes the data contract of ``src/data/camera_capture_common.py``: per frame the left
 camera's RGB (the colour image), the depth of the left camera in millimetres (so it is
 aligned to the RGB by construction; NaN / inf -> 0) and the metadata.  The ZED 2i has
-no IR stream.  Depth mode NEURAL and HD1080 by default, both recorded.
+no IR stream.  Depth mode NEURAL and HD1080 by default, both recorded; depth range set to
+0.3-20 m as in v1, and intrinsics, distortion, stereo baseline, depth scale, SDK and
+firmware recorded at every capture (prereg Amendment 3).
 
 Usage (inside the node's venv, from the repo root)::
 
@@ -36,6 +38,9 @@ from src.data.camera_capture_common import (  # noqa: E402
 
 DEFAULT_DEPTH_MODE = "NEURAL"
 DEFAULT_RESOLUTION = "HD1080"
+#: depth range set explicitly, as the v1 captures did (0.3-20 m; prereg Amendment 3), in
+#: the capture's coordinate units (MILLIMETER) -- never the SDK default
+DEPTH_RANGE_MM = (300.0, 20000.0)
 #: ZED 2i at HD1080 streams at 15 or 30 fps; the capture keeps 5 fps by time
 DEFAULT_STREAM_FPS = 15
 
@@ -85,6 +90,8 @@ class ZedBackend(CameraBackend):
         init.camera_fps = self.stream_fps
         init.depth_mode = getattr(sl.DEPTH_MODE, self.depth_mode)
         init.coordinate_units = sl.UNIT.MILLIMETER
+        init.depth_minimum_distance = DEPTH_RANGE_MM[0]
+        init.depth_maximum_distance = DEPTH_RANGE_MM[1]
         if self.serial is not None:
             init.set_from_serial_number(int(self.serial))
         self.zed = sl.Camera()
@@ -113,6 +120,35 @@ class ZedBackend(CameraBackend):
             "stream_fps": float(getattr(conf, "fps", self.stream_fps) or self.stream_fps),
             "depth_units": "MILLIMETER",
         }
+        self._info.update(self._calibration(conf, res))
+
+    def _calibration(self, conf, res) -> Dict[str, Any]:
+        """Intrinsics with distortion (left = RGB and depth frame, right), the stereo
+        baseline, the depth scale and the depth range actually applied (Amendment 3)."""
+        calib = getattr(conf, "calibration_parameters", None)
+        w = int(res.width) if res is not None else None
+        h = int(res.height) if res is not None else None
+
+        def cam(c):
+            return {"width": w, "height": h, "fx": float(c.fx), "fy": float(c.fy),
+                    "ppx": float(c.cx), "ppy": float(c.cy),
+                    "model": "ZED (k1, k2, p1, p2, k3, ...)",
+                    "coeffs": [float(x) for x in c.disto]}
+
+        out: Dict[str, Any] = {"intrinsics": None, "stereo_baseline_mm": None,
+                               "depth_scale_mm": 1.0, "depth_range_mm": None}
+        if calib is not None:
+            left = cam(calib.left_cam)
+            out["intrinsics"] = {"rgb": left, "depth": dict(left), "right": cam(calib.right_cam)}
+            # in the InitParameters coordinate units, set to MILLIMETER above
+            out["stereo_baseline_mm"] = float(calib.get_camera_baseline())
+        applied = self.zed.get_init_parameters()
+        rng = (float(applied.depth_minimum_distance), float(applied.depth_maximum_distance))
+        out["depth_range_mm"] = list(rng)
+        if rng != DEPTH_RANGE_MM:
+            raise CaptureError("ZED depth range %s mm applied, %s requested (prereg Amendment 3)"
+                               % (rng, DEPTH_RANGE_MM))
+        return out
 
     def info(self) -> Dict[str, Any]:
         return dict(self._info)

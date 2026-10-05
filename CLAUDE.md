@@ -157,6 +157,10 @@ Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major rev
    `CustomRGBDDataset(preprocess="camera")` reads only them, md5-checked -- never re-run
    the preprocessing on a node or per consumer (Pillow 9.0.1 on the nodes, 12.x on the
    desktop).
+   **Amendment 3** (2026-10-05, before any footage, section 12): every capture records
+   intrinsics with distortion (RGB and depth), stereo baseline (mm), depth scale, SDK and
+   firmware -- a capture without them is refused (`calibration_problems`) -- and the ZED
+   depth range is set explicitly to 0.3-20 m as in v1.
 
 12. **Timing reporting rule** (declared 2026-09-29, before any heterogeneous-vs-MAXN
    per-round-time comparison was computed; totals and a rough total/R figure had been seen

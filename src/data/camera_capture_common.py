@@ -223,7 +223,11 @@ class CameraBackend:
     """What a camera back-end implements.  Tests inject a fake one.
 
     ``info()`` (valid after ``open()``) returns at least ``camera_model, serial,
-    firmware, sdk_version, depth_mode, rgb_resolution [w, h], stream_fps``.
+    firmware, sdk_version, depth_mode, rgb_resolution [w, h], stream_fps`` and the
+    calibration of prereg Amendment 3 (:func:`calibration_problems`): ``intrinsics``
+    (``rgb`` and ``depth``: width, height, fx, fy, ppx, ppy, distortion model and
+    coefficients), ``stereo_baseline_mm``, ``depth_scale_mm`` (millimetres per raw depth
+    unit) and, where the SDK sets one, ``depth_range_mm``.
     """
 
     def open(self) -> None:  # pragma: no cover - interface
@@ -389,6 +393,36 @@ def prepare_capture(root: str, node: str, capture_id: str, retake: bool = False,
 # --------------------------------------------------------------------------- #
 # one capture
 # --------------------------------------------------------------------------- #
+#: intrinsics fields every stream must carry (prereg Amendment 3)
+INTRINSIC_FIELDS = ("width", "height", "fx", "fy", "ppx", "ppy", "model", "coeffs")
+#: a stereo baseline outside this range is a unit error, not a camera (D435: 50, ZED 2i: 120)
+BASELINE_PLAUSIBLE_MM = (20.0, 500.0)
+
+
+def calibration_problems(info: Dict[str, Any]) -> List[str]:
+    """What the capture would fail to record of prereg Amendment 3 ([] = complete):
+    rgb and depth intrinsics with distortion, a plausible stereo baseline in mm, the depth
+    scale, and the SDK and firmware versions."""
+    problems = []
+    intr = info.get("intrinsics") or {}
+    for stream in ("rgb", "depth"):
+        d = intr.get(stream) or {}
+        missing = [k for k in INTRINSIC_FIELDS if d.get(k) is None]
+        if missing:
+            problems.append("%s intrinsics missing %s" % (stream, ", ".join(missing)))
+    b = info.get("stereo_baseline_mm")
+    lo, hi = BASELINE_PLAUSIBLE_MM
+    if not isinstance(b, (int, float)) or not math.isfinite(b) or not lo <= b <= hi:
+        problems.append("stereo_baseline_mm %r not recorded or outside %g-%g mm" % (b, lo, hi))
+    sc = info.get("depth_scale_mm")
+    if not isinstance(sc, (int, float)) or not math.isfinite(sc) or sc <= 0:
+        problems.append("depth_scale_mm %r not recorded" % (sc,))
+    for k in ("sdk_version", "firmware"):
+        if not info.get(k):
+            problems.append("%s not recorded" % k)
+    return problems
+
+
 def run_capture(backend: CameraBackend, scene: str, label: str, distance_m, node: str,
                 root: str = DEFAULT_ROOT, frames: int = DEFAULT_FRAMES,
                 fps: float = DEFAULT_FPS, start_at: Optional[float] = None,
@@ -424,6 +458,10 @@ def run_capture(backend: CameraBackend, scene: str, label: str, distance_m, node
     futures: list = []
     try:
         info = dict(backend.info())
+        missing = calibration_problems(info)
+        if missing:
+            raise CaptureError("calibration not recorded, capture refused (prereg "
+                               "Amendment 3): %s" % "; ".join(missing))
         for _ in range(max(0, int(warmup_frames))):
             backend.skip()
         lateness = wait_until(start_at, clock=clock, sleep=sleep, idle=backend.skip)
@@ -525,6 +563,11 @@ def capture_record(capture_id, scene, label, distance_m, node, info, fps, n_requ
         "depth_mode": info.get("depth_mode"),
         "rgb_resolution": info.get("rgb_resolution"),
         "stream_fps": info.get("stream_fps"),
+        "intrinsics": info.get("intrinsics"),
+        "stereo_baseline_mm": info.get("stereo_baseline_mm"),
+        "depth_scale_mm": info.get("depth_scale_mm"),
+        "depth_range_mm": info.get("depth_range_mm"),
+        "extrinsics_depth_to_color": info.get("extrinsics_depth_to_color"),
         "fps": fps,
         "n_frames_requested": int(n_requested),
         "n_frames_written": int(n_written),
@@ -550,8 +593,13 @@ def smoke_test(backend: CameraBackend, node: str, frames: int = 5,
     log("Wrote %d/%d frames to %s" % (rec["n_frames_written"], frames,
                                        os.path.join(tmp, node)))
     for k in ("camera_model", "serial", "firmware", "sdk_version", "depth_mode",
-              "rgb_resolution", "stream_fps"):
-        log("  %-15s %s" % (k, rec.get(k)))
+              "rgb_resolution", "stream_fps", "stereo_baseline_mm", "depth_scale_mm",
+              "depth_range_mm"):
+        log("  %-18s %s" % (k, rec.get(k)))
+    for stream, d in sorted((rec.get("intrinsics") or {}).items()):
+        log("  intrinsics %-7s %sx%s fx=%s fy=%s ppx=%s ppy=%s %s %s"
+            % (stream, d.get("width"), d.get("height"), d.get("fx"), d.get("fy"),
+               d.get("ppx"), d.get("ppy"), d.get("model"), d.get("coeffs")))
     first = os.path.join(tmp, node, make_frame_id(rec["capture_id"], 0) + "_meta.json")
     if os.path.isfile(first):
         with open(first, encoding="utf-8") as f:

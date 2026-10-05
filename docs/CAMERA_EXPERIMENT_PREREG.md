@@ -310,3 +310,45 @@ verdict phrase or interpretation rule.
 * **The pilot** (section 10) exercises this path: the pilot frames are preprocessed with
   the same script into the pilot tree only (the script refuses any other destination for
   pilot frames, and any pilot destination for study frames).
+
+## 12. Amendment 3 (2026-10-05, before any footage exists)
+
+Declared 2026-10-05 and committed and pushed before the pilot. Checked read-only again
+that day, after Amendment 2, no footage of this experiment existed:
+- on all three nodes: no `data/raw/camera`, `data/raw/camera_pilot` or
+  `data/processed/camera_*`, no capture record (`_captures/*.json`), and no `*_rgb.png`
+  newer than 2026-09-28;
+- on the desktop: only the blank scene-sheet template in `data/raw/camera`.
+
+The v1 ZED scenes of April 2026 (`data/raw/captures/node_c/` on node_c) belong to the
+original submission, not to this experiment. This amendment adds what every capture
+records and fixes one capture setting. It changes no question, split, model, metric,
+family, verdict phrase or interpretation rule, and not the preprocessing of section 3.
+
+* **Why.** The original submission characterised the sensors' heterogeneity partly by
+  their calibration: resolution, intrinsics and stereo baseline per camera. The
+  revision's capture code recorded the RealSense intrinsics, but for the ZED 2i it
+  recorded no intrinsics, distortion or baseline, and it left the ZED depth range at the
+  SDK default. Without this amendment the revision would lose that evidence.
+* **Recorded at every capture, for every camera**, in the capture record
+  (`_captures/<capture_id>.json`):
+  - intrinsics of the RGB and depth streams: width, height, fx, fy, principal point, and
+    the distortion model and coefficients. The ZED also records its right camera; the
+    RealSense also records its IR stream;
+  - the stereo baseline in mm. RealSense: the `stereo_baseline` option, or else the
+    left/right IR extrinsics. ZED: the calibration baseline;
+  - the depth scale in mm per raw unit;
+  - the depth-to-colour extrinsics (RealSense);
+  - the depth range applied (ZED);
+  - SDK and firmware versions.
+* **Enforced.** A capture whose camera does not provide all of these is refused before
+  any frame is kept, and its record says why (`calibration_problems` in
+  `src/data/camera_capture_common.py`). A baseline outside 20-500 mm counts as missing,
+  so a unit error cannot pass. A ZED depth range the SDK does not apply exactly is
+  refused.
+* **ZED depth range.** Set explicitly to 0.3-20 m (300-20 000 mm in the capture's
+  millimetre units), as in the v1 captures, instead of the SDK default. The analysis
+  clip of section 3 (0.3-10 m) is unchanged.
+* **The pilot** checks it: every capture record carries the calibration, and the
+  baselines are plausible (about 50 mm for the D435 models; 120 mm for the ZED 2i,
+  serial 32608934, as in v1).

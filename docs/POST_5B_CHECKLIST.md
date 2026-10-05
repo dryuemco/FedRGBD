@@ -275,7 +275,10 @@ capture when you say "ready". Four captures:
 *Verify:*
 - each capture prints PASS: 40 frames per camera, start within 1 s of schedule, the
   record belongs to this session;
-- the clock offsets are logged in `session_log.jsonl`.
+- the clock offsets are logged in `session_log.jsonl`;
+- every capture record carries the Amendment 3 calibration: RGB and depth intrinsics
+  with distortion, stereo baseline (about 50 mm D435if/D435i; 120 mm ZED 2i, as in v1),
+  depth scale, SDK and firmware. The ZED's `depth_range_mm` is [300, 20000].
 
 **e4 [CLAUDE]** Copy the pilot frames of all three nodes to the desktop under
 `data/raw/camera_pilot/`, then:

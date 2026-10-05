@@ -55,9 +55,13 @@ class FakeCamera(CameraBackend):
         self.opened = True
 
     def info(self):
+        intr = {"width": self.w, "height": self.h, "fx": 50.0, "fy": 50.0, "ppx": 32.0,
+                "ppy": 24.0, "model": "fake brown-conrady", "coeffs": [0.0] * 5}
         return {"camera_model": self.model, "serial": self.serial, "firmware": "5.16.0.1",
                 "sdk_version": "2.55.1", "depth_mode": self.depth_mode,
-                "rgb_resolution": [self.w, self.h], "stream_fps": self.stream_fps}
+                "rgb_resolution": [self.w, self.h], "stream_fps": self.stream_fps,
+                "intrinsics": {"rgb": intr, "depth": dict(intr)},
+                "stereo_baseline_mm": 50.0, "depth_scale_mm": 1.0, "depth_range_mm": None}
 
     def grab(self):
         if self.fail_at is not None and self.n >= self.fail_at:
@@ -138,7 +142,12 @@ def test_realsense_like_capture_writes_exactly_the_contract_files(tmp_path):
     assert rgb.dtype == np.uint8 and rgb.shape == (48, 64, 3)
     assert tuple(rgb[0, 0]) == (255, 0, 0)  # RGB order kept
     depth = np.asarray(Image.open(node_dir / (fid0 + "_depth.png")))
-    assert depth.dtype == np.uint16 and depth.shape == (48, 64) and depth.min() > 1000
+    # values, not the read-back dtype: Pillow 9.0.1 (nodes) opens a 16-bit PNG as mode "I"
+    # (int32), Pillow >= 10 as "I;16" (uint16); the file is 16-bit either way
+    assert Image.open(node_dir / (fid0 + "_depth.png")).mode in ("I;16", "I")
+    assert depth.shape == (48, 64) and depth.min() >= 0 and depth.max() <= 65535
+    # frame 0 is the 16th grab (15 warm-up grabs), whose fake depth is 1000 + 16 mm
+    assert np.array_equal(depth.astype(np.int64), np.full((48, 64), 1016, np.int64))
     ir = np.asarray(Image.open(node_dir / (fid0 + "_ir.png")))
     assert ir.dtype == np.uint8 and ir.shape == (48, 64)
 
@@ -522,3 +531,134 @@ def test_scenes_template_header():
     lines = open(path, encoding="utf-8").read().splitlines()
     assert lines[0] == "scene,location,background,distractors,fire_source,distances_m,notes"
     assert lines[1].startswith("# s01,")
+
+
+# --------------------------------------------------------------------------- #
+# calibration at every capture (prereg Amendment 3)
+# --------------------------------------------------------------------------- #
+def test_every_capture_record_carries_the_calibration(tmp_path):
+    rec, _ = _capture(tmp_path, node="node_a")
+    assert rec["status"] == "complete"
+    assert rec["intrinsics"]["rgb"]["fx"] == 50.0 and rec["intrinsics"]["depth"]["coeffs"]
+    assert (rec["stereo_baseline_mm"], rec["depth_scale_mm"]) == (50.0, 1.0)
+    assert rec["sdk_version"] and rec["firmware"]
+
+
+@pytest.mark.parametrize("drop,match", [
+    (lambda i: i.pop("intrinsics"), "rgb intrinsics missing"),
+    (lambda i: i["intrinsics"]["depth"].pop("coeffs"), "depth intrinsics missing coeffs"),
+    (lambda i: i.update(stereo_baseline_mm=0.12), "stereo_baseline_mm"),   # metres: unit error
+    (lambda i: i.update(stereo_baseline_mm=None), "stereo_baseline_mm"),
+    (lambda i: i.update(depth_scale_mm=None), "depth_scale_mm"),
+    (lambda i: i.update(firmware=""), "firmware"),
+])
+def test_a_capture_without_its_calibration_is_refused_and_recorded(tmp_path, drop, match):
+    class Uncalibrated(FakeCamera):
+        def info(self):
+            i = super().info()
+            drop(i)
+            return i
+    clock = FakeClock()
+    with pytest.raises(ccc.CaptureError, match=match):
+        _capture(tmp_path, clock=clock, camera=Uncalibrated(clock=clock))
+    rec = json.loads((tmp_path / "node_a" / "_captures" / "s03_no_fire_d200.json").read_text())
+    assert rec["status"] == "incomplete" and rec["n_frames_written"] == 0
+    assert "Amendment 3" in rec["notes"]
+
+
+class _FakeSl:
+    """Just enough of pyzed.sl for ZedBackend.open()."""
+
+    class ERROR_CODE:
+        SUCCESS = "SUCCESS"
+
+    class RESOLUTION:
+        HD1080 = "HD1080"
+
+    class DEPTH_MODE:
+        NEURAL = "NEURAL"
+
+    class UNIT:
+        MILLIMETER = "MILLIMETER"
+
+    class InitParameters:
+        depth_minimum_distance = -1.0
+        depth_maximum_distance = -1.0
+
+    clamp_max = None
+
+    class Camera:
+        @staticmethod
+        def get_sdk_version():
+            return "5.2.3"
+
+        def open(self, init):
+            self.init = init
+            return _FakeSl.ERROR_CODE.SUCCESS
+
+        def get_init_parameters(self):
+            if _FakeSl.clamp_max is not None:
+                self.init.depth_maximum_distance = _FakeSl.clamp_max
+            return self.init
+
+        def get_camera_information(self):
+            from types import SimpleNamespace as NS
+            cam = lambda fx: NS(fx=fx, fy=fx, cx=960.5, cy=540.5, disto=[0.1, -0.02, 0, 0, 0.003])
+            calib = NS(left_cam=cam(1066.0), right_cam=cam(1067.0),
+                       get_camera_baseline=lambda: 120.0)
+            conf = NS(firmware_version=1523, resolution=NS(width=1920, height=1080), fps=15,
+                      calibration_parameters=calib)
+            return NS(camera_model="ZED2i", serial_number=32608934, camera_configuration=conf,
+                      sensors_configuration=NS(firmware_version=777))
+
+    class RuntimeParameters:
+        pass
+
+    class Mat:
+        pass
+
+
+def test_zed_sets_the_v1_depth_range_and_records_its_calibration(monkeypatch):
+    from src.data import zed_capture as zc
+    monkeypatch.setattr(zc, "_import_sl", lambda: _FakeSl)
+    _FakeSl.clamp_max = None
+    b = zc.ZedBackend()
+    b.open()
+    i = b.info()
+    assert (b.zed.init.depth_minimum_distance, b.zed.init.depth_maximum_distance) == (300.0, 20000.0)
+    assert i["depth_range_mm"] == [300.0, 20000.0] and i["depth_scale_mm"] == 1.0
+    assert i["stereo_baseline_mm"] == 120.0 and i["firmware"] == "1523" and i["sdk_version"] == "5.2.3"
+    assert i["intrinsics"]["rgb"]["fx"] == 1066.0 and i["intrinsics"]["right"]["fx"] == 1067.0
+    assert i["intrinsics"]["depth"] == i["intrinsics"]["rgb"]      # depth is in the left frame
+    assert i["intrinsics"]["rgb"]["coeffs"] == [0.1, -0.02, 0, 0, 0.003]
+    assert ccc.calibration_problems(i) == []
+    _FakeSl.clamp_max = 15000.0                                      # SDK did not apply it
+    with pytest.raises(ccc.CaptureError, match="depth range"):
+        zc.ZedBackend().open()
+    _FakeSl.clamp_max = None
+
+
+def test_realsense_stereo_baseline_from_option_or_ir_extrinsics(monkeypatch):
+    from types import SimpleNamespace as NS
+    from src.data import realsense_capture as rsc
+    fake_rs = NS(option=NS(stereo_baseline="stereo_baseline"), stream=NS(infrared="ir"))
+    monkeypatch.setattr(rsc, "rs", fake_rs)
+
+    class Sensor:
+        def __init__(self, opt):
+            self.opt = opt
+
+        def supports(self, attr):
+            return self.opt is not None
+
+        def get_option(self, attr):
+            return self.opt
+
+        def get_stream_profiles(self):
+            right = NS(stream_type=lambda: "ir", stream_index=lambda: 2)
+            left = NS(stream_type=lambda: "ir", stream_index=lambda: 1,
+                      get_extrinsics_to=lambda other: NS(translation=[-0.0501, 0.0, 0.0]))
+            return [left, right]
+
+    assert rsc.stereo_baseline_mm(Sensor(49.9)) == pytest.approx(49.9)
+    assert rsc.stereo_baseline_mm(Sensor(None)) == pytest.approx(50.1)
