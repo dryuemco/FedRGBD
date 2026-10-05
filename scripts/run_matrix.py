@@ -1292,7 +1292,9 @@ def main():
                                       datetime.now().strftime('%Y%m%d_%H%M%S'), timeout + 1800)
                 energy.start()
             times = {}
-            t0 = time.time()
+            # the logged per-run duration: monotonic, so an NTP step after a reboot cannot
+            # inflate it (2026-09-28: ~22 min); the log line timestamps stay wall-clock
+            t0 = time.monotonic()
             try:
                 rc, ended = execute_run(run, attempt, args.server_ready_timeout, timeout,
                                         finish_grace=args.finish_grace, monitor=monitor,
@@ -1300,7 +1302,7 @@ def main():
             finally:
                 if energy is not None:
                     energy.stop()
-            dt = time.time() - t0
+            dt = time.monotonic() - t0
             if rc == -5:
                 gate_renamed = fail_gate(run, ended)
                 gate_failed = ended

@@ -12,6 +12,7 @@ The identity gates are hard gates.  These tests pin that a mismatch
 
 import json
 import os
+import re
 import sys
 
 import numpy as np
@@ -524,3 +525,24 @@ def test_a_diverged_seed_does_not_trip_the_mixed_aggregation_check():
     df = summary_table([ok, diverged], bootstrap_B=0)
     row = df[df.metric == "selected_test_balanced_accuracy"].iloc[0]
     assert row["aggregation"] == "pooled" and row["n_seeds"] == 1
+
+
+def test_logged_run_duration_ignores_a_wall_clock_jump(block, monkeypatch):
+    """POST_5B_CHECKLIST c2: an NTP step of 22 min during a 3-min run must not show up
+    in the '%.1f min' of the run's log line; the line timestamps stay wall-clock."""
+    clock = {"wall": 1.79e9, "mono": 5000.0}
+    monkeypatch.setattr(run_matrix.time, "time", lambda: clock["wall"])
+    monkeypatch.setattr(run_matrix.time, "monotonic", lambda: clock["mono"])
+    fake = run_matrix.execute_run
+
+    def jumping_execute(*a, **kw):
+        out = fake(*a, **kw)
+        clock["mono"] += 180.0                   # the run really took 3 min
+        clock["wall"] += 180.0 + 22 * 60         # and the wall clock stepped 22 min
+        return out
+    monkeypatch.setattr(run_matrix, "execute_run", jumping_execute)
+    with pytest.raises(SystemExit) as e:
+        run_matrix.main()
+    assert e.value.code == 0
+    durations = re.findall(r"server exited \(rc=0\), ([\d.]+) min", _log(block["tmp"]))
+    assert durations == ["3.0", "3.0"]
