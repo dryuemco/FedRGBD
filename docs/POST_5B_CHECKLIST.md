@@ -185,6 +185,32 @@ Commit c1-c3 (one commit each, tests passing) and push.
 
 ## (d) Pull on all three nodes, then MAXN pre-flight
 
+**DONE (2026-10-05; all three nodes at `f97c60b`).**
+- d1: on node_a, the 30 run files equalled their committed blobs; they were moved to
+  `~/fedrgbd_reconcile_20261005/` and match the checkout by md5. On node_c, an untracked
+  April `src/data/zed_capture.py` blocked the pull. It is the script that captured the v1
+  ZED scenes, and it is kept in `~/fedrgbd_reconcile_20261005/` (md5 `ff23c646...`).
+- d2: the crontab entry is present. The node test counts differ from the desktop for two
+  environment-only reasons:
+  - the depth-PNG dtype test fails under Pillow 9.0.1 (it reads back int32 with
+    identical values);
+  - node_a's real-results analysis test refuses, by design, because of
+    `results/_gate_failed/`.
+- d3: PRE-FLIGHT OK. All three nodes are MAXN_SUPER, with WiFi disabled, GUI off and NTP
+  synchronised.
+- The c1 dry run logged `clocks: node_a sync=yes, node_b +1134 ms, node_c +121 ms`. The
+  NTP offsets are all under 4 ms; node_b's figure is an SSH-setup artifact (see below).
+
+**Before the pilot (2026-10-05):**
+- [YOU] node_b sshd: `PermitEmptyPasswords yes` makes every key login wait ~2-4 s on a
+  failed empty-password PAM attempt. Set it to `no` (command in the session report).
+- DECISION: the FLAME train-transform difference between Pillow 9.0.1 (nodes) and 12.3
+  (desktop baselines). It affects 7 of 300 images and 0.0024 % of pixels; the eval
+  transform is bitwise identical. How it is disclosed is still to decide.
+- Done: camera preprocessing once on the desktop (prereg Amendment 2, `e37e788`). The
+  nodes get it with their next pull, before f1; the pilot (e) does not need it on the
+  nodes.
+
 **d1 [CLAUDE, after your go]** node_a first. Its 30 run dirs hold the untracked originals
 of the files committed in a4, and those would block `git pull`. For each file:
 - check it against the committed blob (`git hash-object` = the blob in `origin/revision-ncaa`);

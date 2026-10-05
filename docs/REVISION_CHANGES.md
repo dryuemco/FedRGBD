@@ -1578,3 +1578,39 @@ read-only on all three nodes).
 * **(c3)** `fetch_results.ps1` also fetches `results/camera/<config>/{rev,diag}_camera_*`.
   The alert scan is unchanged; a 600-character alert line was tested on both pop-up
   paths (`de924db`).
+
+## Step (d), and the checks before the pilot (2026-10-05)
+
+* **Two more clock fixes, pulled to the nodes.**
+  - `fetch_results.ps1`: a stray form-feed byte in the pop-up text is now `\f`
+    (`c5eb17a`).
+  - `run_matrix.execute_run`: the run timeout and finish grace are measured on the
+    monotonic clock (`f97c60b`). A simulated 22-minute clock step had ended a normal run
+    as TIMEOUT.
+* **Step (d).** All three nodes are at `f97c60b`. The node_a reconcile and the node_c
+  untracked file are described in `docs/POST_5B_CHECKLIST.md` (d). The MAXN pre-flight
+  is OK.
+* **FLAME preprocessing across Pillow versions** (nodes 9.0.1, desktop 12.3; 300
+  images, 150 per class; the inputs are byte-identical):
+  - the eval transform (decode, resize, normalise) is bitwise identical, 300/300;
+  - the train transform, with the same torch seed per image, differs in 7/300 images:
+    max |d| = 15 of 255 levels, 0.0024 % of all pixels, at most 0.70 % of one image.
+
+  Disclosure is pending a decision.
+* **Camera preprocessing once on the desktop** (prereg Amendment 2, `e37e788`). Every
+  consumer now reads the md5-verified files. A 224 PNG gives bitwise-identical tensors
+  through `FlameDataset` on node_a and on the desktop.
+* **v1 ZED capture settings.** The capture script is node_c's untracked April
+  `zed_capture.py`; the v1 scenes' `metadata.json` match it.
+  - Settings: HD1080 at camera_fps 30, NEURAL depth, METER units, depth range 0.3-20 m,
+    RIGHT_HANDED_Y_UP, 15 warm-up grabs.
+  - Frames: 50 consecutive frames at the achievable rate (2.6-3.6 fps).
+  - Files: RGB as BGR PNG via cv2; depth as truncated mm uint16 PNG plus raw metres
+    `.npy`.
+
+  The revision backend uses the same resolution and depth mode, but:
+  - stream fps 15, sampled to 5 fps by time, 40 frames;
+  - MILLIMETER units, with the depth range left at the SDK defaults;
+  - rounded mm;
+  - the contract file layout;
+  - exposure, gain and white balance recorded per frame.
