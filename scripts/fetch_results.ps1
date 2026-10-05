@@ -192,7 +192,7 @@ function Show-Alert {
         # and under $ErrorActionPreference = 'Stop' its stderr used to abort the whole
         # alert scan -- no pop-up and no state saved (2026-09-28). Shorten, never throw.
         $text = "FedRGBD testbed: " + $Body
-        $tail = ' ... (full text: logsetch.log)'
+        $tail = ' ... (full text: logs\fetch.log)'
         if ($text.Length -gt 250) { $text = $text.Substring(0, 250 - $tail.Length) + $tail }
         $prevEap = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
