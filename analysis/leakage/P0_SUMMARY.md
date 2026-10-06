@@ -111,3 +111,24 @@ All val/test leak rates are 0 and no near-duplicate group spans two nodes: **PAS
 | split_stats.json (no _meta, canonical) |  | e552f32d894171d85fff422814d21132 |
 
 `split_stats.json` raw bytes legitimately differ between machines (`_meta.data_dir` is absolute); the canonical digest and every `manifest.csv` md5 must match.
+
+## A5 additional Dirichlet draws (2026-10-07, docs/A5_DIRICHLET_DRAWS_PREREG.md)
+
+Generated once on the desktop after the A5 pre-registration (1cdbd4e), with partition seeds 123 and 456 and the
+original command plus `--dirichlet_name_suffix _ps<seed>`. `--verify`: PASS for both seeds (no group spans two nodes
+or train/val/test). Seed 123 was generated twice and the manifests were byte-identical. The same desktop reproduced
+the three seed-42 Dirichlet manifests above byte for byte. The table above is unchanged; these rows add to it, and
+the pre-flight (`scripts/run_matrix.py`) reads both.
+
+| file | rows | md5 |
+|---|---|---|
+| dirichlet_0.1_ps123/manifest.csv | 47992 | fd390ae4068d2c11cbfcbcfc9c7c22a7 |
+| dirichlet_0.5_ps123/manifest.csv | 47992 | 50f3770eac79166d4e6818d8343f6d78 |
+| dirichlet_1_ps123/manifest.csv | 47992 | 7a9944b885304368d7e8ff17bb6da435 |
+| dirichlet_0.1_ps456/manifest.csv | 47992 | 10018c9c1f65ce167da7caf1f09d65ad |
+| dirichlet_0.5_ps456/manifest.csv | 47992 | dcc1ae18e878394f2c78b8d2477a1111 |
+| dirichlet_1_ps456/manifest.csv | 47992 | 8694805b5fcc055ddd0ca51993071bdd |
+| split_stats.json (no _meta, canonical, with the A5 draws) |  | ee48055b7be7abee0c6d9318e66aa49a |
+
+After the A5 draws were added, the canonical `split_stats.json` digest is the one in this table; the earlier one
+(e552f32d...) describes the 15 original splits only.

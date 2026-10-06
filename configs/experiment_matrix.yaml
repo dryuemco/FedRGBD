@@ -343,6 +343,32 @@ revision:
       runs: [results/diag_smoke_maxn, results/diag_smoke_maxn_r2]
 
   # ------------------------------------------------------------------------
+  # A5. Additional Dirichlet partition draws on the testbed (pre-registered
+  #     2026-10-07, docs/A5_DIRICHLET_DRAWS_PREREG.md, commit 1cdbd4e).
+  #     alpha = 0.1 only; the two new draws (partition seeds 123, 456; splits
+  #     dirichlet_0.1_ps<seed>) x {FedAvg, FedProx(0.01)}; one training seed;
+  #     as maxn_long_horizon otherwise, with its determinism gate. Order:
+  #     FedAvg before FedProx, ps123 before ps456. Emitted only with --block.
+  #     Descriptive only; never pooled with the main Dirichlet results.
+  # ------------------------------------------------------------------------
+  a5_dirichlet_draws:
+    description: >
+      FedAvg and FedProx(mu=0.01) on the two additional Dirichlet draws of
+      alpha = 0.1 (partition seeds 123, 456), 10 rounds, all nodes MAXN_SUPER.
+    power_config: maxn
+    strategies: [fedavg, fedprox_0.01]
+    alphas: [0.1]
+    partition_seeds: [123, 456]
+    seeds: [42]
+    rounds: 10
+    local_epochs: 5
+    lr: 0.001
+    batch_size: 8
+    total_runs: 4    # 2 strategies x 2 draws x 1 seed
+    determinism_gate:
+      runs: [results/diag_smoke_maxn, results/diag_smoke_maxn_r2]
+
+  # ------------------------------------------------------------------------
   # 5. FedProx proximal-mu sensitivity grid.
   # ------------------------------------------------------------------------
   mu_grid:

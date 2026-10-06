@@ -278,6 +278,22 @@ def test_dirichlet_determinism_and_class_counts(dataset, tmp_path):
     assert stats_a["dirichlet_1"]["dirichlet_alpha"] == 1.0
 
 
+def test_dirichlet_name_suffix_only_renames(dataset, tmp_path):
+    """A5: --dirichlet_name_suffix renames the split and changes nothing else; the
+    default (no suffix) keeps the original name."""
+    kw = dict(nodes=3, skip_base_splits=True, dirichlet_alpha=[0.1], dirichlet_min_size=1)
+    plain = tmp_path / "plain"
+    suff = tmp_path / "suff"
+    stats_plain = run_split(dataset["raw"], plain, seed=123, **kw)
+    stats_suff = run_split(dataset["raw"], suff, seed=123, dirichlet_name_suffix="_ps123", **kw)
+    assert "dirichlet_0.1" in stats_plain and "dirichlet_0.1_ps123" not in stats_plain
+    assert "dirichlet_0.1_ps123" in stats_suff and "dirichlet_0.1" not in stats_suff
+    assert (assignment_from_manifest(plain, "dirichlet_0.1")
+            == assignment_from_manifest(suff, "dirichlet_0.1_ps123"))
+    assert (stats_plain["dirichlet_0.1"]["dirichlet_proportions"]
+            == stats_suff["dirichlet_0.1_ps123"]["dirichlet_proportions"])
+
+
 def test_dirichlet_min_size_honoured(dataset, tmp_path):
     out = tmp_path / "d_min"
     stats = run_split(dataset["raw"], out, seed=42, nodes=3, skip_base_splits=True,

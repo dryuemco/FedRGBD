@@ -311,6 +311,21 @@ def expand_maxn_long_horizon(cfg: dict) -> List[Run]:
     return runs
 
 
+def expand_a5_dirichlet_draws(cfg: dict) -> List[Run]:
+    """A5 (docs/A5_DIRICHLET_DRAWS_PREREG.md): the additional Dirichlet draws, split
+    ``dirichlet_<alpha>_ps<partition seed>``; strategy outermost, so FedAvg runs first."""
+    runs = []
+    for strategy in cfg["strategies"]:
+        for alpha in cfg["alphas"]:
+            for ps in cfg["partition_seeds"]:
+                split = f"{dirichlet_split(alpha)}_ps{ps}"
+                dist = f"{dirichlet_dist_tag(alpha)}_ps{ps}"
+                for seed in cfg["seeds"]:
+                    runs.append(_fl_run(A5_BLOCK, dist, split, strategy, seed, cfg["rounds"],
+                                        cfg["local_epochs"], cfg["lr"], cfg["batch_size"]))
+    return runs
+
+
 def expand_mu_grid(cfg: dict) -> List[Run]:
     runs = []
     for mu in cfg["mus"]:
@@ -508,6 +523,9 @@ def apply_all_seeds(revision_cfg: dict) -> dict:
     return out
 
 
+#: A5 additional Dirichlet draws (testbed; emitted only with --block)
+A5_BLOCK = "a5_dirichlet_draws"
+
 BLOCK_EXPANDERS = {
     "seed_extension": expand_seed_extension,
     "dirichlet_skew": expand_dirichlet_skew,
@@ -521,6 +539,7 @@ BLOCK_EXPANDERS = {
     CAMERA_BLOCK: expand_camera_sensor_skew,
     CAMERA_BASELINE_BLOCK: expand_camera_sensor_skew_baselines,
     CAMERA_SMOKE_BLOCK: expand_camera_determinism_smoke,
+    A5_BLOCK: expand_a5_dirichlet_draws,
 }
 
 #: blocks expanded from another block's yaml entry (the camera baselines live in
@@ -552,7 +571,7 @@ BLOCK_NOTES = {
 
 #: blocks outside the FLAME matrix: never part of the default (all-block) output, only
 #: emitted with ``--block``
-EXTRA_BLOCKS = [CAMERA_BLOCK, CAMERA_BASELINE_BLOCK, CAMERA_SMOKE_BLOCK]
+EXTRA_BLOCKS = [CAMERA_BLOCK, CAMERA_BASELINE_BLOCK, CAMERA_SMOKE_BLOCK, A5_BLOCK]
 
 
 def expand_all(revision_cfg: dict, block: Optional[str] = None) -> Dict[str, List[Run]]:

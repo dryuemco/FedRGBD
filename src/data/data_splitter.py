@@ -1333,7 +1333,7 @@ def run(args) -> dict:
 
     # --- Dirichlet label skew -------------------------------------------- #
     for alpha in (getattr(args, 'dirichlet_alpha', None) or []):
-        name = 'dirichlet_{:g}'.format(alpha)
+        name = 'dirichlet_{:g}{}'.format(alpha, getattr(args, 'dirichlet_name_suffix', '') or '')
         print("\n--- Dirichlet Split alpha={:g} ({} nodes) ---".format(alpha, args.nodes))
         nodes_units, proportions = partition_dirichlet(
             fire_units, nofire_units, node_names, alpha, args.seed,
@@ -1409,7 +1409,7 @@ def run(args) -> dict:
 def _defaults() -> dict:  # noqa: D401
     return {'data_dir': 'data/raw/flame_dataset', 'output_dir': 'data/processed',
             'seed': 42, 'nodes': 3, 'group_file': None, 'dirichlet_alpha': None,
-            'dirichlet_min_size': 10, 'skip_base_splits': False,
+            'dirichlet_min_size': 10, 'dirichlet_name_suffix': '', 'skip_base_splits': False,
             'subsample_frac': None, 'subsample_splits': ['train'], 'link_mode': 'symlink',
             'clean': False, 'verify': False,
             'export_manifests': None, 'from_manifest': None}
@@ -1429,6 +1429,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="one or more Dirichlet concentrations -> splits dirichlet_<alpha>")
     parser.add_argument("--dirichlet_min_size", type=int, default=10,
                         help="minimum images per node for a Dirichlet draw to be accepted")
+    parser.add_argument("--dirichlet_name_suffix", default="",
+                        help="appended to every Dirichlet split name (dirichlet_<alpha><suffix>), "
+                             "e.g. _ps123 for an additional draw with --seed 123 (A5); "
+                             "the default, empty, keeps the original names")
     parser.add_argument("--skip_base_splits", action="store_true",
                         help="do not regenerate iid / non_iid_label")
     parser.add_argument("--subsample_frac", type=float, nargs='+', default=None,
