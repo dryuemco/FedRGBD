@@ -1,6 +1,6 @@
 # A5 -- additional Dirichlet partition draws (pre-registration)
 
-**Declared 2026-10-07, about 03:00, before any new partition is drawn and before any A5
+**Declared 2026-10-07, about 02:00, before any new partition is drawn and before any A5
 run exists.** Approved by the author. This file is committed and pushed before the new
 partitions are generated. Nothing below changes after the first A5 result exists; a
 change before that is a dated amendment in this file.
