@@ -362,3 +362,69 @@ family, verdict phrase or interpretation rule, and not the preprocessing of sect
   current unit fx = 1051 px, about 85 deg. This is consistent with the 4 mm and 2.1 mm
   lens options of the ZED 2i, but the lens is not recorded. Commit `2dab803` called the
   old number a transcription error; that was wrong and is corrected here.*
+
+## 14. Erratum (2026-10-07)
+
+**The preamble (2026-09-28) says:** "on that day no camera capture of any kind was
+present on the three nodes or the desktop (checked read-only; the only matching file on
+the nodes is a librealsense unit-test `.bag`). The five-scene captures behind the v1
+cross-camera result are no longer on the nodes and are not used here."
+
+**Correct:** The v1 five-scene captures were on all three nodes that day and still are,
+in `~/FedRGBD/data/raw/captures/`:
+
+| node | files | content |
+|---|---|---|
+| node_a | 2765 | its own scenes, plus copies of node_b's and node_c's (byte-identical) |
+| node_b | 1005 | its own scenes |
+| node_c | 755 | its own scenes |
+
+The files' birth time is 2026-04-23, 12:35-13:47, and their ctime and mtime are the
+same. Access times are not used as evidence. The read-only check of 2026-09-28 missed
+these files; its search is not recorded. Amendment 3 (2026-10-05) named the node_c
+scenes as belonging to the original submission. It did not correct the preamble and did
+not mention the copies on node_a or the originals on node_b. The files are left as they
+are. Their content as of 2026-10-07 is fixed by md5 manifests in `data/v1_captures_md5/`,
+checked against all three nodes with `md5sum -c` (all OK).
+
+**Audit (2026-10-07):**
+- *Code in the repository.* No code in the repository reads `data/raw/captures`, now or
+  in any commit since 2026-09-28 (`git log -G` on the path; the only hit is the prose of
+  Amendment 3, `4802ebe`).
+- *Write paths.* The camera experiment writes only to `data/raw/camera`,
+  `data/raw/camera_pilot` and `data/processed/camera_*`. The legacy default
+  `data/raw/custom` is also separate. None of these overlaps with `data/raw/captures`.
+- *Manifests, folds, training and analysis.* None of these exists yet for this
+  experiment. The only frame table and preprocessing so far are the pilot's, and they
+  read only `data/raw/camera_pilot`. The study scripts read only the paths above.
+- *The v1 pipeline on node_a, outside git.* node_a also holds the untracked v1
+  cross-sensor pipeline that read these captures. All its files are dated 2026-04-23:
+  - scripts `scripts/prepare_captures.py`, `scripts/cross_sensor_eval.py` and
+    `scripts/cross_sensor_depth_eval.py`, never committed;
+  - their outputs `data/processed/captures/` (903 files), `data/processed/captures_depth/`
+    and `data/processed/captures.zip`;
+  - `results/cross_sensor/` and `results/cross_sensor_depth/`.
+
+  They are the original submission's cross-sensor analysis. They are derived camera
+  data, so the preamble's "no camera capture of any kind" missed them too. No revision
+  code reads them: the repository's `scripts/cross_sensor_loso.py` (2026-09-17) reads
+  `data/raw/custom`. node_b and node_c hold no such derived files; their checkouts have
+  no untracked files.
+
+  The files on node_a are left as they are. Their content as of 2026-10-07 is recorded
+  in two places:
+  - `data/v1_captures_md5/node_a_v1_derived.md5` (commit `1409085`): 1812 files, verified
+    with `md5sum -c`;
+  - `legacy/v1_cross_sensor/` (commit `89eb15c`): the three scripts and the two
+    `results.json` as byte copies, md5-identical to that manifest. They were not run,
+    and no image data was copied.
+- *Manual inspection.* node_a's `.bash_history` keeps no timestamps. It contains the v1
+  capture, `scp` and pipeline commands above, plus `find` and `ls` commands on
+  `data/raw/captures` (for example `find ~ -type d -name "captures"` and `ls` of
+  `node_*/scene01_fire_candles_1.0m/`). When they were run is unknown. No code path of
+  the revision read the files, but manual inspection from a shell, before or after
+  2026-09-28, cannot be excluded entirely.
+
+So the statement "not used here" holds, and the statement "no longer on the nodes" does
+not. The v1 files also record the v1 ZED 2i unit (S/N 32608934, fx 1951 px at
+1920 x 1080), which differs from the revision's (section 12 correction).
