@@ -148,6 +148,8 @@ Our testbed consists of three NVIDIA Jetson Orin Nano Super edge nodes, each equ
 
 \textbf{Power modes.} The Jetson power mode (\texttt{nvpmodel}) fixes, per node, how many CPU cores are online, how many GPU texture processing clusters (TPCs) are powered, and the maximum clock frequencies. The main experimental matrix of the revision ran with power modes that had not been harmonised across the nodes: Node~A at 15\,W, Node~B at MAXN\_SUPER and Node~C at 7\,W, as read back with \texttt{nvpmodel -q} on every node before and after every run and recorded with its results. The three modes differ in more than clock frequency. At 15\,W and MAXN\_SUPER all six CPU cores are online and all four TPCs (eight streaming multiprocessors, SMs) are powered; the two modes differ only in their frequency caps. At 7\,W two of the six CPU cores are taken offline and two of the four TPCs are power-gated, leaving four SMs, in addition to lower frequency caps. Because the slowest client sets the length of a synchronous round, every wall-clock figure of the main matrix belongs to this configuration and is reported as such. The power mode also changes the numbers, not only the timing: training is bitwise reproducible within a fixed power configuration but not across configurations, and the difference originates on Node~C's 7\,W mode, which our tests cannot attribute to the SM count or to the CPU cores separately (Section~\ref{sec:stats}). A separate block therefore repeats a subset of the matrix with all three nodes at MAXN\_SUPER (Section~\ref{sec:powercfg}); it is a configuration of its own, never pooled with the main matrix.
 
+\todo{Table~\ref{tab:hardware} describes the revision's cameras only (decision 7 Oct 2026); the v1 camera results are removed from the paper, so the v1 ZED unit is not described here.}
+
 \begin{table}[t]
 \centering
 \caption{Hardware Configuration of Edge Nodes}
@@ -167,7 +169,7 @@ Technology & Active IR & Active IR & Passive stereo \\
  & stereo & stereo & + neural depth \\
 Baseline & 50\,mm & 50\,mm & 120\,mm \\
 Depth Range & 0.3--3\,m & 0.3--3\,m & 0.3--20\,m \\
-RGB Res. & 1920$\times$1080 & 1920$\times$1080 & 2208$\times$1242 \\
+RGB Res. & 1920$\times$1080 & 1920$\times$1080 & 1920$\times$1080 \\
 IMU & BMI055 & BMI055 & BMI088 \\
 \midrule
 Network & \multicolumn{3}{c}{Wired Gigabit Ethernet (v1: WiFi 802.11ac)} \\
@@ -179,26 +181,12 @@ Topology & \multicolumn{3}{c}{Three nodes on one switch} \\
 The three cameras span a two-level hierarchy of sensor heterogeneity:
 
 \begin{itemize}
-    \item \textbf{Level~1 -- Manufacturing Variance:} Nodes~A and B both use Intel RealSense cameras of the same product family, but the D435if includes an additional IR cut filter and has different factory calibration parameters (Table~\ref{tab:intrinsics}).
+    \item \textbf{Level~1 -- Manufacturing Variance:} Nodes~A and B both use Intel RealSense cameras of the same product family, but the D435if includes an additional IR cut filter. \todo{camera experiment results}
 
     \item \textbf{Level~2 -- Cross-Technology:} Node~C uses a Stereolabs ZED~2i, which employs passive stereo with neural depth estimation, fundamentally different from the active IR stereo approach of RealSense cameras.
 \end{itemize}
 
-\begin{table}[t]
-\centering
-\caption{Camera Intrinsic Parameters (Heterogeneity Evidence)}
-\label{tab:intrinsics}
-\begin{tabular}{@{}lccc@{}}
-\toprule
-\textbf{Parameter} & \textbf{Node A (D435if)} & \textbf{Node B (D435i)} & \textbf{$\Delta$} \\
-\midrule
-RGB $f_x$ (px) & 1367.0 & 1360.9 & 6.1 \\
-RGB $f_y$ (px) & 1366.7 & 1360.3 & 6.4 \\
-Depth $f_x$ (px) & 644.1 & 646.3 & 2.2 \\
-IR min value & 15 & 19 & 4 \\
-\bottomrule
-\end{tabular}
-\end{table}
+\todo{camera experiment results}
 
 \todo{Add testbed photo (Fig.~1) showing the three Jetson nodes with their cameras.}
 
@@ -481,12 +469,12 @@ where $T_{\mathrm{round}}^{\mathrm{wall}}$ is the measured server wall-clock of 
 \subsection{Leave-One-Scene-Out Cross-Sensor Protocol}
 \label{sec:loso}
 
-The cross-sensor study of Experiment~II uses custom captures of $S=5$ scenes recorded with all three cameras. A split that randomly divides the frames of these scenes between training and test allows a classifier to recognise a test frame by its scene rather than by the target concept, so a high cross-camera accuracy obtained this way does not establish cross-camera transfer. We therefore evaluate leave-one-scene-out: for every held-out scene $s$, the model is trained on the frames of the remaining $S-1$ scenes of the source camera and evaluated on the frames of scene $s$ of the target camera, and the reported score is the mean over the $S$ folds with its confidence interval from~\eqref{eq:ci}. The same folds are used for every (source, target) camera pair, so the within-camera diagonal ($\text{source}=\text{target}$, different scene) provides the scene-shift-only reference against which the additional cost of a camera change is measured. The corresponding accuracy gap
+The cross-sensor study of Experiment~II uses custom captures of $S$ scenes recorded with all three cameras. \todo{camera experiment results} A split that randomly divides the frames of these scenes between training and test allows a classifier to recognise a test frame by its scene rather than by the target concept, so a high cross-camera accuracy obtained this way does not establish cross-camera transfer. We therefore evaluate leave-one-scene-out: for every held-out scene $s$, the model is trained on the frames of the remaining $S-1$ scenes of the source camera and evaluated on the frames of scene $s$ of the target camera, and the reported score is the mean over the $S$ folds with its confidence interval from~\eqref{eq:ci}. The same folds are used for every (source, target) camera pair, so the within-camera diagonal ($\text{source}=\text{target}$, different scene) provides the scene-shift-only reference against which the additional cost of a camera change is measured. The corresponding accuracy gap
 \begin{equation}
 \Delta_{\text{sensor}} = \mathrm{Acc}_{\text{same camera, held-out scene}} - \mathrm{Acc}_{\text{cross camera, held-out scene}}
 \label{eq:sensorgap}
 \end{equation}
-isolates the sensor effect from the scene effect. In the camera experiment every frame is preprocessed once, on the desktop, and every training run, on the testbed and on the desktop, reads the same md5-verified files, so its inputs are identical by construction; its training-time augmentation is subject to the same library-version difference as FLAME's (Section~\ref{sec:stats}). \todo{Confirm the final scene count $S$ and the per-scene frame counts from the capture log before submission; the protocol text assumes $S=5$.}
+isolates the sensor effect from the scene effect. In the camera experiment every frame is preprocessed once, on the desktop, and every training run, on the testbed and on the desktop, reads the same md5-verified files, so its inputs are identical by construction; its training-time augmentation is subject to the same library-version difference as FLAME's (Section~\ref{sec:stats}). \todo{Confirm the final scene count $S$ and the per-scene frame counts from the capture log before submission.} \todo{One sentence: the camera experiment's pre-registration, its amendments and its erratum are listed, dated, in the public repository (\texttt{docs/CAMERA\_EXPERIMENT\_PREREG.md}).}
 
 
 % ============================================================
@@ -950,7 +938,7 @@ ZED 2i & \PHs & \PHs & \PHs \\
 \footnotesize{Diagonal: same camera, held-out scene (scene-shift-only reference). Off-diagonal: cross-camera on the same held-out scene. The sensor gap of~\eqref{eq:sensorgap} is the row-wise difference. \todo{Fill from \texttt{scripts/cross\_sensor\_loso.py}; report per-fold values as well as the mean, and state the number of frames per scene and camera.}}
 \end{table}
 
-\todo{The v1 manuscript reported near-perfect cross-camera accuracy under a random frame-level split of five shared scenes. That number is not reported here because it cannot be separated from scene overlap; replace this paragraph with the leave-one-scene-out result and an explicit comparison against the earlier protocol.}
+\todo{camera experiment results}
 
 
 % ============================================================
@@ -1010,7 +998,7 @@ Three directions follow directly from the limitations above.
 
 \textbf{Hybrid wavelet-transform feature extraction for edge GPU clusters.} A promising way to reduce both the local computation and the transmitted payload is to place a fixed, non-learned wavelet transform in front of the learned backbone, so that the network operates on sub-band representations at reduced spatial resolution~\cite{dede2025wavelet, yang2025wavelitenet}. Because the transform carries no parameters, it shrinks the model that federated averaging must exchange at every round without adding to the aggregation cost, and its multi-resolution sub-bands offer a natural granularity for transmitting only the coefficients that changed. Combining such a wavelet front end with the federated objectives of Section~\ref{sec:objectives}, and tuning the resulting joint architecture-and-federation hyperparameter space with the metaheuristic search methods reviewed in Section~\ref{sec:related_meta}~\cite{tuba2021cnnhyper, ibrahim2025metaheuristiccnn}, is the hybrid method we intend to evaluate next on the same edge GPU cluster, measured on the time and communication axes of Section~\ref{sec:timecomm}.
 
-\textbf{Scene-independent, multi-site data collection.} The strongest limitation of the present cross-sensor evidence is that the custom captures share a small set of scenes. We are collecting RGB-D recordings at several physically distinct sites, with each camera fixed to one site, so that the client partitions are defined by \emph{where} and \emph{with what} the data were recorded rather than by an artificial label split. Such a corpus would make sensor heterogeneity an intrinsic property of the federated experiment instead of a separately characterised effect, and would allow the leave-one-scene-out protocol of Section~\ref{sec:loso} to be extended to a leave-one-site-out federated evaluation.
+\textbf{Scene-independent, multi-site data collection.} \todo{camera experiment results} We are collecting RGB-D recordings at several physically distinct sites, with each camera fixed to one site, so that the client partitions are defined by \emph{where} and \emph{with what} the data were recorded rather than by an artificial label split. Such a corpus would make sensor heterogeneity an intrinsic property of the federated experiment instead of a separately characterised effect, and would allow the leave-one-scene-out protocol of Section~\ref{sec:loso} to be extended to a leave-one-site-out federated evaluation.
 
 \textbf{Scale, budget and search.} Larger client counts with partial participation, longer communication budgets, additional backbones, and joint rather than one-factor-at-a-time hyperparameter search are required before any of the rankings reported here can be claimed to hold generally. The same applies to the three measurements deferred in Section~\ref{sec:limitations}: a depth/IR modality ablation, per-round energy profiling and a constrained-network sensitivity study.
 
