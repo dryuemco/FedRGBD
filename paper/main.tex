@@ -469,12 +469,25 @@ where $T_{\mathrm{round}}^{\mathrm{wall}}$ is the measured server wall-clock of 
 \subsection{Leave-One-Scene-Out Cross-Sensor Protocol}
 \label{sec:loso}
 
-The cross-sensor study of Experiment~II uses custom captures of $S$ scenes recorded with all three cameras. \todo{camera experiment results} A split that randomly divides the frames of these scenes between training and test allows a classifier to recognise a test frame by its scene rather than by the target concept, so a high cross-camera accuracy obtained this way does not establish cross-camera transfer. We therefore evaluate leave-one-scene-out: for every held-out scene $s$, the model is trained on the frames of the remaining $S-1$ scenes of the source camera and evaluated on the frames of scene $s$ of the target camera, and the reported score is the mean over the $S$ folds with its confidence interval from~\eqref{eq:ci}. The same folds are used for every (source, target) camera pair, so the within-camera diagonal ($\text{source}=\text{target}$, different scene) provides the scene-shift-only reference against which the additional cost of a camera change is measured. The corresponding accuracy gap
+The cross-sensor study of Experiment~II uses custom captures of $S$ scenes. Each scene is recorded simultaneously by all three cameras, once with a flame and once without. \todo{camera experiment results} A split that divides the frames of these scenes at random between training and test lets a classifier recognise a test frame by its scene rather than by the target concept. A high cross-camera accuracy obtained that way therefore does not establish cross-camera transfer. We evaluate leave-one-scene-out instead.
+
+\textbf{Folds and models.} Scenes are sorted by identifier. Fold~$s$ holds out scene~$s$ for testing, uses the next scene in that order for validation (the first after the last), and trains on the remaining $S-2$. For each source camera~$X$, fold and seed (42, 123, 456), a MobileNetV3-Small is trained on $X$'s frames of the training scenes (15 epochs, Adam, learning rate $10^{-3}$, batch size~8). The epoch is selected on $X$'s frames of the validation scene by the rule of Section~\ref{sec:selection}, and the selected model then predicts scene~$s$ as recorded by each of the three cameras. Every frame of every scene is thus predicted exactly once per (source camera, seed), by the model of the fold that holds its scene out.
+
+\textbf{Statistic.} Every balanced accuracy of this study is computed once, from these out-of-fold predictions pooled over all scenes; it is not averaged over folds. For an ordered pair of cameras $X \neq Y$, the cost of the camera change is
 \begin{equation}
-\Delta_{\text{sensor}} = \mathrm{Acc}_{\text{same camera, held-out scene}} - \mathrm{Acc}_{\text{cross camera, held-out scene}}
+D(X \rightarrow Y) = \frac{1}{|\mathcal{K}|}\sum_{k \in \mathcal{K}} \Bigl[ \mathrm{BA}_k(X \text{ on } Y) - \mathrm{BA}_k(X \text{ on } X) \Bigr],
 \label{eq:sensorgap}
 \end{equation}
-isolates the sensor effect from the scene effect. In the camera experiment every frame is preprocessed once, on the desktop, and every training run, on the testbed and on the desktop, reads the same md5-verified files, so its inputs are identical by construction; its training-time augmentation is subject to the same library-version difference as FLAME's (Section~\ref{sec:stats}). \todo{Confirm the final scene count $S$ and the per-scene frame counts from the capture log before submission.} \todo{One sentence: the camera experiment's pre-registration, its amendments and its erratum are listed, dated, in the public repository (\texttt{docs/CAMERA\_EXPERIMENT\_PREREG.md}).}
+where $\mathrm{BA}_k(X \text{ on } Y)$ is the pooled out-of-fold balanced accuracy~\eqref{eq:ba} of the seed-$k$ models trained on camera~$X$ and evaluated on camera~$Y$'s frames, and $\mathcal{K}$ is the set of seeds. Both terms cover the same scenes, because the rig records every scene with every camera. The second term is therefore the scene-shift-only reference, and $D$ isolates the sensor effect from the scene effect. $D<0$ means that the change to the target camera costs balanced accuracy.
+
+\textbf{Intervals and families.} Intervals are 95\% percentile intervals of a cluster bootstrap with the scene as the cluster, $B=10{,}000$ replicates, and the seeds resampled jointly with the scenes. One scene resample is applied to both terms of~$D$. Every scene contains both classes by design, so no class stratification is needed. The two-sided bootstrap $p$-value is $p = \min\{1,\ 2\min(\#\{D^{*} \le 0\}+1,\ \#\{D^{*} \ge 0\}+1)/(B+1)\}$.
+\begin{itemize}
+    \item \emph{Primary family:} the six ordered pairs on RGB input, Holm-corrected ($m=6$).
+    \item \emph{Primary contrast:} a single test of the sensor hierarchy of Section~\ref{sec:testbed}, $K = \overline{D}_{\text{pairs involving the ZED~2i}} - \overline{D}_{\text{D435if}\leftrightarrow\text{D435i}}$.
+    \item \emph{Secondary family:} the same six pairs on RGB-D input, also Holm-corrected ($m=6$).
+    \item \emph{Descriptive:} IR, which only the two RealSense cameras provide; the full $3\times3$ matrix of pooled balanced accuracy for each modality; and the same data under a random frame-level split, to show how much scene overlap inflates the numbers.
+\end{itemize}
+Verdicts use the pre-registered phrases (``higher on the target sensor'', ``lower on the target sensor'', ``no detectable difference''). The Holm verdict is the headline, and ``no detectable difference'' is never read as sensor invariance. In the camera experiment every frame is preprocessed once, on the desktop, and every training run, on the testbed and on the desktop, reads the same md5-verified files, so its inputs are identical by construction; its training-time augmentation is subject to the same library-version difference as FLAME's (Section~\ref{sec:stats}). \todo{Confirm the final scene count $S$ and the per-scene frame counts from the capture log before submission.} \todo{One sentence: the camera experiment's pre-registration, its amendments and its erratum are listed, dated, in the public repository (\texttt{docs/CAMERA\_EXPERIMENT\_PREREG.md}).}
 
 
 % ============================================================
@@ -921,22 +934,27 @@ Table~\ref{tab:stats} lists the paired comparisons of the v1 protocol. With $n \
 \subsection{Cross-Sensor Generalisation (Leave-One-Scene-Out)}
 \label{sec:res_loso}
 
-\begin{table}[t]
+\begin{table*}[t]
 \centering
-\caption{Leave-One-Scene-Out Cross-Sensor Accuracy (\%), mean Over $S$ Folds [95\% CI]}
+\caption{Leave-One-Scene-Out Cross-Sensor Shift on RGB (Primary Family): Pooled Out-of-Fold Balanced Accuracy (\%) and $D(X\rightarrow Y)$ (Percentage Points) [95\% Scene-Bootstrap CI]}
 \label{tab:loso}
-\begin{tabular}{@{}lccc@{}}
+\begin{tabular}{@{}lccccl@{}}
 \toprule
-\textbf{Train $\rightarrow$ Test} & \textbf{D435if} & \textbf{D435i} & \textbf{ZED 2i} \\
+\textbf{Pair $X \rightarrow Y$} & \textbf{BA($X$ on $X$)} & \textbf{BA($X$ on $Y$)} & \textbf{$D(X\rightarrow Y)$} & \textbf{Holm $p$} & \textbf{Verdict} \\
 \midrule
-D435if & \PHs & \PHs & \PHs \\
-D435i  & \PHs & \PHs & \PHs \\
-ZED 2i & \PHs & \PHs & \PHs \\
+D435if $\rightarrow$ D435i  & \PHs & \PHs & \PHs & \PHs & \PHs \\
+D435if $\rightarrow$ ZED 2i & \PHs & \PHs & \PHs & \PHs & \PHs \\
+D435i $\rightarrow$ D435if  & \PHs & \PHs & \PHs & \PHs & \PHs \\
+D435i $\rightarrow$ ZED 2i  & \PHs & \PHs & \PHs & \PHs & \PHs \\
+ZED 2i $\rightarrow$ D435if & \PHs & \PHs & \PHs & \PHs & \PHs \\
+ZED 2i $\rightarrow$ D435i  & \PHs & \PHs & \PHs & \PHs & \PHs \\
+\midrule
+Contrast $K$ (hierarchy)    & --   & --   & \PHs & \PHs\,(single test) & \PHs \\
 \bottomrule
 \end{tabular}
 \vspace{2pt}
-\footnotesize{Diagonal: same camera, held-out scene (scene-shift-only reference). Off-diagonal: cross-camera on the same held-out scene. The sensor gap of~\eqref{eq:sensorgap} is the row-wise difference. \todo{Fill from \texttt{scripts/cross\_sensor\_loso.py}; report per-fold values as well as the mean, and state the number of frames per scene and camera.}}
-\end{table}
+\parbox{\textwidth}{\footnotesize Balanced accuracy pooled over the out-of-fold predictions of all $S$ scenes, mean over seeds 42, 123 and 456; $D$ as in~\eqref{eq:sensorgap}. Holm correction is applied within the six pairs; $K$ is a single pre-registered contrast without Holm. The secondary RGB-D family, the descriptive IR comparison, the full $3\times3$ matrices and the random-split comparison are reported separately. \todo{Fill from \texttt{scripts/camera\_analysis\_a.py}; state the number of frames per scene and camera.}}
+\end{table*}
 
 \todo{camera experiment results}
 
