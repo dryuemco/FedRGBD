@@ -351,7 +351,14 @@ family, verdict phrase or interpretation rule, and not the preprocessing of sect
   clip of section 3 (0.3-10 m) is unchanged.
 * **The pilot** checks it: every capture record carries the calibration, and the
   baselines are plausible (about 50 mm for the D435 models; 120 mm for the ZED 2i,
-  serial 35201583, as in v1). *Correction 2026-10-07, before any footage: this line
-  said 32608934, copied from `docs/HARDWARE_SETUP.md`, where the operator identified
-  it as a transcription error; 35201583 is what the connected unit reports. Only the
-  identifier changed.*
+  serial 35201583). *Correction 2026-10-07: this line said "serial 32608934, as in v1".
+  The pilot's ZED 2i reports 35201583. 32608934 is the serial of the ZED 2i in the v1
+  captures (April 2026 capture metadata on the nodes, five scenes, and
+  `/usr/local/zed/settings/SN32608934.conf` of 2026-03-27 on node_c); the SDK fetched
+  `SN35201583.conf` on 2026-10-06, when the current unit was first connected. So the
+  revision captures use a different ZED 2i unit from v1, of the same model; the 120 mm
+  baseline holds for both. The two units differ in focal length: at the same 1920 x
+  1080 the v1 unit records fx = 1951 px, about 52 deg horizontal field of view, and the
+  current unit fx = 1051 px, about 85 deg. This is consistent with the 4 mm and 2.1 mm
+  lens options of the ZED 2i, but the lens is not recorded. Commit `2dab803` called the
+  old number a transcription error; that was wrong and is corrected here.*

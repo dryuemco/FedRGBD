@@ -83,7 +83,7 @@ $ sudo ethtool enP8p1s0 | grep -E "Speed|Duplex|Link detected"
 | IP | 192.168.1.10 | 192.168.1.7 | 192.168.1.6 |
 | Network | Wired GbE (v1: WiFi) | Wired GbE (v1: WiFi) | Wired GbE (v1: WiFi) |
 | Camera | Intel RealSense D435if | Intel RealSense D435i | Stereolabs ZED 2i |
-| Camera S/N | 239722070442 | 405622076256 | 35201583 |
+| Camera S/N | 239722070442 | 405622076256 | 35201583 (v1: 32608934, a different unit) |
 | Camera FW | 5.13.0.55 | 5.17.0.10 | 1523 |
 | Camera SDK | librealsense 2.55.1 | librealsense 2.55.1 | ZED SDK 5.2.3 |
 | FL Role | Server + Client | Client | Client |
