@@ -56,6 +56,8 @@ CAPTURE_SCRIPT = {
 }
 #: the camera SDK each node must import
 EXPECTED_SDK = {"node_a": "pyrealsense2", "node_b": "pyrealsense2", "node_c": "pyzed"}
+#: the camera each node must have (S/N as the SDK reports it; docs/HARDWARE_SETUP.md)
+EXPECTED_SERIAL = {"node_a": "239722070442", "node_b": "405622076256", "node_c": "35201583"}
 PROBE_CMD = "python src/data/camera_capture_common.py --probe"
 CLOCK_CMD = 'python3 -c "import time; print(repr(time.time()))"'
 CONTROL_PATH = "~/.ssh/cm-fedrgbd-%r@%h:%p"
@@ -125,13 +127,15 @@ def record_relpath(root: str, node: str, capture_id: str) -> str:
 # --------------------------------------------------------------------------- #
 def verify_records(records: Dict[str, Optional[Dict]], start_scheduled: float,
                    n_requested: int, tol_s: float = START_TOLERANCE_S,
-                   returncodes: Optional[Dict[str, Optional[int]]] = None
+                   returncodes: Optional[Dict[str, Optional[int]]] = None,
+                   expected_serials: Dict[str, str] = EXPECTED_SERIAL
                    ) -> Tuple[bool, Dict[str, str]]:
     """-> (all nodes pass, {node: one-line summary}).
 
     A node passes iff its capture record exists, belongs to this session (its
     start_scheduled_unix equals the one sent), has n_frames_written == requested, a
-    start_actual_unix within ``tol_s`` of the schedule, and its command exited 0.
+    start_actual_unix within ``tol_s`` of the schedule, was recorded by the node's
+    expected camera (serial), and its command exited 0.
     """
     ok_all = True
     lines: Dict[str, str] = {}
@@ -152,6 +156,9 @@ def verify_records(records: Dict[str, Optional[Dict]], start_scheduled: float,
                 problems.append("record is not from this session (scheduled %s)" % sched)
             if written != n_requested:
                 problems.append("%s of %d frames" % (written, n_requested))
+            if str(rec.get("serial")) != expected_serials[node]:
+                problems.append("camera S/N %s, expected %s"
+                                % (rec.get("serial"), expected_serials[node]))
             if actual is None:
                 problems.append("no start_actual")
                 delay = "n/a"
@@ -295,6 +302,9 @@ def run_check(nodes: Dict[str, Dict], dry_run: bool = False, log=print) -> int:
             problems.append("%s does not import: %s" % (EXPECTED_SDK[n], sdk.get("error")))
         elif probe and not cams:
             problems.append("no camera detected")
+        elif probe and [str(c.get("serial")) for c in cams] != [EXPECTED_SERIAL[n]]:
+            problems.append("cameras %s, expected exactly S/N %s"
+                            % ([c.get("serial") for c in cams], EXPECTED_SERIAL[n]))
         try:
             off, rtt = measure_offset(cfg)
             clock = "offset %+.1f ms (rtt %.1f ms)" % (off * 1e3, rtt * 1e3)

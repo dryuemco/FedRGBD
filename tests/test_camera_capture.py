@@ -453,18 +453,24 @@ def _rec(start, actual, written=40, **kw):
 def test_verification_pass_and_fail(monkeypatch):
     from scripts.camera_capture_session import verify_records
 
+    from scripts.camera_capture_session import EXPECTED_SERIAL
+
     s = 1000.0
-    good = {n: _rec(s, s + 0.05) for n in ("node_a", "node_b", "node_c")}
+    sn = EXPECTED_SERIAL
+    good = {n: _rec(s, s + 0.05, serial=sn[n]) for n in ("node_a", "node_b", "node_c")}
     ok, lines = verify_records(good, s, 40, returncodes={n: 0 for n in good})
     assert ok and all(l.endswith("PASS") for l in lines.values())
 
     cases = [
         ({"node_b": None}, "no capture record"),
-        ({"node_c": _rec(s, s + 0.1, written=39)}, "39 of 40 frames"),
-        ({"node_b": _rec(s, s + 1.2)}, "off schedule"),
-        ({"node_a": _rec(s, s - 1.3)}, "off schedule"),
-        ({"node_c": _rec(s - 60, s - 59.9)}, "not from this session"),
-        ({"node_a": _rec(s, None)}, "no start_actual"),
+        ({"node_c": _rec(s, s + 0.1, written=39, serial=sn["node_c"])}, "39 of 40 frames"),
+        ({"node_b": _rec(s, s + 1.2, serial=sn["node_b"])}, "off schedule"),
+        ({"node_a": _rec(s, s - 1.3, serial=sn["node_a"])}, "off schedule"),
+        ({"node_c": _rec(s - 60, s - 59.9, serial=sn["node_c"])}, "not from this session"),
+        ({"node_a": _rec(s, None, serial=sn["node_a"])}, "no start_actual"),
+        # the two RealSense units swapped between node_a and node_b
+        ({"node_a": _rec(s, s + 0.05, serial=sn["node_b"])}, "camera S/N"),
+        ({"node_c": _rec(s, s + 0.05, serial=32608934)}, "expected 35201583"),
     ]
     for change, reason in cases:
         recs = dict(good, **change)
@@ -475,7 +481,9 @@ def test_verification_pass_and_fail(monkeypatch):
     ok, lines = verify_records(good, s, 40, returncodes={"node_a": 0, "node_b": 1, "node_c": 0})
     assert not ok and "exit code 1" in lines["node_b"]
     # exactly 1.0 s late is still within the declared tolerance
-    assert verify_records(dict(good, node_b=_rec(s, s + 1.0)), s, 40)[0]
+    assert verify_records(dict(good, node_b=_rec(s, s + 1.0, serial=sn["node_b"])), s, 40)[0]
+    # the ZED SDK reports the serial as an int; it matches the pinned string
+    assert verify_records(dict(good, node_c=_rec(s, s + 0.05, serial=35201583)), s, 40)[0]
 
 
 def test_clock_offset_uses_the_tightest_round_trip():
@@ -608,7 +616,7 @@ class _FakeSl:
                        get_camera_baseline=lambda: 120.0)
             conf = NS(firmware_version=1523, resolution=NS(width=1920, height=1080), fps=15,
                       calibration_parameters=calib)
-            return NS(camera_model="ZED2i", serial_number=32608934, camera_configuration=conf,
+            return NS(camera_model="ZED2i", serial_number=35201583, camera_configuration=conf,
                       sensors_configuration=NS(firmware_version=777))
 
     class RuntimeParameters:

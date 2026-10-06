@@ -351,4 +351,7 @@ family, verdict phrase or interpretation rule, and not the preprocessing of sect
   clip of section 3 (0.3-10 m) is unchanged.
 * **The pilot** checks it: every capture record carries the calibration, and the
   baselines are plausible (about 50 mm for the D435 models; 120 mm for the ZED 2i,
-  serial 32608934, as in v1).
+  serial 35201583, as in v1). *Correction 2026-10-07, before any footage: this line
+  said 32608934, copied from `docs/HARDWARE_SETUP.md`, where the operator identified
+  it as a transcription error; 35201583 is what the connected unit reports. Only the
+  identifier changed.*
