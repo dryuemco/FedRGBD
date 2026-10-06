@@ -23,4 +23,21 @@ cd ~/FedRGBD/data/raw/captures && find . -type f | LC_ALL=C sort | sed "s|^\./||
 
 To check later, run on the node: `cd ~/FedRGBD/data/raw/captures && md5sum -c --quiet <manifest>`.
 
+## v1 derived files on node_a (`node_a_v1_derived.md5`)
+
+node_a also holds the v1 cross-sensor pipeline that read these captures. None of it was
+ever in git. All files are dated 2026-04-23, between 12:44 and 17:02 (mtime). The
+manifest covers 1812 files; paths are relative to `~/FedRGBD/`:
+
+| path | files |
+|---|---|
+| `scripts/prepare_captures.py`, `scripts/cross_sensor_eval.py`, `scripts/cross_sensor_depth_eval.py` | 3 |
+| `data/processed/captures/` | 903 |
+| `data/processed/captures_depth/` | 903 |
+| `data/processed/captures.zip` | 1 |
+| `results/cross_sensor/seed42/results.json`, `results/cross_sensor_depth/seed42/results.json` | 2 |
+
+It was produced read-only, with the same `md5sum` command run from `~/FedRGBD` over
+these paths, and verified with `md5sum -c` (all OK). The files are left as they are.
+
 Context: the camera prereg's preamble (2026-09-28) said these captures were no longer on the nodes; an erratum is being prepared.
