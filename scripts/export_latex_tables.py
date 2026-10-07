@@ -1080,6 +1080,109 @@ def global_eval_tabular(analysis_dir: str) -> Optional[str]:
     return "\n".join(out) + "\n"
 
 
+#: sec:powercfg (docs/CROSS_CONFIG_COMPARISON.md): the two declared families
+CROSS_FAMILIES = (("rounds_1_3", "Rounds 1--3"), ("ten_rounds", "Ten rounds"))
+CROSS_QUANTITY = {"primary": "rounds 2--3 (primary)", "secondary": "MAXN 2--10 vs 2--3",
+                  "round1": "round 1", "steady": "rounds 2--10"}
+POWER_LABEL = {"heterogeneous": "main matrix", "maxn": r"MAXN\_SUPER"}
+
+
+def _strategy_tex(name: str) -> str:
+    return {"FedAvg": r"\fedavg{}", "FedProx(0.01)": r"\fedprox{} 0.01",
+            "FedBN": r"\fedbn{}"}.get(str(name), str(name))
+
+
+def powercfg_acc_tabular(analysis_dir: str) -> Optional[str]:
+    """tab:powercfg_acc: MAXN_SUPER minus main matrix, balanced accuracy pooled, every
+    declared comparison of both families with interval, p, Holm p and both verdicts, the
+    phrases exactly as scripts/cross_config_comparison.py wrote them."""
+    path = os.path.join(analysis_dir, "cross_config", "cross_config_comparisons.csv")
+    if not os.path.isfile(path):
+        return None
+    df = pd.read_csv(path)
+    out = [_GENERATED, r"\begin{tabular}{@{}llcccccp{2.3cm}p{2.3cm}@{}}", r"\toprule",
+           _row([r"\textbf{Family}", r"\textbf{Partition}", r"\textbf{Strategy}", r"$n$",
+                 r"\textbf{$D$ [95\% CI] (pp)}", r"\textbf{$p$}", r"\textbf{Holm $p$}",
+                 r"\textbf{Holm verdict}", r"\textbf{Interval verdict}"]), r"\midrule"]
+    for k, (family, title) in enumerate(CROSS_FAMILIES):
+        fam = df[df["family"] == family]
+        if fam.empty:
+            continue
+        if k:
+            out.append(r"\midrule")
+        for j, (_, r) in enumerate(fam.iterrows()):
+            lead = (r"\multirow{%d}{*}{\shortstack[l]{%s\\($m=%d$)}}"
+                    % (len(fam), title, int(r["holm_m"]))) if j == 0 else ""
+            out.append(_row([lead, PARTITION_LABEL.get(r["partition"], str(r["partition"])),
+                             _strategy_tex(r["strategy"]), str(int(r["n_pairs"])),
+                             _pp_ci(r["diff"], r["ci_low"], r["ci_high"]),
+                             "%.4f" % r["p_boot"], "%.4f" % r["p_holm"],
+                             # the declared phrases verbatim; "MAXN_SUPER" needs its _ escaped
+                             str(r["verdict_holm"]).replace("_", r"\_"),
+                             str(r["verdict"]).replace("_", r"\_")]))
+    out += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(out) + "\n"
+
+
+def powercfg_time_tabular(analysis_dir: str) -> Optional[str]:
+    """tab:powercfg_time: seed-paired ratio MAXN_SUPER / main matrix of the per-run time
+    quantities (geometric mean over seeds, seed-bootstrap interval, indicative), with the
+    per-seed ratios printed next to it -- descriptive, no verdicts."""
+    path = os.path.join(analysis_dir, "cross_config_timing", "timing_ratios.csv")
+    if not os.path.isfile(path):
+        return None
+    df = pd.read_csv(path)
+    out = [_GENERATED, r"\begin{tabular}{@{}lllccl@{}}", r"\toprule",
+           _row([r"\textbf{Family}", r"\textbf{Partition, strategy}", r"\textbf{Quantity}",
+                 r"\textbf{Ratio [95\% CI]}", r"\textbf{$n$ (resamples)}",
+                 r"\textbf{Per-seed ratios}"]), r"\midrule"]
+    for k, (family, title) in enumerate(CROSS_FAMILIES):
+        fam = df[df["family"] == family]
+        if fam.empty:
+            continue
+        if k:
+            out.append(r"\midrule")
+        for j, (_, r) in enumerate(fam.iterrows()):
+            out.append(_row([title if j == 0 else "",
+                             "%s, %s" % (PARTITION_LABEL.get(r["partition"], str(r["partition"])),
+                                         _strategy_tex(r["strategy"])),
+                             CROSS_QUANTITY.get(str(r["quantity"]), str(r["quantity"])),
+                             "%.3f [%.3f, %.3f]" % (r["ratio"], r["ci_low"], r["ci_high"]),
+                             "%d (%d)" % (int(r["n_pairs"]), int(r["max_distinct_resamples"])),
+                             str(r["per_seed_ratios"]).replace(" ", ", ")]))
+    out += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(out) + "\n"
+
+
+def powercfg_straggler_tabular(analysis_dir: str) -> Optional[str]:
+    """tab:powercfg_straggler: per configuration and round range, how many rounds each node
+    finished local training last (largest fit_wall_s), counted over all seeds."""
+    path = os.path.join(analysis_dir, "cross_config_timing", "timing_stragglers.csv")
+    if not os.path.isfile(path):
+        return None
+    df = pd.read_csv(path)
+    out = [_GENERATED, r"\begin{tabular}{@{}llllcccc@{}}", r"\toprule",
+           _row([r"\textbf{Family}", r"\textbf{Partition, strategy}", r"\textbf{Configuration}",
+                 r"\textbf{Rounds}", r"\textbf{Counted}", r"\textbf{Node A}", r"\textbf{Node B}",
+                 r"\textbf{Node C}"]), r"\midrule"]
+    for k, (family, title) in enumerate(CROSS_FAMILIES):
+        fam = df[df["family"] == family]
+        if fam.empty:
+            continue
+        if k:
+            out.append(r"\midrule")
+        for j, (_, r) in enumerate(fam.iterrows()):
+            out.append(_row([title if j == 0 else "",
+                             "%s, %s" % (PARTITION_LABEL.get(r["partition"], str(r["partition"])),
+                                         _strategy_tex(r["strategy"])),
+                             POWER_LABEL.get(str(r["power_config"]), str(r["power_config"])),
+                             str(r["rounds"]).replace("-", "--"), str(int(r["n_rounds_counted"])),
+                             str(int(r["straggler_node_a"])), str(int(r["straggler_node_b"])),
+                             str(int(r["straggler_node_c"]))]))
+    out += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(out) + "\n"
+
+
 def load_partition_skew(analysis_dir: str) -> Dict[str, float]:
     """{partition: size-weighted mean JSD} from scripts/partition_skew.py."""
     path = os.path.join(analysis_dir, "partition_skew.csv")
@@ -1275,6 +1378,9 @@ def export(analysis_dir: str, output_dir: str, metrics: Optional[Sequence[str]] 
     _write(fedbn10_tabular(summary, scarce), "fedbn10_tabular.tex")
     if power_config == DEFAULT_POWER_CONFIG:   # both declared families, one table
         _write(global_eval_tabular(analysis_dir), "global_eval_tabular.tex")
+        _write(powercfg_acc_tabular(analysis_dir), "powercfg_acc_tabular.tex")
+        _write(powercfg_time_tabular(analysis_dir), "powercfg_time_tabular.tex")
+        _write(powercfg_straggler_tabular(analysis_dir), "powercfg_straggler_tabular.tex")
 
     # held-out sequences per class, generated by scripts/heldout_dominance.py
     hs_table = os.path.join(analysis_dir, "leakage", "heldout_sequences.tex")

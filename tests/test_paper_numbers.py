@@ -403,3 +403,25 @@ def test_global_eval_table_is_the_declared_analysis_verbatim():
         assert cells[5] == r["verdict_holm"] and cells[6] == r["verdict"]
         assert cells[5] in allowed and cells[6] in allowed and cells[8] in allowed
         assert cells[2].startswith("$%+.1f$" % (100 * r["diff"]))
+
+
+def test_powercfg_tables_are_the_declared_analysis_verbatim():
+    """sec:powercfg: every cross-configuration comparison with its declared verdicts, and
+    every timing ratio with its per-seed ratios (docs/CROSS_CONFIG_COMPARISON.md)."""
+    import pandas as pd
+    acc = pd.read_csv(os.path.join(ROOT, "analysis", "cross_config", "cross_config_comparisons.csv"))
+    rows = [l for l in _generated("powercfg_acc_tabular.tex").splitlines()
+            if l.count(" & ") == 8 and "textbf" not in l]
+    assert len(rows) == len(acc) == 6
+    allowed = {"higher at MAXN_SUPER", "no detectable difference", "lower at MAXN_SUPER"}
+    for line, (_, r) in zip(rows, acc.iterrows()):
+        cells = [c.strip() for c in line.rstrip(" \\").split(" & ")]
+        assert cells[5] == "%.4f" % r["p_boot"] and cells[6] == "%.4f" % r["p_holm"]
+        cells = [c.replace(r"\_", "_") for c in cells]
+        assert cells[7] == r["verdict_holm"] and cells[8] == r["verdict"]
+        assert cells[7] in allowed and cells[8] in allowed
+    ratios = pd.read_csv(os.path.join(ROOT, "analysis", "cross_config_timing", "timing_ratios.csv"))
+    text = _generated("powercfg_time_tabular.tex")
+    for _, r in ratios.iterrows():
+        assert "%.3f [%.3f, %.3f]" % (r["ratio"], r["ci_low"], r["ci_high"]) in text
+        assert str(r["per_seed_ratios"]).replace(" ", ", ") in text
