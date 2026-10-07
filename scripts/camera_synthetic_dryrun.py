@@ -50,14 +50,30 @@ def tree_dir(work: str, scenes: int) -> str:
     return os.path.join(work, "S%d" % scenes, "camera")
 
 
-def _frame(node: str, scene: int, label: str, cm: int, idx: int, out_dir: str) -> None:
+#: --overlap: per-camera factor on the probability that a fire frame shows the signal
+OVERLAP_CAMERA_FACTOR = {"node_a": 1.0, "node_b": 0.9, "node_c": 0.6}
+
+
+def overlap_signal_prob(node: str, scene: int) -> float:
+    """--overlap: probability that a fire frame of this scene and camera shows the flame
+    signal (per scene 0.3-0.9, times the camera factor); the other fire frames are drawn
+    exactly like no-fire frames, so the classes overlap."""
+    q = 0.3 + 0.6 * float(np.random.default_rng([99, scene]).random())
+    return q * OVERLAP_CAMERA_FACTOR[node]
+
+
+def _frame(node: str, scene: int, label: str, cm: int, idx: int, out_dir: str,
+           overlap: bool = False) -> None:
     from PIL import Image
     rng = np.random.default_rng([NODES.index(node), scene, LABELS.index(label), cm, idx])
     w, h = RGB_RES
     # low-frequency random content (compresses, non-constant), upscaled to native size
     small = rng.integers(0, 256, size=(18, 32, 3), dtype=np.uint8)
-    if label == "fire":
+    if label == "fire" and not overlap:
         small[..., 0] = np.maximum(small[..., 0], 180)
+    elif label == "fire" and rng.random() < overlap_signal_prob(node, scene):
+        cells = rng.random((18, 32)) < 0.15          # weak signal: 15 % of the cells
+        small[..., 0][cells] = np.maximum(small[..., 0][cells], 180)
     rgb = Image.fromarray(small, "RGB").resize((w, h), Image.NEAREST)
     cap = "s%02d_%s_d%d" % (scene, label, cm)
     fid = "%s_%04d" % (cap, idx)
@@ -72,21 +88,24 @@ def _frame(node: str, scene: int, label: str, cm: int, idx: int, out_dir: str) -
     meta = {"frame_id": fid, "capture_id": cap, "scene": "s%02d" % scene, "label": label,
             "distance_m": cm / 100.0, "frame_index": idx, "node": node,
             "serial": "SYNTHETIC-" + node, "timestamp_unix": 1.79e9 + idx * 0.2,
-            "synthetic": True}
+            "synthetic": True, "synthetic_overlap": bool(overlap)}
     with open(os.path.join(out_dir, fid + "_meta.json"), "w", encoding="utf-8") as f:
         json.dump(meta, f)
 
 
 def _capture(args) -> None:
-    node, scene, label, cm, out_dir = args
+    node, scene, label, cm, out_dir, overlap = args
     for i in range(FRAMES):
-        _frame(node, scene, label, cm, i, out_dir)
+        _frame(node, scene, label, cm, i, out_dir, overlap)
     cap = "s%02d_%s_d%d" % (scene, label, cm)
     with open(os.path.join(out_dir, "_captures", cap + ".json"), "w", encoding="utf-8") as f:
         json.dump({"capture_id": cap, "n_frames_written": FRAMES, "synthetic": True}, f)
 
 
-def generate(work: str, scenes: int, workers: int = 12) -> None:
+def generate(work: str, scenes: int, workers: int = 12, overlap: bool = False) -> None:
+    """``overlap``: classes overlap (weak flame signal in only part of the fire frames, per
+    scene and camera, see ``overlap_signal_prob``), so balanced accuracy is well below 100 %
+    and differs between scenes and cameras; otherwise every fire frame carries the signal."""
     root = tree_dir(work, scenes)
     jobs = []
     for node in NODES:
@@ -95,9 +114,12 @@ def generate(work: str, scenes: int, workers: int = 12) -> None:
         for s in range(1, scenes + 1):
             for label in LABELS:
                 for cm in DISTANCES_CM:
-                    jobs.append((node, s, label, cm, d))
+                    jobs.append((node, s, label, cm, d, overlap))
     with open(os.path.join(work, "SYNTHETIC.txt"), "w", encoding="utf-8") as f:
         f.write(MARK)
+        if overlap:
+            f.write("overlapping classes (--overlap): weak flame signal in part of the fire "
+                    "frames\n")
     with ProcessPoolExecutor(workers) as pool:
         list(pool.map(_capture, jobs, chunksize=4))
 
@@ -207,14 +229,16 @@ def run(work: str, scenes: int, python: str, B: int = 10000) -> None:
 
 
 def smoke(work: str, scenes: int, python: str, B: int = 10000, source: str = "node_a",
-          seed: str = "42", epochs: int = 1) -> None:
+          seed: str = "42", epochs: int = 1, baselines: bool = False, fold: int = 0) -> None:
     """End-to-end smoke: one timed source x seed (rgb, LOSO + random) at ``epochs`` epochs.
 
     The two other sources are run as well, at the same settings and untimed as a reference,
     only because the contrast K is defined over all three sources; folds, epoch selection,
     pooled BA, the scene bootstrap with ``B`` resamples, Holm, K and tab:loso are all
-    exercised.  Shares labels/manifests/preprocessing with ``run``; writes under
-    ``S<scenes>/SMOKE_*``."""
+    exercised.  ``baselines``: also the federated folds and, for one fold and ``seed``, the
+    centralized and local-only baselines at ``epochs`` epochs (otherwise the settings of
+    ``run``) with their per-image predictions.  Shares labels/manifests/preprocessing with
+    ``run``; writes under ``S<scenes>/SMOKE_*``."""
     base = os.path.join(work, "S%d" % scenes)
     root = tree_dir(work, scenes)
     splits = os.path.join(base, "splits_camera")
@@ -244,6 +268,29 @@ def smoke(work: str, scenes: int, python: str, B: int = 10000, source: str = "no
     t.run("tab_loso", py + ["scripts/camera_export_loso_table.py", "--analysis_dir", ana,
                             "--output", os.path.join(base, "SMOKE_tables", "loso_tabular.tex"),
                             "--synthetic"])
+    if not baselines:
+        return
+    folds_out = os.path.join(base, "SMOKE_processed")
+    base_out = os.path.join(base, "SMOKE_results", "desktop")
+    t.run("fl_prepare", py + ["scripts/camera_fl_prepare.py", "--labels_csv", labels,
+                              "--folds_csv", os.path.join(splits, "fl_folds.csv"),
+                              "--preprocessed_dir", pre, "--preprocessed_manifest", manifest,
+                              "--output_root", folds_out,
+                              "--counts_csv", os.path.join(base, "SMOKE_fl_materialised.csv"),
+                              "--folds", str(fold), "--clean"])
+    dirs = [os.path.join(folds_out, "camera_fold%d" % fold, n) for n in NODES]
+    c = os.path.join(base_out, "rev_camera_fold%d_centralized_r10_seed%s" % (fold, seed))
+    t.run("central_f%d_s%s" % (fold, seed),
+          py + ["scripts/train_centralized.py", "--data_dirs"] + dirs
+          + ["--epochs", str(epochs), "--batch_size", "8", "--lr", "0.001", "--seed", seed,
+             "--output_dir", c])
+    t.run("central_pred_f%d_s%s" % (fold, seed), py + ["scripts/predict_from_checkpoint.py", c])
+    loc = os.path.join(base_out, "rev_camera_fold%d_local_r10_seed%s" % (fold, seed))
+    t.run("local_f%d_s%s" % (fold, seed),
+          py + ["scripts/train_local.py", "--batch", "--data_dirs"] + dirs
+          + ["--epochs", str(epochs), "--batch_size", "8", "--lr", "0.001", "--seed", seed,
+             "--output_dir", loc])
+    t.run("local_pred_f%d_s%s" % (fold, seed), py + ["scripts/predict_from_checkpoint.py", loc])
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -253,6 +300,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     g.add_argument("--work", required=True)
     g.add_argument("--scenes", type=int, required=True)
     g.add_argument("--workers", type=int, default=12)
+    g.add_argument("--overlap", action="store_true",
+                   help="overlapping classes (weak flame signal in part of the fire frames)")
     s = sub.add_parser("subset")
     s.add_argument("--work", required=True)
     s.add_argument("--from_scenes", type=int, required=True)
@@ -270,16 +319,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     k.add_argument("--source", default="node_a", choices=list(NODES))
     k.add_argument("--seed", default="42")
     k.add_argument("--epochs", type=int, default=1)
+    k.add_argument("--baselines", action="store_true",
+                   help="also the federated folds and one fold of the desktop baselines")
+    k.add_argument("--fold", type=int, default=0)
     args = ap.parse_args(argv)
     work = os.path.abspath(args.work)
     if os.path.commonpath([work, REPO]) == REPO:
         raise SystemExit("--work must lie outside the repository")
     if args.cmd == "generate":
-        generate(work, args.scenes, args.workers)
+        generate(work, args.scenes, args.workers, args.overlap)
     elif args.cmd == "subset":
         subset(work, args.from_scenes, args.scenes)
     elif args.cmd == "smoke":
-        smoke(work, args.scenes, args.python, args.B, args.source, args.seed, args.epochs)
+        smoke(work, args.scenes, args.python, args.B, args.source, args.seed, args.epochs,
+              args.baselines, args.fold)
     else:
         run(work, args.scenes, args.python, args.B)
     return 0
