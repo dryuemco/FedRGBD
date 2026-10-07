@@ -33,7 +33,7 @@ if _REPO not in sys.path:
 
 from src.data.camera_capture_common import (  # noqa: E402
     CameraBackend, CaptureError, Frame, add_capture_args, depth_to_mm_uint16,
-    run_capture, smoke_test,
+    run_capture, smoke_test, zed_usb_devices, zed_usb_speed_mbps,
 )
 
 DEFAULT_DEPTH_MODE = "NEURAL"
@@ -121,6 +121,9 @@ class ZedBackend(CameraBackend):
             "depth_units": "MILLIMETER",
         }
         self._info.update(self._calibration(conf, res))
+        usb = zed_usb_devices()
+        self._info["usb_devices"] = usb
+        self._info["usb_speed_mbps"] = zed_usb_speed_mbps(usb)
 
     def _calibration(self, conf, res) -> Dict[str, Any]:
         """Intrinsics with distortion (left = RGB and depth frame, right), the stereo
@@ -184,6 +187,42 @@ class ZedBackend(CameraBackend):
         }
         return Frame(rgb=rgb, depth_mm=depth, ir=None, device_ts_ms=float(ts), meta=meta)
 
+    # -- exposure lock (prereg sec. 13 draft) ------------------------------------
+    def _set(self, name, value) -> None:
+        sl = self.sl
+        err = self.zed.set_camera_settings(getattr(sl.VIDEO_SETTINGS, name), int(value))
+        if err is not None and err != sl.ERROR_CODE.SUCCESS:
+            raise CaptureError("ZED set_camera_settings(%s, %s) failed: %s" % (name, value, err))
+
+    def settle_auto(self, n_frames) -> Dict[str, Any]:
+        """AEC/AGC and auto white balance run for ``n_frames``; -> the values they applied
+        (the ZED reports applied values while auto is on).  White balance on the SDK's
+        100 K grid."""
+        sl = self.sl
+        self._set("AEC_AGC", 1)
+        self._set("WHITEBALANCE_AUTO", 1)
+        for _ in range(max(1, int(n_frames))):
+            self._grab_ok()
+        wb = _setting(self.zed, sl, "WHITEBALANCE_TEMPERATURE")
+        return {"exposure": _setting(self.zed, sl, "EXPOSURE"),
+                "gain": _setting(self.zed, sl, "GAIN"),
+                "white_balance": None if wb is None else int(round(wb / 100.0) * 100),
+                "source": "get_camera_settings with AEC_AGC and auto white balance on, "
+                          "after %d frames" % n_frames}
+
+    def apply_lock(self, lock) -> Dict[str, Any]:
+        sl = self.sl
+        self._set("AEC_AGC", 0)
+        self._set("WHITEBALANCE_AUTO", 0)
+        self._set("EXPOSURE", lock["exposure"])
+        self._set("GAIN", lock["gain"])
+        self._set("WHITEBALANCE_TEMPERATURE", lock["white_balance"])
+        return {"exposure": _setting(self.zed, sl, "EXPOSURE"),
+                "gain": _setting(self.zed, sl, "GAIN"),
+                "white_balance": _setting(self.zed, sl, "WHITEBALANCE_TEMPERATURE"),
+                "auto_exposure": _setting(self.zed, sl, "AEC_AGC"),
+                "auto_white_balance": _setting(self.zed, sl, "WHITEBALANCE_AUTO")}
+
     def close(self) -> None:
         if self.zed is not None:
             self.zed.close()
@@ -233,7 +272,9 @@ def main(argv=None, backend_factory=None) -> int:
     try:
         rec = run_capture(factory(), args.scene, args.label, args.distance_m, args.node,
                           root=args.root, frames=args.frames, fps=args.fps,
-                          start_at=args.start_at, retake=args.retake, notes=args.notes)
+                          start_at=args.start_at, retake=args.retake, notes=args.notes,
+                          study_gates=True, exposure_lock=not args.no_lock,
+                          lock_settle_frames=args.lock_settle_frames)
     except (CaptureError, ValueError) as e:
         print("ERROR: %s" % e, file=sys.stderr)
         return 1

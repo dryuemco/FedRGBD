@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+"""FedRGBD -- flame height in pixels at the classifier's input vs the ruler (e5).
+
+The flame-source acceptance criterion of the camera prereg (section 13.2 draft,
+``docs/POST_5B_CHECKLIST.md`` e5): the study's source must show a visible flame of at
+least about 10 cm at 3 m.  This tool measures how tall the flame actually is in the
+224 x 224 input of section 3 (``camera_preprocess.rgb_224``, the very function the study
+uses) and compares it with what the ruler predicts from the recorded intrinsics:
+
+    expected_px = flame_height_cm / 100 * fy_224 / distance_m
+    fy_224      = fy * (height after the shorter side is resized to 224) / height
+
+Measurement, per node, for one scene x distance: the no-fire capture (same exposure
+lock) gives a per-pixel median reference at 224; in every fire frame the flame is the
+largest 8-connected region where some channel is at least ``--threshold`` brighter than
+the reference; its height is its row span.  The median over the fire frames is reported,
+with min and max (flicker).  The flame height (cm) and measured distance come from the
+fire capture's parsed ``--notes`` unless given on the command line.
+
+    python scripts/camera_flame_height.py --root data/raw/camera_pilot --scene s01 \\
+        --distance_m 3 --overlay flame_s01_d300.png
+
+A technical image property only: no model, no accuracy, no prediction.  It reads only
+pilot / acceptance-test footage; the study root ``data/raw/camera`` is refused (the
+acceptance decision is taken before any study footage exists).
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import os
+import sys
+from typing import Dict, List, Optional, Sequence, Tuple
+
+import numpy as np
+from PIL import Image, ImageDraw
+
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO not in sys.path:
+    sys.path.insert(0, _REPO)
+
+from src.data.camera_capture_common import (  # noqa: E402
+    CAPTURES_DIR, NODE_NAMES, make_capture_id, make_frame_id, parse_notes,
+)
+from src.data.camera_preprocess import SIZE, _crop_box, rgb_224  # noqa: E402
+
+STUDY_ROOT = os.path.join("data", "raw", "camera")
+DEFAULT_ROOT = os.path.join("data", "raw", "camera_pilot")
+DEFAULT_THRESHOLD = 40
+#: the acceptance criterion's flame height (prereg sec. 13.2 draft)
+CRITERION_CM = 10.0
+COLUMNS = ("node", "scene", "distance_m", "distance_measured_m", "flame_height_cm",
+           "fy_native", "fy_224", "px_per_10cm", "expected_px", "measured_px_median",
+           "measured_px_min", "measured_px_max", "measured_cm_median", "ratio_measured_expected",
+           "n_fire_frames", "n_frames_detected", "touches_crop_border", "threshold")
+
+
+def _is_study_root(root: str) -> bool:
+    a = os.path.normcase(os.path.abspath(root))
+    return a in (os.path.normcase(os.path.abspath(STUDY_ROOT)),
+                 os.path.normcase(os.path.abspath(os.path.join(_REPO, STUDY_ROOT))))
+
+
+def fy_224(fy: float, width: int, height: int, size: int = SIZE) -> float:
+    """Focal length in pixels of the 224 crop (resizing scales it; cropping does not)."""
+    (new_w, new_h), _ = _crop_box(int(width), int(height), size)
+    return float(fy) * new_h / float(height)
+
+
+def expected_px(flame_cm: float, distance_m: float, fy224: float) -> float:
+    return float(flame_cm) / 100.0 * fy224 / float(distance_m)
+
+
+def _label(mask: np.ndarray) -> Tuple[np.ndarray, int]:
+    """8-connected components (scipy if present, else a small flood fill)."""
+    try:
+        from scipy import ndimage
+        return ndimage.label(mask, structure=np.ones((3, 3), int))
+    except ImportError:  # pragma: no cover - scipy is on the desktop
+        lab = np.zeros(mask.shape, np.int32)
+        n = 0
+        for y, x in zip(*np.nonzero(mask)):
+            if lab[y, x]:
+                continue
+            n += 1
+            stack = [(y, x)]
+            lab[y, x] = n
+            while stack:
+                cy, cx = stack.pop()
+                for dy in (-1, 0, 1):
+                    for dx in (-1, 0, 1):
+                        ny, nx = cy + dy, cx + dx
+                        if (0 <= ny < mask.shape[0] and 0 <= nx < mask.shape[1]
+                                and mask[ny, nx] and not lab[ny, nx]):
+                            lab[ny, nx] = n
+                            stack.append((ny, nx))
+        return lab, n
+
+
+def flame_region(fire: np.ndarray, reference: np.ndarray, threshold: int
+                 ) -> Optional[Tuple[int, int, int, int]]:
+    """(top, left, bottom, right), inclusive, of the largest brighter-than-reference
+    region of one 224 frame, or None if no pixel passes the threshold."""
+    diff = (fire.astype(np.int16) - reference.astype(np.int16)).max(axis=2)
+    mask = diff >= int(threshold)
+    if not mask.any():
+        return None
+    lab, n = _label(mask)
+    sizes = np.bincount(lab.ravel())
+    sizes[0] = 0
+    ys, xs = np.nonzero(lab == int(sizes.argmax()))
+    return int(ys.min()), int(xs.min()), int(ys.max()), int(xs.max())
+
+
+def _record(root: str, node: str, capture_id: str) -> Dict:
+    path = os.path.join(root, node, CAPTURES_DIR, capture_id + ".json")
+    if not os.path.isfile(path):
+        raise SystemExit("missing capture record %s" % path)
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _frames_224(root: str, node: str, rec: Dict) -> List[np.ndarray]:
+    out = []
+    for i in range(int(rec.get("n_frames_written") or 0)):
+        p = os.path.join(root, node, make_frame_id(rec["capture_id"], i) + "_rgb.png")
+        if os.path.isfile(p):
+            with Image.open(p) as im:
+                out.append(np.asarray(rgb_224(im), dtype=np.uint8))
+    return out
+
+
+def measure_node(root: str, node: str, scene: str, distance_m: float,
+                 threshold: int = DEFAULT_THRESHOLD, flame_cm: Optional[float] = None,
+                 measured_m: Optional[float] = None) -> Tuple[Dict, Optional[np.ndarray],
+                                                             Optional[Tuple[int, int, int, int]]]:
+    """-> (CSV row, median fire frame at 224, region in it)."""
+    fire_rec = _record(root, node, make_capture_id(scene, "fire", distance_m))
+    nofire_rec = _record(root, node, make_capture_id(scene, "no_fire", distance_m))
+    notes = fire_rec.get("notes_parsed") or parse_notes(fire_rec.get("notes"))
+    if flame_cm is None:
+        flame_cm = float(notes["flame_height_cm"]) if notes.get("flame_height_cm") else None
+    if measured_m is None:
+        measured_m = (float(notes["distance_measured_m"]) if notes.get("distance_measured_m")
+                      else float(distance_m))
+    rgb = (fire_rec.get("intrinsics") or {}).get("rgb") or {}
+    f224 = fy_224(rgb["fy"], rgb["width"], rgb["height"])
+    fire = _frames_224(root, node, fire_rec)
+    ref_frames = _frames_224(root, node, nofire_rec)
+    if not fire or not ref_frames:
+        raise SystemExit("%s: no frames (fire %d, no-fire %d)" % (node, len(fire), len(ref_frames)))
+    reference = np.median(np.stack(ref_frames), axis=0).astype(np.uint8)
+    heights, border = [], False
+    for fr in fire:
+        reg = flame_region(fr, reference, threshold)
+        if reg is None:
+            continue
+        top, left, bottom, right = reg
+        heights.append(bottom - top + 1)
+        border = border or top == 0 or left == 0 or bottom == SIZE - 1 or right == SIZE - 1
+    med_frame = np.median(np.stack(fire), axis=0).astype(np.uint8)
+    med_region = flame_region(med_frame, reference, threshold)
+    exp = expected_px(flame_cm, measured_m, f224) if flame_cm else None
+    med = float(np.median(heights)) if heights else None
+    row = {
+        "node": node, "scene": scene, "distance_m": distance_m,
+        "distance_measured_m": measured_m, "flame_height_cm": flame_cm,
+        "fy_native": float(rgb["fy"]), "fy_224": round(f224, 2),
+        "px_per_10cm": round(expected_px(CRITERION_CM, measured_m, f224), 2),
+        "expected_px": None if exp is None else round(exp, 2),
+        "measured_px_median": med,
+        "measured_px_min": min(heights) if heights else None,
+        "measured_px_max": max(heights) if heights else None,
+        "measured_cm_median": None if med is None else round(med * 100.0 * measured_m / f224, 1),
+        "ratio_measured_expected": None if (med is None or not exp) else round(med / exp, 2),
+        "n_fire_frames": len(fire), "n_frames_detected": len(heights),
+        "touches_crop_border": border, "threshold": threshold,
+    }
+    return row, med_frame, med_region
+
+
+def overlay(frames: Sequence[Tuple[str, np.ndarray, Optional[Tuple[int, int, int, int]]]],
+            path: str, scale: int = 2) -> None:
+    """Median fire frame per node at 224 (upscaled), the measured region boxed."""
+    tiles = []
+    for node, frame, reg in frames:
+        im = Image.fromarray(frame).resize((SIZE * scale, SIZE * scale), Image.NEAREST)
+        d = ImageDraw.Draw(im)
+        if reg is not None:
+            top, left, bottom, right = reg
+            d.rectangle([left * scale, top * scale, (right + 1) * scale - 1,
+                         (bottom + 1) * scale - 1], outline=(0, 255, 0), width=1)
+        d.text((4, 4), node, fill=(255, 255, 0))
+        tiles.append(im)
+    out = Image.new("RGB", (sum(t.width for t in tiles), tiles[0].height))
+    x = 0
+    for t in tiles:
+        out.paste(t, (x, 0))
+        x += t.width
+    out.save(path)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    p.add_argument("--root", default=DEFAULT_ROOT)
+    p.add_argument("--scene", required=True)
+    p.add_argument("--distance_m", type=float, required=True)
+    p.add_argument("--nodes", nargs="+", default=list(NODE_NAMES), choices=NODE_NAMES)
+    p.add_argument("--threshold", type=int, default=DEFAULT_THRESHOLD,
+                   help="per-channel brightness increase over the no-fire median (0-255)")
+    p.add_argument("--flame_height_cm", type=float, default=None,
+                   help="ruler reading; default: the fire capture's --notes")
+    p.add_argument("--distance_measured_m", type=float, default=None,
+                   help="default: the fire capture's --notes")
+    p.add_argument("--out_csv", default=None)
+    p.add_argument("--overlay", default=None, help="PNG with the measured region per node")
+    args = p.parse_args(argv)
+    if _is_study_root(args.root):
+        print("refused: %s is the study footage; the acceptance test reads pilot / e5 "
+              "footage only" % args.root, file=sys.stderr)
+        return 2
+    rows, tiles = [], []
+    for node in args.nodes:
+        row, frame, reg = measure_node(args.root, node, args.scene, args.distance_m,
+                                       args.threshold, args.flame_height_cm,
+                                       args.distance_measured_m)
+        rows.append(row)
+        tiles.append((node, frame, reg))
+    w = csv.DictWriter(sys.stdout, fieldnames=COLUMNS, lineterminator="\n")
+    w.writeheader()
+    w.writerows(rows)
+    if args.out_csv:
+        with open(args.out_csv, "w", newline="", encoding="utf-8") as f:
+            cw = csv.DictWriter(f, fieldnames=COLUMNS, lineterminator="\n")
+            cw.writeheader()
+            cw.writerows(rows)
+    if args.overlay:
+        overlay(tiles, args.overlay)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

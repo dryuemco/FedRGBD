@@ -40,7 +40,14 @@ class FakeCamera(CameraBackend):
     """RealSense-like (with IR) or ZED-like (no IR, NaN depth) fake."""
 
     def __init__(self, clock=None, stream_fps=30.0, ir=True, size=(48, 64), fail_at=None,
-                 model="Fake D435I", serial="123", depth_mode=None):
+                 model="Fake D435I", serial="123", depth_mode=None, usb_type="3.2",
+                 ae_stuck=False, auto_values=(166, 64, 4600), lock_offset=0.0):
+        self.usb_type = usb_type
+        self.ae = True                 # auto exposure on until a lock is applied
+        self.ae_stuck = ae_stuck       # a camera that ignores "auto exposure off"
+        self.auto_values = auto_values
+        self.lock_offset = lock_offset  # a camera that does not take the locked value
+        self.settled = self.applied = None
         self.clock = clock
         self.stream_fps = stream_fps
         self.ir = ir
@@ -61,7 +68,22 @@ class FakeCamera(CameraBackend):
                 "sdk_version": "2.55.1", "depth_mode": self.depth_mode,
                 "rgb_resolution": [self.w, self.h], "stream_fps": self.stream_fps,
                 "intrinsics": {"rgb": intr, "depth": dict(intr)},
-                "stereo_baseline_mm": 50.0, "depth_scale_mm": 1.0, "depth_range_mm": None}
+                "stereo_baseline_mm": 50.0, "depth_scale_mm": 1.0, "depth_range_mm": None,
+                "usb_type": self.usb_type}
+
+    def settle_auto(self, n_frames):
+        self.ae = True
+        for _ in range(n_frames):
+            self.grab()
+        self.settled = n_frames
+        e, g, w = self.auto_values
+        return {"exposure": e, "gain": g, "white_balance": w, "source": "fake auto"}
+
+    def apply_lock(self, lock):
+        self.ae = self.ae_stuck
+        self.applied = dict(lock)
+        return {"exposure": lock["exposure"] + self.lock_offset, "gain": lock["gain"],
+                "white_balance": lock["white_balance"], "auto_exposure": self.ae}
 
     def grab(self):
         if self.fail_at is not None and self.n >= self.fail_at:
@@ -80,7 +102,7 @@ class FakeCamera(CameraBackend):
                      ir=np.full((self.h, self.w), 7, np.uint8) if self.ir else None,
                      device_ts_ms=self.ts_ms,
                      meta={"exposure": 166, "gain": 64, "white_balance": 4600,
-                           "auto_exposure": True, "timestamp_domain": "fake"})
+                           "auto_exposure": self.ae, "timestamp_domain": "fake"})
 
     def close(self):
         self.closed = True
@@ -327,15 +349,24 @@ def test_realsense_module_imports_without_the_sdk_and_captures_via_cli(tmp_path)
     from src.data import realsense_capture as rsc
 
     assert rsc.build_parser().parse_args([]).frames is None  # legacy default resolved later
-    rc = rsc.main(["--scene", "s02", "--label", "fire", "--distance_m", "3", "--node",
-                   "node_b", "--frames", "3", "--root", str(tmp_path)],
+    base = ["--scene", "s02", "--distance_m", "3", "--node", "node_b", "--frames", "3",
+            "--root", str(tmp_path)]
+    assert rsc.main(base + ["--label", "no_fire", "--notes", NOFIRE_NOTES],
+                    backend_factory=lambda: FakeCamera()) == 0
+    rc = rsc.main(base + ["--label", "fire", "--notes", FIRE_NOTES],
                   backend_factory=lambda: FakeCamera())
     assert rc == 0
     rec = json.loads((tmp_path / "node_b" / "_captures" / "s02_fire_d300.json").read_text())
     assert rec["n_frames_written"] == 3 and rec["fps"] == 5.0
-    assert rsc.main(["--scene", "s02", "--label", "fire", "--distance_m", "3", "--node",
-                     "node_b", "--frames", "3", "--root", str(tmp_path)],
+    assert rec["exposure_lock"]["how"] == "reused" and rec["ae_on_frames"] == 0
+    assert rec["notes_parsed"]["source"] == "torch1"
+    assert rsc.main(base + ["--label", "fire", "--notes", FIRE_NOTES],
                     backend_factory=lambda: FakeCamera()) == 1  # refuses to overwrite
+    # no --notes: refused before the camera opens, nothing written
+    assert rsc.main(["--scene", "s09", "--label", "no_fire", "--distance_m", "2", "--node",
+                     "node_b", "--root", str(tmp_path)],
+                    backend_factory=lambda: FakeCamera()) == 1
+    assert not (tmp_path / "node_b" / "_captures" / "s09_no_fire_d200.json").exists()
 
 
 def test_realsense_sdk_version_fallbacks():
@@ -356,7 +387,7 @@ def test_zed_cli_defaults_and_capture(tmp_path):
     assert (args.depth_mode, args.resolution, args.node) == ("NEURAL", "HD1080", "node_c")
     assert (args.frames, args.fps, args.root) == (40, 5.0, ccc.DEFAULT_ROOT)
     rc = zc.main(["--scene", "s05", "--label", "no_fire", "--distance_m", "1", "--frames",
-                  "2", "--root", str(tmp_path)],
+                  "2", "--root", str(tmp_path), "--notes", NOFIRE_NOTES],
                  backend_factory=lambda: FakeCamera(ir=False, depth_mode="NEURAL"))
     assert rc == 0
     assert os.path.isfile(tmp_path / "node_c" / "_captures" / "s05_no_fire_d100.json")
@@ -366,6 +397,9 @@ def test_zed_cli_defaults_and_capture(tmp_path):
 # --------------------------------------------------------------------------- #
 # orchestrator
 # --------------------------------------------------------------------------- #
+FIRE_NOTES = "source=torch1; distance_measured_m=3.02; flame_height_cm=12"
+NOFIRE_NOTES = "source=none; distance_measured_m=3.02; flame_height_cm=0"
+
 FAKE_NODES = {
     "node_a": {"host": "192.168.1.10", "user": "ua", "repo": "/home/ua/FedRGBD",
                "venv": "/home/ua/fedrgbd_venv", "local": True},
@@ -392,8 +426,8 @@ def _forbidden(*a, **k):
 def test_dry_run_builds_the_three_node_commands(monkeypatch):
     ccs = _session(monkeypatch)
     out = []
-    rc = ccs.main(["--scene", "s04", "--label", "fire", "--distance_m", "2", "--dry_run"],
-                  clock=lambda: 1_790_000_000.0, log=out.append)
+    rc = ccs.main(["--scene", "s04", "--label", "fire", "--distance_m", "2", "--dry_run",
+                   "--notes", FIRE_NOTES], clock=lambda: 1_790_000_000.0, log=out.append)
     assert rc == 0
     caps = {l.split()[0]: l.split(" capture: ", 1)[1] for l in out if " capture: " in l}
     assert set(caps) == {"node_a", "node_b", "node_c"}
@@ -420,7 +454,8 @@ def test_dry_run_builds_the_three_node_commands(monkeypatch):
         assert opts["--distance_m"] == "2.0" and opts["--frames"] == "40"
         assert opts["--fps"] == "5" and opts["--node"] == node
         assert opts["--root"] == "data/raw/camera"
-        assert float(opts["--start_at"]) == 1_790_000_015.0  # now + default 15 s lead
+        assert float(opts["--start_at"]) == 1_790_000_025.0  # now + default 25 s lead
+        assert opts["--notes"] == FIRE_NOTES and "--no_lock" not in tail
     masters = [l for l in out if " master : " in l]
     assert len(masters) == 2 and not any(l.startswith("node_a") for l in masters)
 
@@ -429,7 +464,8 @@ def test_dry_run_passes_retake_and_lead(monkeypatch):
     ccs = _session(monkeypatch)
     out = []
     ccs.main(["--scene", "s04", "--label", "no_fire", "--distance_m", "3", "--dry_run",
-              "--retake", "--lead", "30"], clock=lambda: 100.0, log=out.append)
+              "--retake", "--lead", "30", "--notes", NOFIRE_NOTES], clock=lambda: 100.0,
+             log=out.append)
     caps = [l for l in out if " capture: " in l]
     assert len(caps) == 3 and all("--retake" in l for l in caps)
     assert all("--start_at 130.000" in l for l in caps)
@@ -445,7 +481,10 @@ def test_check_dry_run_prints_probe_commands(monkeypatch):
 
 def _rec(start, actual, written=40, **kw):
     r = {"start_scheduled_unix": start, "start_actual_unix": actual,
-         "n_frames_written": written, "camera_model": "X", "serial": "1"}
+         "n_frames_written": written, "camera_model": "X", "serial": "1",
+         "status": "complete", "usb": {"usb_type": "3.2", "problems": []},
+         "exposure_lock": {"exposure": 166, "gain": 64, "white_balance": 4600},
+         "ae_on_frames": 0, "ae_unknown_frames": 0}
     r.update(kw)
     return r
 
@@ -515,7 +554,8 @@ def test_capture_refuses_to_start_with_unsynchronised_clocks(monkeypatch):
     monkeypatch.setattr(ccs, "measure_offset",
                         lambda cfg: offsets[[n for n, c in FAKE_NODES.items() if c is cfg][0]])
     out = []
-    rc = ccs.main(["--scene", "s04", "--label", "fire", "--distance_m", "2"], log=out.append)
+    rc = ccs.main(["--scene", "s04", "--label", "fire", "--distance_m", "2",
+                   "--notes", FIRE_NOTES], log=out.append)
     assert rc == 1
     text = "\n".join(out)
     assert "node_c: clock -1320.000 s off node_a" in text

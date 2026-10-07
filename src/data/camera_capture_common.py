@@ -246,6 +246,16 @@ class CameraBackend:
     def info(self) -> Dict[str, Any]:  # pragma: no cover - interface
         raise NotImplementedError
 
+    def settle_auto(self, n_frames: int) -> Dict[str, Any]:  # pragma: no cover - interface
+        """Auto exposure and auto white balance on, ``n_frames`` grabbed and discarded,
+        then -> {exposure, gain, white_balance, source}: the values to lock."""
+        raise NotImplementedError
+
+    def apply_lock(self, lock: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cover
+        """Auto exposure and auto white balance off, the locked values set; -> the values
+        the camera reports afterwards (read back)."""
+        raise NotImplementedError
+
 
 # --------------------------------------------------------------------------- #
 # writers
@@ -423,6 +433,188 @@ def calibration_problems(info: Dict[str, Any]) -> List[str]:
     return problems
 
 
+# --------------------------------------------------------------------------- #
+# study-capture gates (prereg sec. 13 draft, Amendment 4; e5 of POST_5B_CHECKLIST)
+# --------------------------------------------------------------------------- #
+#: fields every study capture's --notes must carry ("key=value; key=value; ...")
+NOTES_REQUIRED = ("source", "distance_measured_m", "flame_height_cm")
+NOTES_FORMAT = "source=<id|none>; distance_measured_m=<x.xx>; flame_height_cm=<x>"
+#: measured distances outside this range are a typo, not a rig
+MEASURED_DISTANCE_RANGE_M = (0.3, 10.0)
+#: a ZED on a USB 3.x link runs at >= 5000 Mb/s (sysfs ``speed``)
+USB3_MIN_SPEED_MBPS = 5000
+ZED_USB_VENDOR = "2b03"
+LOCKS_DIR = "_locks"
+
+
+def parse_notes(notes: Optional[str]) -> Dict[str, str]:
+    """``"a=1; b=x y"`` -> {"a": "1", "b": "x y"}; fragments without ``=`` go to "text"."""
+    out: Dict[str, str] = {}
+    text = []
+    for part in (notes or "").split(";"):
+        part = part.strip()
+        if not part:
+            continue
+        if "=" in part:
+            k, v = part.split("=", 1)
+            out[k.strip()] = v.strip()
+        else:
+            text.append(part)
+    if text:
+        out["text"] = "; ".join(text)
+    return out
+
+
+def notes_problems(notes: Optional[str], label: str) -> List[str]:
+    """What a study capture's --notes lacks ([] = complete).  Fire: one lit source and a
+    measured flame height > 0; no-fire: ``source=none`` and ``flame_height_cm=0``."""
+    f = parse_notes(notes)
+    problems = ["--notes lacks %s" % k for k in NOTES_REQUIRED if not f.get(k)]
+    if problems:
+        return problems + ["--notes format: %s" % NOTES_FORMAT]
+    try:
+        d = float(f["distance_measured_m"])
+        lo, hi = MEASURED_DISTANCE_RANGE_M
+        if not lo <= d <= hi:
+            problems.append("distance_measured_m %s outside %g-%g m" % (f["distance_measured_m"], lo, hi))
+    except ValueError:
+        problems.append("distance_measured_m %r is not a number" % f["distance_measured_m"])
+    try:
+        h = float(f["flame_height_cm"])
+    except ValueError:
+        h = None
+        problems.append("flame_height_cm %r is not a number" % f["flame_height_cm"])
+    source = f["source"]
+    if label == "fire":
+        if source == "none":
+            problems.append("fire capture with source=none")
+        if h is not None and not h > 0:
+            problems.append("fire capture needs flame_height_cm > 0, got %s" % f["flame_height_cm"])
+    elif label == "no_fire":
+        if source != "none":
+            problems.append("no-fire capture needs source=none, got %r" % source)
+        if h is not None and h != 0:
+            problems.append("no-fire capture needs flame_height_cm=0, got %s" % f["flame_height_cm"])
+    return problems
+
+
+def _usb_major(usb_type) -> Optional[int]:
+    m = re.match(r"\s*(\d+)", str(usb_type)) if usb_type is not None else None
+    return int(m.group(1)) if m else None
+
+
+def usb_problems(info: Dict[str, Any]) -> List[str]:
+    """USB 3.x gate ([] = pass): a RealSense must report ``usb_type`` 3.x, the ZED a link
+    speed of at least 5000 Mb/s (``usb_speed_mbps``).  Not recorded = fail."""
+    speed = info.get("usb_speed_mbps")
+    if speed is not None:
+        if float(speed) < USB3_MIN_SPEED_MBPS:
+            return ["USB link %s Mb/s, need >= %d (USB 3.x)" % (speed, USB3_MIN_SPEED_MBPS)]
+        return []
+    usb_type = info.get("usb_type")
+    major = _usb_major(usb_type)
+    if major is None:
+        return ["USB type not recorded (usb_type %r, usb_speed_mbps None)" % (usb_type,)]
+    if major < 3:
+        return ["USB type %s, need 3.x" % usb_type]
+    return []
+
+
+def zed_usb_devices(sys_root: str = "/sys/bus/usb/devices") -> List[Dict[str, Any]]:
+    """Every Stereolabs USB device in sysfs: id, product id, product name, speed (Mb/s).
+    The ZED 2i shows up as more than one device (camera, sensors); all are recorded."""
+    out = []
+    if not os.path.isdir(sys_root):
+        return out
+    for name in sorted(os.listdir(sys_root)):
+        d = os.path.join(sys_root, name)
+
+        def read(key, d=d):
+            try:
+                with open(os.path.join(d, key), encoding="utf-8") as f:
+                    return f.read().strip()
+            except OSError:
+                return None
+        if read("idVendor") != ZED_USB_VENDOR:
+            continue
+        speed = read("speed")
+        try:
+            speed_v = float(speed) if speed is not None else None
+        except ValueError:
+            speed_v = None
+        out.append({"device": name, "id_product": read("idProduct"), "product": read("product"),
+                    "speed_mbps": speed_v})
+    return out
+
+
+def zed_usb_speed_mbps(devices: List[Dict[str, Any]]) -> Optional[float]:
+    """The fastest link among the ZED's USB devices (the camera's video interface; the
+    sensor interface may sit at a lower speed behind the camera's own hub)."""
+    speeds = [d["speed_mbps"] for d in devices if d.get("speed_mbps") is not None]
+    return max(speeds) if speeds else None
+
+
+LOCK_KEYS = ("exposure", "gain", "white_balance")
+
+
+def lock_path(root: str, node: str, scene: str, distance_m) -> str:
+    """``<root>/<node>/_locks/<scene>_d<cm>.json``: one exposure lock per scene x distance."""
+    d = validate_distance(distance_m)
+    return os.path.join(root, node, LOCKS_DIR, "%s_d%d.json" % (validate_scene(scene),
+                                                               int(round(d * 100))))
+
+
+def resolve_lock(backend: "CameraBackend", root: str, node: str, scene: str, label: str,
+                 distance_m, settle_frames: int,
+                 clock: Callable[[], float] = time.time) -> Dict[str, Any]:
+    """The exposure lock of this capture.
+
+    No-fire: auto exposure and auto white balance settle on the no-fire setup
+    (``backend.settle_auto``), their values become the lock and are written to
+    :func:`lock_path`.  If the fire capture of the same scene x distance already exists,
+    the stored lock is reused instead, so the pair keeps identical values.  Fire: the
+    stored lock is required and reused unchanged.  Returns
+    {exposure, gain, white_balance, source, how, lock_file}.
+    """
+    path = lock_path(root, node, scene, distance_m)
+    fire_rec = capture_paths(root, node, make_capture_id(scene, "fire", distance_m))["record"]
+    if label == "fire" or os.path.isfile(fire_rec):
+        if not os.path.isfile(path):
+            raise CaptureError("no exposure lock %s: capture the no-fire setup of this scene "
+                               "and distance first (its lock is reused for fire)" % path)
+        with open(path, encoding="utf-8") as f:
+            lock = json.load(f)
+        lock["how"] = "reused"
+    else:
+        lock = dict(backend.settle_auto(int(settle_frames)))
+        missing = [k for k in LOCK_KEYS if lock.get(k) is None]
+        if missing:
+            raise CaptureError("auto exposure did not report %s; no lock" % ", ".join(missing))
+        lock.update(scene=scene, distance_m=validate_distance(distance_m), node=node,
+                    determined_unix=clock())
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if os.path.isfile(path):  # a no-fire retake before any fire capture: keep the old one
+            stamp = time.strftime("%Y%m%dT%H%M%S", time.localtime(clock()))
+            old = os.path.join(os.path.dirname(path), "_superseded")
+            os.makedirs(old, exist_ok=True)
+            shutil.move(path, os.path.join(old, "%s_%s" % (stamp, os.path.basename(path))))
+        write_json(path, lock, exclusive=True)
+        lock["how"] = "determined"
+    lock["lock_file"] = path
+    return lock
+
+
+def lock_mismatch(lock: Dict[str, Any], applied: Dict[str, Any],
+                  rel_tol: float = 0.02) -> List[str]:
+    """Locked values the camera did not take (read back after applying)."""
+    out = []
+    for k in LOCK_KEYS:
+        want, got = lock.get(k), applied.get(k)
+        if got is None or want is None or abs(float(got) - float(want)) > rel_tol * max(1.0, abs(float(want))):
+            out.append("%s: set %s, camera reports %s" % (k, want, got))
+    return out
+
+
 def run_capture(backend: CameraBackend, scene: str, label: str, distance_m, node: str,
                 root: str = DEFAULT_ROOT, frames: int = DEFAULT_FRAMES,
                 fps: float = DEFAULT_FPS, start_at: Optional[float] = None,
@@ -430,13 +622,21 @@ def run_capture(backend: CameraBackend, scene: str, label: str, distance_m, node
                 timeout_s: Optional[float] = None,
                 clock: Callable[[], float] = time.time,
                 sleep: Callable[[float], None] = time.sleep,
-                log: Callable[[str], None] = print) -> Dict[str, Any]:
+                log: Callable[[str], None] = print,
+                study_gates: bool = False, exposure_lock: bool = False,
+                lock_settle_frames: int = 45) -> Dict[str, Any]:
     """Open the camera, wait for ``start_at``, keep ``frames`` frames at ``fps``.
 
     Writes every frame and, once the camera has opened, the capture record -- also on
     failure, with the frames actually written and the error in ``notes``, so that an
     incomplete capture is visible and can only be replaced with ``--retake``.
     Returns the record.
+
+    ``study_gates`` (every study capture; prereg sec. 13 draft): the --notes must parse
+    (:func:`notes_problems`, checked before the camera opens) and the camera must be on a
+    USB 3.x link (:func:`usb_problems`).  ``exposure_lock``: exposure, gain and white
+    balance fixed per scene x distance (:func:`resolve_lock`), and the capture FAILs if
+    any colour frame reports auto exposure on (or does not report it).
     """
     node = validate_node(node)
     capture_id = make_capture_id(scene, label, distance_m)
@@ -445,6 +645,10 @@ def run_capture(backend: CameraBackend, scene: str, label: str, distance_m, node
     fps = float(fps)
     if frames < 1 or fps <= 0:
         raise ValueError("frames must be >= 1 and fps > 0")
+    if study_gates:
+        bad = notes_problems(notes, label)
+        if bad:
+            raise CaptureError("capture refused before it started: %s" % "; ".join(bad))
     prep = prepare_capture(root, node, capture_id, retake=retake, clock=clock)
     node_dir = prep["node_dir"]
 
@@ -456,12 +660,28 @@ def run_capture(backend: CameraBackend, scene: str, label: str, distance_m, node
     lateness = None
     errors: List[str] = []
     futures: list = []
+    lock: Optional[Dict[str, Any]] = None
+    ae = {"on": 0, "unknown": 0}
     try:
         info = dict(backend.info())
         missing = calibration_problems(info)
         if missing:
             raise CaptureError("calibration not recorded, capture refused (prereg "
                                "Amendment 3): %s" % "; ".join(missing))
+        if study_gates:
+            bad = usb_problems(info)
+            if bad:
+                raise CaptureError("USB 3.x gate, capture refused: %s" % "; ".join(bad))
+        if exposure_lock:
+            lock = resolve_lock(backend, root, node, scene, label, distance_m,
+                                lock_settle_frames, clock=clock)
+            applied = dict(backend.apply_lock({k: lock[k] for k in LOCK_KEYS}))
+            lock["applied"] = applied
+            bad = lock_mismatch(lock, applied)
+            if bad:
+                raise CaptureError("exposure lock not applied: %s" % "; ".join(bad))
+            log("exposure lock (%s): exposure %s, gain %s, white balance %s"
+                % (lock["how"], lock["exposure"], lock["gain"], lock["white_balance"]))
         for _ in range(max(0, int(warmup_frames))):
             backend.skip()
         lateness = wait_until(start_at, clock=clock, sleep=sleep, idle=backend.skip)
@@ -487,8 +707,19 @@ def run_capture(backend: CameraBackend, scene: str, label: str, distance_m, node
                 fid = make_frame_id(capture_id, index)
                 meta = frame_meta(fid, capture_id, scene, label, distance_m, index, node,
                                   info, fr, t_host, fps)
+                if lock is not None:
+                    meta["exposure_source"] = "manual_lock"
+                    meta["exposure_lock"] = {k: lock[k] for k in LOCK_KEYS}
+                    flag = (fr.meta or {}).get("auto_exposure")
+                    if flag is None:
+                        ae["unknown"] += 1
+                    elif flag:
+                        ae["on"] += 1
                 futures.append(pool.submit(write_frame, node_dir, fid, fr, meta))
                 index += 1
+        if lock is not None and (ae["on"] or ae["unknown"]):
+            errors.append("exposure lock gate: auto exposure on in %d and unreported in %d "
+                          "of %d colour frames" % (ae["on"], ae["unknown"], index))
     except Exception as e:  # noqa: BLE001 - recorded in the capture record, re-raised
         errors.append("%s: %s" % (type(e).__name__, e))
         raise
@@ -507,6 +738,15 @@ def run_capture(backend: CameraBackend, scene: str, label: str, distance_m, node
         record = capture_record(capture_id, scene, label, distance_m, node, info, fps,
                                 frames, written, start_at, start_actual, clock(),
                                 notes, errors, lateness, prep.get("retake_moved_to"))
+        record["notes_parsed"] = parse_notes(notes)
+        record["study_gates"] = bool(study_gates)
+        record["usb"] = {"usb_type": info.get("usb_type"),
+                         "usb_speed_mbps": info.get("usb_speed_mbps"),
+                         "usb_devices": info.get("usb_devices"),
+                         "problems": usb_problems(info) if info else None}
+        record["exposure_lock"] = lock
+        record["ae_on_frames"] = ae["on"] if lock is not None else None
+        record["ae_unknown_frames"] = ae["unknown"] if lock is not None else None
         write_json(prep["record"], record, exclusive=True)
     return record
 
@@ -632,7 +872,11 @@ def add_capture_args(parser, default_node: str, frames_default=DEFAULT_FRAMES,
     parser.add_argument("--node", default=default_node, choices=NODE_NAMES)
     parser.add_argument("--retake", action="store_true",
                         help="move an existing capture to _retakes/<timestamp>/ first")
-    parser.add_argument("--notes", default="", help="free text stored in the record")
+    parser.add_argument("--notes", default="", help="required, parsed: " + NOTES_FORMAT)
+    parser.add_argument("--no_lock", action="store_true",
+                        help="TEST ONLY (e5): no exposure lock; never a study capture")
+    parser.add_argument("--lock_settle_frames", type=int, default=45,
+                        help="frames auto exposure runs before the no-fire lock is read")
 
 
 def probe_sdks() -> Dict[str, Any]:
@@ -641,17 +885,27 @@ def probe_sdks() -> Dict[str, Any]:
     try:
         import pyrealsense2 as rs  # noqa: F401
         devs = rs.context().query_devices()
-        out["pyrealsense2"] = {"import": True, "cameras": [
-            {"name": d.get_info(rs.camera_info.name),
-             "serial": d.get_info(rs.camera_info.serial_number)} for d in devs]}
+        cams = []
+        for d in devs:
+            try:
+                usb_type = d.get_info(rs.camera_info.usb_type_descriptor)
+            except Exception:  # noqa: BLE001
+                usb_type = None
+            cams.append({"name": d.get_info(rs.camera_info.name),
+                         "serial": d.get_info(rs.camera_info.serial_number),
+                         "usb_type": usb_type})
+        out["pyrealsense2"] = {"import": True, "cameras": cams}
     except Exception as e:  # noqa: BLE001
         out["pyrealsense2"] = {"import": False, "error": "%s: %s" % (type(e).__name__, e)}
     try:
         import pyzed.sl as sl
         devs = sl.Camera.get_device_list()
+        usb = zed_usb_devices()
         out["pyzed"] = {"import": True, "sdk_version": str(sl.Camera.get_sdk_version()),
                         "cameras": [{"model": str(d.camera_model),
-                                     "serial": int(d.serial_number)} for d in devs]}
+                                     "serial": int(d.serial_number),
+                                     "usb_speed_mbps": zed_usb_speed_mbps(usb)} for d in devs],
+                        "usb_devices": usb}
     except Exception as e:  # noqa: BLE001
         out["pyzed"] = {"import": False, "error": "%s: %s" % (type(e).__name__, e)}
     out["time_unix"] = time.time()
