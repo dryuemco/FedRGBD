@@ -230,3 +230,28 @@ def test_foreign_frame_ids_are_rejected(tmp_path):
     np.savez_compressed(path, **d)
     with pytest.raises(ValueError, match="kept frames"):
         ca.load_units(runs, labels)
+
+
+def test_loso_table_is_generated_from_the_analysis(analysis, tmp_path):
+    import pandas as pd
+    from scripts import camera_export_loso_table as cet
+
+    text = cet.tabular(analysis)
+    rows = [l for l in text.splitlines() if r"$\rightarrow$" in l and "&" in l]
+    assert [l.split(" & ")[0] for l in rows] == [
+        r"D435if $\rightarrow$ D435i", r"D435if $\rightarrow$ ZED 2i",
+        r"D435i $\rightarrow$ D435if", r"D435i $\rightarrow$ ZED 2i",
+        r"ZED 2i $\rightarrow$ D435if", r"ZED 2i $\rightarrow$ D435i"]
+    pairs = pd.read_csv(os.path.join(analysis, "pairs.csv"))
+    r = pairs[(pairs["family"] == "A-RGB") & (pairs["source"] == "node_a")
+              & (pairs["target"] == "node_c")].iloc[0]
+    cells = rows[1].split(" & ")
+    assert cells[3].startswith("%+.1f [" % (100 * r["diff"]))
+    assert cells[4] == "%.3f" % r["p_holm"] and cells[5].startswith(r["verdict_holm"])
+    assert "Contrast $K$" in text and text.startswith(cet.GENERATED)
+    assert cet.SYNTHETIC not in text and cet.SYNTHETIC in cet.tabular(analysis, synthetic=True)
+    with pytest.raises(SystemExit, match="never written under paper"):
+        cet.main(["--analysis_dir", analysis, "--synthetic", "--output",
+                  os.path.join(cet.REPO, "paper", "tables", "x.tex")])
+    out = str(tmp_path / "t.tex")
+    assert cet.main(["--analysis_dir", analysis, "--output", out]) == 0
