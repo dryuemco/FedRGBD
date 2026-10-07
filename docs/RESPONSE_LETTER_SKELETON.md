@@ -43,7 +43,7 @@ manuscript tables, which come from `analysis/` (CLAUDE.md rule 4).
 | # | Comment (short) | What was done | Where answered | Status |
 |---|---|---|---|---|
 | R5.1 | Narrow scope; which conclusions generalise | Scope subsection; generalisation discussion; limitations | Sec. `sec:scope`, `sec:generalise`, `sec:limitations` | done, text pending (generalisation paragraph depends on results) |
-| R5.2 | More runs and confidence intervals | Five seeds; stratified sequence-level bootstrap for every held-out metric | Sec. `sec:stats`; every results table | done, text pending |
+| R5.2 | More runs and confidence intervals | Five seeds; balanced accuracy (primary) with the stratified sequence-level bootstrap interval; the other held-out metrics as mean ± SD over seeds | Sec. `sec:stats`; every results table | done, text pending |
 | R5.3 | Precision, recall, F1, BA, MCC, ROC-AUC, globally and per client | Full metric set per client and pooled; second, pre-registered global evaluation perspective (every model on the union of the test splits) | Sec. `sec:metrics`, `sec:primary`, `sec:perspectives`; Tabs. `tab:fullmetrics`, `tab:perclient_metrics` | done, text pending (global perspective: main matrix computed 2026-09-28; MAXN_SUPER family pending 5b) |
 | R5.4 | Check other degrees and types of non-IID | Dirichlet label skew at three concentrations besides the manual skew | Sec. `sec:noniid`, `sec:res_dirichlet`; Tab. `tab:dirichlet`; Fig. `fig:dirichlet` | done, text pending |
 | R5.5 | Hyperparameter sensitivity | One-factor sweeps of mu, local epochs, learning rate, rounds | Sec. `sec:sensitivity`, `sec:res_sensitivity`; Tab. `tab:sensitivity`; Fig. `fig:sensitivity` | done, text pending (`tab:sensitivity` still has placeholders) |
