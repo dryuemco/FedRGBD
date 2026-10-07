@@ -132,3 +132,9 @@ the pre-flight (`scripts/run_matrix.py`) reads both.
 
 After the A5 draws were added, the canonical `split_stats.json` digest is the one in this table; the earlier one
 (e552f32d...) describes the 15 original splits only.
+
+**2026-10-07, Dirichlet minimum size recorded.** Every `dirichlet_*` entry of `split_stats.json` now carries `dirichlet_min_size: 200` and a note: regenerating the seed-42, 123 and 456 draws with `--dirichlet_min_size` 200 and with 10 gave, in both cases, exactly the manifest md5s of the tables above, so the constraint is not binding for any of these draws and the value is documented rather than identifiable from the manifests. No manifest changed. The canonical `split_stats.json` digest is now
+
+| file | rows | md5 |
+|---|---|---|
+| split_stats.json (no _meta, canonical, with the A5 draws and min size) |  | 1558d956f29e8edfae0939f44e549518 |
