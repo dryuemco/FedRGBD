@@ -654,8 +654,11 @@ class _FakeSl:
             cam = lambda fx: NS(fx=fx, fy=fx, cx=960.5, cy=540.5, disto=[0.1, -0.02, 0, 0, 0.003])
             calib = NS(left_cam=cam(1066.0), right_cam=cam(1067.0),
                        get_camera_baseline=lambda: 120.0)
+            raw_t = NS(get_rotation_vector=lambda: [0.001, -0.002, 0.0003],
+                       get_translation=lambda: NS(get=lambda: [-119.9, 0.1, -0.2]))
+            raw = NS(left_cam=cam(1060.0), right_cam=cam(1061.0), stereo_transform=raw_t)
             conf = NS(firmware_version=1523, resolution=NS(width=1920, height=1080), fps=15,
-                      calibration_parameters=calib)
+                      calibration_parameters=calib, calibration_parameters_raw=raw)
             return NS(camera_model="ZED2i", serial_number=35201583, camera_configuration=conf,
                       sensors_configuration=NS(firmware_version=777))
 
@@ -666,9 +669,11 @@ class _FakeSl:
         pass
 
 
-def test_zed_sets_the_v1_depth_range_and_records_its_calibration(monkeypatch):
+def test_zed_sets_the_v1_depth_range_and_records_its_calibration(monkeypatch, tmp_path):
     from src.data import zed_capture as zc
     monkeypatch.setattr(zc, "_import_sl", lambda: _FakeSl)
+    (tmp_path / "SN35201583.conf").write_bytes(b"[LEFT_CAM_FHD]\nfx=1060.0\n")
+    monkeypatch.setattr(zc, "ZED_SETTINGS_DIRS", (str(tmp_path),))
     _FakeSl.clamp_max = None
     b = zc.ZedBackend()
     b.open()

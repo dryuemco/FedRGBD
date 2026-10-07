@@ -430,7 +430,39 @@ def calibration_problems(info: Dict[str, Any]) -> List[str]:
     for k in ("sdk_version", "firmware"):
         if not info.get(k):
             problems.append("%s not recorded" % k)
+    if info.get("requires_factory_calibration"):   # ZED (prereg sec. 13.1 draft)
+        raw = info.get("calibration_raw") or {}
+        for side in ("left", "right"):
+            d = raw.get(side) or {}
+            missing = [k for k in INTRINSIC_FIELDS if d.get(k) is None]
+            if missing:
+                problems.append("raw %s calibration missing %s" % (side, ", ".join(missing)))
+        if not raw.get("stereo_transform"):
+            problems.append("raw stereo transform not recorded")
+        if not info.get("factory_conf"):
+            problems.append("factory calibration file SN%s.conf not found" % info.get("serial"))
     return problems
+
+
+CALIBRATION_DIR = "_calibration"
+
+
+def keep_factory_conf(node_dir: str, info: Dict[str, Any]) -> None:
+    """Byte copy of the factory calibration file into ``<node>/_calibration/`` (named by
+    serial and md5, written once per distinct file); the record keeps path and md5 only."""
+    fc = info.get("factory_conf")
+    if not fc or "text" not in fc:
+        return
+    d = os.path.join(node_dir, CALIBRATION_DIR)
+    os.makedirs(d, exist_ok=True)
+    name = "SN%s_%s.conf" % (info.get("serial"), fc["md5"])
+    path = os.path.join(d, name)
+    if not os.path.isfile(path):
+        with open(path, "xb") as f:
+            f.write(fc["text"].encode("latin-1"))
+    fc = {k: v for k, v in fc.items() if k != "text"}
+    fc["copy"] = os.path.join(CALIBRATION_DIR, name)
+    info["factory_conf"] = fc
 
 
 # --------------------------------------------------------------------------- #
@@ -668,6 +700,7 @@ def run_capture(backend: CameraBackend, scene: str, label: str, distance_m, node
         if missing:
             raise CaptureError("calibration not recorded, capture refused (prereg "
                                "Amendment 3): %s" % "; ".join(missing))
+        keep_factory_conf(node_dir, info)
         if study_gates:
             bad = usb_problems(info)
             if bad:
@@ -804,6 +837,8 @@ def capture_record(capture_id, scene, label, distance_m, node, info, fps, n_requ
         "rgb_resolution": info.get("rgb_resolution"),
         "stream_fps": info.get("stream_fps"),
         "intrinsics": info.get("intrinsics"),
+        "calibration_raw": info.get("calibration_raw"),
+        "factory_conf": info.get("factory_conf"),
         "stereo_baseline_mm": info.get("stereo_baseline_mm"),
         "depth_scale_mm": info.get("depth_scale_mm"),
         "depth_range_mm": info.get("depth_range_mm"),

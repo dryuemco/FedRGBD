@@ -54,6 +54,39 @@ def _import_sl():
     return sl
 
 
+#: where the ZED SDK keeps the factory calibration file SN<serial>.conf
+ZED_SETTINGS_DIRS = ("/usr/local/zed/settings",)
+
+
+def factory_conf(serial, dirs=None) -> Optional[Dict[str, Any]]:
+    """The factory calibration file ``SN<serial>.conf`` (prereg sec. 13.1 draft): its
+    source path, md5 and exact text, or None if it is not on this machine."""
+    import hashlib
+    if serial is None:
+        return None
+    for d in (ZED_SETTINGS_DIRS if dirs is None else dirs):
+        path = os.path.join(d, "SN%s.conf" % serial)
+        if os.path.isfile(path):
+            with open(path, "rb") as f:
+                blob = f.read()
+            return {"source": path, "md5": hashlib.md5(blob).hexdigest(),
+                    "bytes": len(blob), "text": blob.decode("latin-1")}
+    return None
+
+
+def _transform(raw) -> Optional[Dict[str, Any]]:
+    """The raw (unrectified) stereo transform, left -> right: rotation vector and
+    translation (in the capture's units, mm)."""
+    t = getattr(raw, "stereo_transform", None)
+    if t is None:
+        return None
+    try:
+        return {"rotation_vector": [float(x) for x in t.get_rotation_vector()],
+                "translation_mm": [float(x) for x in t.get_translation().get()]}
+    except Exception:  # noqa: BLE001 - recorded as missing; the capture then refuses
+        return None
+
+
 def _setting(zed, sl, name) -> Optional[int]:
     """get_camera_settings -> int or None.  SDK >= 4 returns (ERROR_CODE, value)."""
     key = getattr(sl.VIDEO_SETTINGS, name, None)
@@ -119,6 +152,7 @@ class ZedBackend(CameraBackend):
             "rgb_resolution": [int(res.width), int(res.height)] if res is not None else None,
             "stream_fps": float(getattr(conf, "fps", self.stream_fps) or self.stream_fps),
             "depth_units": "MILLIMETER",
+            "requires_factory_calibration": True,
         }
         self._info.update(self._calibration(conf, res))
         usb = zed_usb_devices()
@@ -145,6 +179,12 @@ class ZedBackend(CameraBackend):
             out["intrinsics"] = {"rgb": left, "depth": dict(left), "right": cam(calib.right_cam)}
             # in the InitParameters coordinate units, set to MILLIMETER above
             out["stereo_baseline_mm"] = float(calib.get_camera_baseline())
+        raw = getattr(conf, "calibration_parameters_raw", None)
+        out["calibration_raw"] = None
+        if raw is not None:
+            out["calibration_raw"] = {"left": cam(raw.left_cam), "right": cam(raw.right_cam),
+                                      "stereo_transform": _transform(raw)}
+        out["factory_conf"] = factory_conf(self._info.get("serial"))
         applied = self.zed.get_init_parameters()
         rng = (float(applied.depth_minimum_distance), float(applied.depth_maximum_distance))
         out["depth_range_mm"] = list(rng)

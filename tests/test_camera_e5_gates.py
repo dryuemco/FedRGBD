@@ -394,3 +394,65 @@ def test_fy_224_follows_the_preprocessing_geometry():
     # landscape 1920x1080 and 1280x720: shorter side (height) to 224, crop keeps scale
     assert cfh.fy_224(1000.0, 1920, 1080) == pytest.approx(1000.0 * 224 / 1080)
     assert cfh.fy_224(640.0, 1280, 720) == pytest.approx(640.0 * 224 / 720)
+
+
+# --------------------------------------------------------------------------- #
+# ZED raw calibration and factory file (prereg sec. 13.1 draft)
+# --------------------------------------------------------------------------- #
+def _zed_like(clock, conf_text="[LEFT_CAM_FHD]", drop=None):
+    class ZedLike(FakeCamera):
+        def info(self):
+            i = super().info()
+            left = dict(i["intrinsics"]["rgb"])
+            i.update(requires_factory_calibration=True, usb_type=None, usb_speed_mbps=5000.0,
+                     serial=35201583,
+                     calibration_raw={"left": left, "right": dict(left),
+                                      "stereo_transform": {"rotation_vector": [0, 0, 0],
+                                                           "translation_mm": [-120, 0, 0]}},
+                     factory_conf=None if conf_text is None else {
+                         "source": "/usr/local/zed/settings/SN35201583.conf",
+                         "md5": "abc123", "bytes": len(conf_text), "text": conf_text})
+            if drop:
+                drop(i)
+            return i
+    return ZedLike(clock=clock, ir=False)
+
+
+def test_zed_capture_keeps_raw_calibration_and_a_copy_of_the_factory_file(tmp_path):
+    clock = FakeClock()
+    rec, _ = _study(tmp_path, "no_fire", camera=_zed_like(clock), clock=clock, node="node_c")
+    assert rec["status"] == "complete"
+    assert rec["calibration_raw"]["left"]["fx"] == 50.0
+    assert rec["calibration_raw"]["stereo_transform"]["translation_mm"] == [-120, 0, 0]
+    fc = rec["factory_conf"]
+    assert fc["md5"] == "abc123" and "text" not in fc
+    copy = tmp_path / "node_c" / fc["copy"]
+    assert copy.read_text() == "[LEFT_CAM_FHD]"
+    assert "text" not in rec["backend_info"]["factory_conf"]
+    # a second capture with the same file reuses the copy
+    clock2 = FakeClock()
+    rec2, _ = _study(tmp_path, "fire", camera=_zed_like(clock2), clock=clock2, node="node_c")
+    assert rec2["factory_conf"]["copy"] == fc["copy"]
+    assert len(list((tmp_path / "node_c" / "_calibration").iterdir())) == 1
+
+
+@pytest.mark.parametrize("conf,drop,match", [
+    (None, None, "factory calibration file SN35201583.conf not found"),
+    ("x", lambda i: i.update(calibration_raw=None), "raw left calibration missing"),
+    ("x", lambda i: i["calibration_raw"].pop("stereo_transform"), "raw stereo transform"),
+])
+def test_zed_capture_without_raw_calibration_is_refused(tmp_path, conf, drop, match):
+    clock = FakeClock()
+    with pytest.raises(ccc.CaptureError, match=match):
+        _study(tmp_path, "no_fire", camera=_zed_like(clock, conf, drop), clock=clock,
+               node="node_c")
+
+
+def test_factory_conf_reader(tmp_path):
+    from src.data import zed_capture as zc
+    (tmp_path / "SN35201583.conf").write_bytes(b"[STEREO]\r\nBaseline=119.9\r\n")
+    fc = zc.factory_conf(35201583, dirs=(str(tmp_path / "none"), str(tmp_path)))
+    assert fc["bytes"] == 26 and fc["text"].encode("latin-1") == b"[STEREO]\r\nBaseline=119.9\r\n"
+    assert len(fc["md5"]) == 32
+    assert zc.factory_conf(1, dirs=(str(tmp_path),)) is None
+    assert zc.factory_conf(None) is None
