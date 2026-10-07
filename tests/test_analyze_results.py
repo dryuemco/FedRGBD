@@ -322,6 +322,14 @@ def test_parse_distribution_sources():
     assert parse_distribution({}, "run", cfg) == "non_iid_label"
 
 
+def test_parse_distribution_keeps_a5_draw_suffix():
+    """An additional Dirichlet draw is its own partition, never the seed-42 one."""
+    assert parse_distribution({"tags": ["dirichlet0.1_ps123"]}, "x") == "dirichlet_0.1_ps123"
+    assert parse_distribution({}, "rev_dirichlet0.1_ps456_fedavg_r10_seed42") == "dirichlet_0.1_ps456"
+    assert parse_distribution({}, "rev_dirichlet0.1_fedavg_seed42") == "dirichlet_0.1"
+    assert parse_distribution({}, "rev_dirichlet0.5_sub0.05_fedavg_seed42") == "dirichlet_0.5_sub0.05"
+
+
 # --------------------------------------------------------------------------- #
 # collection
 # --------------------------------------------------------------------------- #

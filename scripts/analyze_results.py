@@ -282,9 +282,11 @@ def _dist_from_token(token: Optional[str]) -> Optional[str]:
     if not token:
         return None
     text = str(token).lower()
-    match = re.search(r"dirichlet[_\-]?(\d+(?:\.\d+)?)", text)
+    # an additional A5 draw (docs/A5_DIRICHLET_DRAWS_PREREG.md) keeps its _ps<seed> suffix:
+    # it is a different partition from the seed-42 draw of the same alpha
+    match = re.search(r"dirichlet[_\-]?(\d+(?:\.\d+)?)(?:[_\-](ps\d+))?", text)
     if match:
-        return "dirichlet_" + match.group(1)
+        return "dirichlet_" + match.group(1) + ("_" + match.group(2) if match.group(2) else "")
     if re.search(r"non[_\-]?iid", text):
         return "non_iid_label"
     if re.search(r"(?<![a-z])iid(?![a-z])", text) or re.search(r"[_\-]iid", text):
