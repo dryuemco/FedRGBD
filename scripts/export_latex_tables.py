@@ -303,7 +303,7 @@ def latex_table(column_spec: str, header_lines: Sequence[str], body_lines: Seque
     if small:
         out.append("\\small")
     if fit_width:
-        out.append("\\resizebox{\\linewidth}{!}{%")
+        out.append("\\resizebox{\\linewidth}{!}{")
     out.append("\\begin{tabular}{" + column_spec + "}")
     out.append("\\toprule")
     out.extend(header_lines)
