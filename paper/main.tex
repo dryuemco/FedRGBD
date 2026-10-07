@@ -144,7 +144,7 @@ Hybrid designs that combine a fixed analytical transform with a learned CNN are 
 \subsection{Hardware Testbed}
 \label{sec:testbed}
 
-Our testbed consists of three NVIDIA Jetson Orin Nano Super edge nodes, each equipped with a different depth camera, as summarized in Table~\ref{tab:hardware}. For the revision experiments the three nodes are connected by wired Gigabit Ethernet through a single switch, and Node~A hosts the Flower server in addition to its own client. All three nodes negotiate 1000\,Mb/s full duplex. The round-trip time from the server node (Node~A) to each client, measured with 20 ICMP echo requests per link (default 56-byte payload), had a mean of 1.09\,ms (range 0.55--2.27\,ms) to Node~B and 0.84\,ms (range 0.52--1.58\,ms) to Node~C, with no packet loss. The experiments of the original submission (v1, Section~\ref{sec:res_v1}) were run on the same three nodes connected over WiFi (IEEE 802.11ac); the testbed was reassembled on the wired network between submission and revision.
+Our testbed consists of three NVIDIA Jetson Orin Nano Super edge nodes, each equipped with a different depth camera, as summarized in Table~\ref{tab:hardware}. For the revision experiments the three nodes are connected by wired Gigabit Ethernet through a single switch, and Node~A hosts the Flower server in addition to its own client. All three nodes negotiate 1000\,Mb/s full duplex. The round-trip time from the server node (Node~A) to each client, measured with 20 ICMP echo requests per link (default 56-byte payload), had a mean of 1.09\,ms (range 0.55--2.27\,ms) to Node~B and 0.84\,ms (range 0.52--1.58\,ms) to Node~C, with no packet loss. The experiments of the original submission (v1) were run on the same three nodes connected over WiFi (IEEE 802.11ac); the testbed was reassembled on the wired network between submission and revision.
 
 \textbf{Power modes.} The Jetson power mode (\texttt{nvpmodel}) fixes, per node, how many CPU cores are online, how many GPU texture processing clusters (TPCs) are powered, and the maximum clock frequencies. The main experimental matrix of the revision ran with power modes that had not been harmonised across the nodes: Node~A at 15\,W, Node~B at MAXN\_SUPER and Node~C at 7\,W, as read back with \texttt{nvpmodel -q} on every node before and after every run and recorded with its results. The three modes differ in more than clock frequency. At 15\,W and MAXN\_SUPER all six CPU cores are online and all four TPCs (eight streaming multiprocessors, SMs) are powered; the two modes differ only in their frequency caps. At 7\,W two of the six CPU cores are taken offline and two of the four TPCs are power-gated, leaving four SMs, in addition to lower frequency caps. Because the slowest client sets the length of a synchronous round, every wall-clock figure of the main matrix belongs to this configuration and is reported as such. The power mode also changes the numbers, not only the timing: training is bitwise reproducible within a fixed power configuration but not across configurations, and the difference originates on Node~C's 7\,W mode, which our tests cannot attribute to the SM count or to the CPU cores separately (Section~\ref{sec:stats}). A separate block therefore repeats a subset of the matrix with all three nodes at MAXN\_SUPER (Section~\ref{sec:powercfg}); it is a configuration of its own, never pooled with the main matrix.
 
@@ -337,7 +337,7 @@ L^{\mathrm{val}}(r) \;=\; \frac{\sum_{k} n_k^{\mathrm{val}}\, \ell_k^{\mathrm{va
 \[
 r^{*} \;=\; \min\Bigl\{\, r \;:\; L^{\mathrm{val}}(r) = \min_{r'} L^{\mathrm{val}}(r') \Bigr\},
 \]
-and a round in which any client's validation loss is not finite is not eligible. Each client evaluates the validation split first and the test split afterwards, with the model in inference mode; the loss and example count returned to the server, and therefore every quantity the server aggregates or the rule reads, are the validation ones. The test metrics of every round are computed and logged, but only those of round $r^{*}$ are reported; no test metric, of any round, is used for early stopping, for aggregation weights, or for any other decision. No maximum over rounds is reported anywhere in this paper. Per-round quantities (convergence curves, round-1 accuracy, per-round confusion matrices) are validation quantities. The centralized and local-only references follow the same rule, with the epoch in place of the round: they are trained for a fixed budget of 15 epochs, evaluated on validation and test after every epoch, and reported at the epoch of lowest validation loss. The same runs reported at their final epoch instead are retained in the repository under a separate protocol label and are used only where the point at issue is the reporting protocol itself (Section~\ref{sec:res_metrics}). The v1 federated results of Section~\ref{sec:res_v1} predate this protocol: they record no per-round test metrics and are reported as final-round validation accuracy, labelled as such.
+and a round in which any client's validation loss is not finite is not eligible. Each client evaluates the validation split first and the test split afterwards, with the model in inference mode; the loss and example count returned to the server, and therefore every quantity the server aggregates or the rule reads, are the validation ones. The test metrics of every round are computed and logged, but only those of round $r^{*}$ are reported; no test metric, of any round, is used for early stopping, for aggregation weights, or for any other decision. No maximum over rounds is reported anywhere in this paper. Per-round quantities (convergence curves, round-1 accuracy, per-round confusion matrices) are validation quantities. The centralized and local-only references follow the same rule, with the epoch in place of the round: they are trained for a fixed budget of 15 epochs, evaluated on validation and test after every epoch, and reported at the epoch of lowest validation loss. The same runs reported at their final epoch instead are retained in the repository under a separate protocol label and are used only where the point at issue is the reporting protocol itself (Section~\ref{sec:res_metrics}). The v1 federated results, which appear only in Table~\ref{tab:protocol_effect}, predate this protocol: they record no per-round test metrics and are reported as final-round validation accuracy, labelled as such.
 
 \subsection{Declared Primary Metric}
 \label{sec:primary}
@@ -432,7 +432,7 @@ Every metric is computed \emph{per client} on that client's own evaluation split
 \subsection{Statistical Analysis}
 \label{sec:stats}
 
-The IID and label-skew configurations and the federated runs of the low-data regime are repeated with five seeds (42, 123, 456, 789, 1011); the Dirichlet partitions, the low-data references, the sensitivity sweeps and the ten-round runs with three (42, 123, 456). Held-out images are not independent: within one node, a few sequences can make up most of the validation or test set (Section~\ref{sec:limitations}). Every confidence interval of a held-out metric in this paper is therefore a \emph{hierarchical sequence-level (cluster) bootstrap percentile interval with $B=1000$ replicates, in which the sequences are resampled stratified by class composition}. Concretely, each replicate draws the $n$ seeds of the configuration with replacement; within every drawn run it draws, for each evaluation unit, that unit's held-out sequences (near-duplicate groups) with replacement, separately within each of the three strata \emph{fire-only}, \emph{no-fire-only} and \emph{mixed}, each stratum resampled to its own size; the run's headline metric is recomputed from the per-image predictions with the same aggregation as the point estimate; and the replicate value is the mean over the drawn runs. The interval is the 2.5th and 97.5th percentile of those $B$ values. The stratification is there for one reason: a class confined to very few sequences would otherwise vanish entirely from some resamples, and balanced accuracy silently becomes the recall of the class that survives. Image-level resampling, or intervals over seeds alone, would treat a dominant sequence as thousands of independent observations and understate the uncertainty. The stratification is necessary rather than decorative: a node's minority class can occupy very few sequences---under Dirichlet $\alpha{=}0.1$ one node holds all 211 of its no-fire test images in a single sequence---so unstratified resampling produces replicates containing no example of that class, in which balanced accuracy degenerates to the recall of the surviving class and biases the interval upward. Sequences are therefore split into those carrying only fire, only no-fire, and both, and each group is resampled to its own size, which keeps every class that a unit contains present in every replicate. Stratifying by a sequence's majority class would not achieve this, because a node's entire minority class can lie inside sequences that are majority the other class: FLAME sequences are videos in which the fire appears and disappears. The centralized and local-only references are included in this: their per-image predictions are regenerated from the saved selected-epoch checkpoints, so every headline interval in this paper, reference and federated alike, comes from the same estimator and no table mixes the two methods. The change is not cosmetic. On the configurations with five seeds the sequence-level interval is about twice as wide as the interval over seeds---for the IID local-only reference, pooled balanced accuracy $[0.781, 0.882]$ against $[0.835, 0.870]$---which is the understatement the estimator is meant to correct. On the three-seed Dirichlet configurations it is often narrower, because the $t$ interval with $n=3$ is dominated by the $t_{0.975,2}=4.30$ multiplier and can leave the unit interval altogether, as it does for the $\alpha{=}1$ centralized reference, $[0.741, 1.040]$. Where per-image predictions are genuinely unavailable, namely for the v1 results, which record no per-round test metrics at all, we report instead the two-sided 95\% confidence interval of the mean over seeds based on the $t$ distribution,
+The IID and label-skew configurations and the federated runs of the low-data regime are repeated with five seeds (42, 123, 456, 789, 1011); the Dirichlet partitions, the low-data references, the sensitivity sweeps and the ten-round runs with three (42, 123, 456). Held-out images are not independent: within one node, a few sequences can make up most of the validation or test set (Section~\ref{sec:limitations}). Every confidence interval of a held-out metric in this paper is therefore a \emph{hierarchical sequence-level (cluster) bootstrap percentile interval with $B=1000$ replicates, in which the sequences are resampled stratified by class composition}. Concretely, each replicate draws the $n$ seeds of the configuration with replacement; within every drawn run it draws, for each evaluation unit, that unit's held-out sequences (near-duplicate groups) with replacement, separately within each of the three strata \emph{fire-only}, \emph{no-fire-only} and \emph{mixed}, each stratum resampled to its own size; the run's headline metric is recomputed from the per-image predictions with the same aggregation as the point estimate; and the replicate value is the mean over the drawn runs. The interval is the 2.5th and 97.5th percentile of those $B$ values. The stratification is there for one reason: a class confined to very few sequences would otherwise vanish entirely from some resamples, and balanced accuracy silently becomes the recall of the class that survives. Image-level resampling, or intervals over seeds alone, would treat a dominant sequence as thousands of independent observations and understate the uncertainty. The stratification is necessary rather than decorative: a node's minority class can occupy very few sequences---under Dirichlet $\alpha{=}0.1$ one node holds all 211 of its no-fire test images in a single sequence---so unstratified resampling produces replicates containing no example of that class, in which balanced accuracy degenerates to the recall of the surviving class and biases the interval upward. Sequences are therefore split into those carrying only fire, only no-fire, and both, and each group is resampled to its own size, which keeps every class that a unit contains present in every replicate. Stratifying by a sequence's majority class would not achieve this, because a node's entire minority class can lie inside sequences that are majority the other class: FLAME sequences are videos in which the fire appears and disappears. The centralized and local-only references are included in this: their per-image predictions are regenerated from the saved selected-epoch checkpoints, so every headline interval in this paper, reference and federated alike, comes from the same estimator and no table mixes the two methods. The change is not cosmetic. On the configurations with five seeds the sequence-level interval is about twice as wide as the interval over seeds---for the IID local-only reference, pooled balanced accuracy $[0.781, 0.882]$ against $[0.835, 0.870]$---which is the understatement the estimator is meant to correct. On the three-seed Dirichlet configurations it is often narrower, because the $t$ interval with $n=3$ is dominated by the $t_{0.975,2}=4.30$ multiplier and can leave the unit interval altogether, as it does for the $\alpha{=}1$ centralized reference, $[0.741, 1.040]$. For quantities measured once per run, such as wall-clock time, we report the two-sided 95\% confidence interval of the mean over seeds based on the $t$ distribution,
 \begin{equation}
 \mathrm{CI}_{95} = \bar{x} \;\pm\; t_{0.975,\,n-1}\,\frac{s}{\sqrt{n}} .
 \label{eq:ci}
@@ -443,12 +443,7 @@ The federated implementation therefore aggregates clients in a fixed order, sort
 
 \textbf{Library versions.} The Jetson nodes and the desktop GPU use different versions of the imaging library (Pillow 9.0.1 and 12.3). On a fixed sample of 300 FLAME images (150 per class), the evaluation inputs---decoded, resized and normalised---are bitwise identical between the two environments. The training-time augmentation, drawn with the same random seed, differs in 7 of the 300 images, most likely because of interpolation differences between the library versions: 0.0024\% of all pixels change, by at most 15 of 255 intensity levels, and in no image more than 0.70\% of its pixels.
 
-Strategy pairs are compared \emph{paired by seed} within a data distribution. We report the paired effect size
-\begin{equation}
-d = \frac{\overline{\Delta}}{s_{\Delta}}, \qquad \Delta_i = x_i^{(A)} - x_i^{(B)},
-\label{eq:cohend}
-\end{equation}
-together with the paired $t$-test and the Wilcoxon signed-rank test, and a Friedman omnibus test across all strategies within a distribution. Because $n$ is small, we do not interpret a non-significant test as evidence of equivalence, and we do not use the phrase ``statistically indistinguishable''; we report the confidence interval of the difference and state explicitly when it contains zero. For the same reason, very large values of~\eqref{eq:cohend} are reported but not interpreted as strong evidence: with $n \le 5$, $s_{\Delta}$ is itself estimated from few observations, so $d$ has a wide sampling distribution and a large $|d|$ can arise from an unusually small $s_{\Delta}$ rather than from a large true effect. Where multiplicity matters we report the number of comparisons and the corresponding Bonferroni-adjusted threshold alongside the raw $p$ values. The two declared comparisons of Sections~\ref{sec:perspectives} and~\ref{sec:powercfg} use a different, fully specified procedure instead: the seed-paired difference with the shared-set stratified sequence bootstrap ($B=10{,}000$), its two-sided bootstrap $p$-value, a Holm correction within each declared family, and fixed verdict phrases.
+Because $n$ is small, a non-significant result is never interpreted as evidence of equivalence, and the phrase ``statistically indistinguishable'' is not used. The two declared comparisons of Sections~\ref{sec:perspectives} and~\ref{sec:powercfg} use a different, fully specified procedure instead: the seed-paired difference with the shared-set stratified sequence bootstrap ($B=10{,}000$), its two-sided bootstrap $p$-value, a Holm correction within each declared family, and fixed verdict phrases.
 
 \subsection{Time- and Communication-Normalised Comparison}
 \label{sec:timecomm}
@@ -496,118 +491,12 @@ Verdicts use the pre-registered phrases (``higher on the target sensor'', ``lowe
 \section{Experimental Results}
 \label{sec:results}
 
-Results are organised by protocol. Section~\ref{sec:res_v1} reports the original (v1) results, which were obtained under the \emph{image-level} split and are retained for continuity and for comparison against the audited protocol. Sections~\ref{sec:res_leakage}--\ref{sec:res_loso} report the revised protocol.
-
-\subsection{Results Under the Image-Level-Split Protocol (v1)}
-\label{sec:res_v1}
-
-\subsubsection{Impact of Non-IID Data Distribution}
-
-Table~\ref{tab:main_results} presents the global validation accuracy across communication rounds for a single reference seed, and Table~\ref{tab:v1_ci} aggregates the final accuracy over the available seeds with 95\% confidence intervals. The dominant v1 effect is the accuracy deficit of the first round under non-IID conditions: with 3-node \fedavg{} the round-1 accuracy of the reference seed falls from 85.45\% (IID) to 53.66\% (non-IID), i.e.\ to near-chance level for a binary task. Table~\ref{tab:v1_ci} shows that this first-round quantity is also highly seed-dependent: over seeds the 3-node \fedavg{} round-1 accuracy is $49.79\% \pm 9.80\%$ (95\% CI $[25.5, 74.1]$, $n=3$) under non-IID and $68.23\% \pm 16.93\%$ ($n=2$) under IID. Single-seed round-1 numbers should therefore be read as illustrations, not as estimates.
-
-\begin{table}[t]
-\centering
-\caption{Global Validation Accuracy (\%) Across Communication Rounds, Image-Level Split, Reference Seed 42}
-\label{tab:main_results}
-\begin{tabular}{@{}llccc@{}}
-\toprule
-\textbf{Config} & \textbf{Strategy} & \textbf{R1} & \textbf{R2} & \textbf{R3} \\
-\midrule
-\multirow{4}{*}{3-Node} & \fedavg{} (IID) & 85.45 & 99.69 & 99.75 \\
- & \fedavg{} (Non-IID) & 53.66 & 99.15 & 99.10 \\
- & \fedprox{} $\mu$=0.01 (Non-IID) & 94.79 & 99.27 & \textbf{99.49} \\
- & \fedprox{} $\mu$=0.1 (Non-IID) & \textbf{96.91} & 97.81 & 98.35 \\
-\bottomrule
-\end{tabular}
-\vspace{2pt}
-\footnotesize{Single seed (42), image-level split. Seed-aggregated values with confidence intervals are given in Table~\ref{tab:v1_ci}.}
-\end{table}
-
-\begin{table}[t]
-\centering
-\caption{v1 Final-Round Accuracy Under the Image-Level Split, Aggregated Over Seeds (mean $\pm$ std, 95\% $t$-CI of the mean)}
-\label{tab:v1_ci}
-\begin{tabular}{@{}llcl@{}}
-\toprule
-\textbf{Dist.} & \textbf{Method} & $n$ & \textbf{Final acc.\ (\%), mean $\pm$ std [95\% CI]} \\
-\midrule
-\multirow{6}{*}{IID}
- & Centralized        & 3 & $99.65 \pm 0.13$ \, [99.31, 99.98] \\
- & Local-only         & 3 & $99.49 \pm 0.08$ \, [99.28, 99.70] \\
- & \fedavg{}          & 2 & $99.32 \pm 0.03$ \, [99.04, 99.60] \\
- & \fedprox{} 0.01    & 3 & $99.18 \pm 0.12$ \, [98.90, 99.47] \\
- & \fedprox{} 0.1     & 3 & $98.29 \pm 0.48$ \, [97.11, 99.47] \\
- & \fedbn{}           & 3 & $95.69 \pm 3.12$ \, [87.93, 100.00]$^{\dagger}$ \\
-\midrule
-\multirow{6}{*}{Non-IID}
- & Centralized        & 3 & $99.72 \pm 0.07$ \, [99.54, 99.90] \\
- & Local-only         & 3 & $99.50 \pm 0.03$ \, [99.44, 99.57] \\
- & \fedavg{}          & 3 & $99.31 \pm 0.39$ \, [98.34, 100.00]$^{\dagger}$ \\
- & \fedprox{} 0.01    & 3 & $99.22 \pm 0.24$ \, [98.63, 99.82] \\
- & \fedprox{} 0.1     & 3 & $98.33 \pm 0.19$ \, [97.86, 98.81] \\
- & \fedbn{}           & 3 & $75.06 \pm 8.36$ \, [54.30, 95.83] \\
-\bottomrule
-\end{tabular}
-\vspace{2pt}
-\footnotesize{Image-level split (v1 protocol). Federated rows: final-round (R3) global \emph{validation} accuracy; the v1 runs recorded no per-round test metrics and predate the selection rule of Section~\ref{sec:selection}. Centralized and local-only rows: final-epoch test accuracy. $n$ is the number of completed seeds; the 3-node \fedavg{} IID cell and several v1 cells have fewer than three usable seeds, which is why the intervals are wide. $^{\dagger}$Interval truncated at the 100\% boundary; the raw $t$-interval exceeds~1. Values produced by \texttt{scripts/analyze\_results.py}. \todo{Replace this table with the $n=5$ group-level-split results once the seed-extension block has been executed; keep the present table as the image-level-split reference.}}
-\end{table}
-
-\subsubsection{FedProx Proximal Term Analysis}
-
-Under the v1 protocol, \fedprox{} with $\mu=0.01$ improved the reference-seed round-1 accuracy by 41.13 percentage points over \fedavg{} under non-IID conditions (94.79\% vs.\ 53.66\%). Increasing the proximal term to $\mu=0.1$ further raised round-1 accuracy to 96.91\% but lowered round-3 accuracy to $98.33\% \pm 0.19\%$ compared with $99.22\% \pm 0.24\%$ at $\mu=0.01$; the 95\% CIs of these two conditions do not overlap, which is consistent with an over-regularisation effect in which the stronger proximal constraint limits local adaptation. Whether this ordering persists across the wider $\mu$ grid is addressed in Section~\ref{sec:res_sensitivity}.
-
-Fig.~\ref{fig:convergence} shows the convergence curves, and Fig.~\ref{fig:mu_tradeoff} illustrates the $\mu$ trade-off between initial convergence speed and final accuracy.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{figures/fig1_convergence_accuracy}
-\caption{Global validation accuracy convergence for 3-node FL configurations under the image-level-split (v1) protocol. \todo{Regenerate with the group-level split, five seeds and shaded 95\% CI bands.}}
-\label{fig:convergence}
-\end{figure}
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{figures/fig6_mu_tradeoff}
-\caption{Proximal-term trade-off under the v1 protocol: increasing $\mu$ raises round-1 accuracy but lowers final accuracy. \todo{Extend to the full grid $\mu \in \{0.001, 0.01, 0.05, 0.1, 0.5\}$ (Section~\ref{sec:res_sensitivity}).}}
-\label{fig:mu_tradeoff}
-\end{figure}
-
-\subsubsection{Per-Node Analysis Under Non-IID}
-
-Table~\ref{tab:per_node} shows that the non-IID first-round degradation concentrates on the nodes with the strongest majority-class bias. Nodes~A (80\% fire) and B (88.5\% fire) reach only 45.11\% and 48.69\% round-1 accuracy with \fedavg{}, because their locally trained models fail on the minority class; Node~C (20\% fire), which observes the minority class more often, reaches 85.92\%. Under the sequence-level split this first-round collapse is not confined to the skewed nodes: the \fedavg{} global model collapses after round~1 under IID as well (Section~\ref{sec:discussion}). \fedprox{} ($\mu=0.01$) raises the weakest node from 45.11\% to 93.48\%. These are single-seed accuracies; the corresponding balanced accuracies, per-class sensitivities and confusion matrices under the revised protocol are reported in Section~\ref{sec:res_metrics}, and they are the quantities that actually identify \emph{which} class each node fails on.
-
-\begin{table}[t]
-\centering
-\caption{Per-Node Accuracy (\%) Under Manual Non-IID Label Skew (3-Node, Image-Level Split, Seed 42)}
-\label{tab:per_node}
-\begin{tabular}{@{}llccc@{}}
-\toprule
-\textbf{Strategy} & \textbf{Round} & \textbf{Node A} & \textbf{Node B} & \textbf{Node C} \\
- & & \textbf{(80\% F)} & \textbf{(88.5\% F)} & \textbf{(20\% F)} \\
-\midrule
-\multirow{2}{*}{\fedavg{}} & R1 & 45.11 & 48.69 & 85.92 \\
- & R3 & 99.02 & 98.92 & 99.71 \\
-\midrule
-\multirow{2}{*}{\fedprox{} $\mu$=0.01} & R1 & 93.48 & 94.61 & 98.33 \\
- & R3 & 99.58 & 99.37 & 99.58 \\
-\midrule
-\multirow{2}{*}{\fedprox{} $\mu$=0.1} & R1 & 96.93 & 97.27 & 96.00 \\
- & R3 & 98.21 & 98.07 & 99.38 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{figures/fig4_per_node_noniid}
-\caption{Per-node accuracy under manual label skew (v1 protocol, seed~42). \todo{Regenerate as per-node balanced accuracy with CI bands under the group-level split.}}
-\label{fig:pernode}
-\end{figure}
+Sections~\ref{sec:res_leakage}--\ref{sec:res_loso} report the revised (group-level) protocol. Results of the original submission (v1, image-level split) appear only in Table~\ref{tab:protocol_effect}, for the configurations that exist under both protocols.
 
 \subsection{Leakage Audit and the Sequence-Level Split}
 \label{sec:res_leakage}
 
-Table~\ref{tab:leakage} reports the near-duplicate audit of the FLAME frames and of the two partitioning protocols. The result settles the reviewers' concern in the strongest possible way: under the v1 image-level split, 99.6\% of all validation and test images have a near-duplicate in the training split of some node, and 235 (IID) and 219 (label skew) of the 265 non-trivial groups were spread over several nodes. The near-perfect v1 accuracies of Section~\ref{sec:res_v1} therefore measure, to a large extent, recognition of sequences seen during training. Under the group-level protocol the independent audit of all 15 written partitions (IID, label skew, three Dirichlet skews, and their two low-data variants each) finds $L=0$ at $\tau=8$, the definition used to build the partitions, and no group spanning two nodes. Beyond the threshold the picture is continuous rather than clean (Table~\ref{tab:nn_distance}): some held-out images have a training image just above $\tau=8$ under dHash, and under pHash some fall within 8 bits. They are concentrated in a few pairs of adjacent segments of the same flight. Merging groups more aggressively does not remove this residual, and it is not free. Table~\ref{tab:grouping_tradeoff} rebuilds all five partitions under three coarser groupings, formed by unioning the dHash edges at $\tau=8$ with the pHash edges at 3, 4 and 6 bits. Adding pHash at 6 bits is the one that buys something: it cuts the dHash 9--10 residual from 188--476 images to 65--91. It pays for that by merging the 265 non-trivial groups down to 152, which costs on both of the other criteria---the smallest held-out set left to any client falls from 137 images to 116, and the number of per-node held-out class sets in which a single sequence supplies 90\% or more of the images rises from 2 of 55 to 8 of 53, so exactly the concentration that makes per-node metrics unreliable (Section~\ref{sec:limitations}) gets worse. The intermediate thresholds are not even reliably better on the residual they were meant to fix: at 4 bits the Dirichlet $\alpha{=}1$ partition improves only from 473 to 406 images, and at 3 bits it degrades to 520, because re-partitioning under a coarser grouping also reshuffles which images are held out at all. There is therefore no threshold that dominates the others, and we keep $\tau=8$ as the choice that is best on balance and on sequence dominance while leaving a residual that is measured rather than assumed, and handled by the clean-subset analysis of Section~\ref{sec:clean}. Table~\ref{tab:group_counts} lists the achieved per-node counts: the equal and label-skew designs are met to within a few dozen images, the Dirichlet skews are as extreme as intended (a node with 9\% fire next to a node with 95\%; one client with 911 images next to one with 41{,}786), and every client keeps at least 137 validation and 137 test images.
+Table~\ref{tab:leakage} reports the near-duplicate audit of the FLAME frames and of the two partitioning protocols. The result settles the reviewers' concern in the strongest possible way: under the v1 image-level split, 99.6\% of all validation and test images have a near-duplicate in the training split of some node, and 235 (IID) and 219 (label skew) of the 265 non-trivial groups were spread over several nodes. The near-perfect v1 accuracies of Table~\ref{tab:protocol_effect} therefore measure, to a large extent, recognition of sequences seen during training. Under the group-level protocol the independent audit of all 15 written partitions (IID, label skew, three Dirichlet skews, and their two low-data variants each) finds $L=0$ at $\tau=8$, the definition used to build the partitions, and no group spanning two nodes. Beyond the threshold the picture is continuous rather than clean (Table~\ref{tab:nn_distance}): some held-out images have a training image just above $\tau=8$ under dHash, and under pHash some fall within 8 bits. They are concentrated in a few pairs of adjacent segments of the same flight. Merging groups more aggressively does not remove this residual, and it is not free. Table~\ref{tab:grouping_tradeoff} rebuilds all five partitions under three coarser groupings, formed by unioning the dHash edges at $\tau=8$ with the pHash edges at 3, 4 and 6 bits. Adding pHash at 6 bits is the one that buys something: it cuts the dHash 9--10 residual from 188--476 images to 65--91. It pays for that by merging the 265 non-trivial groups down to 152, which costs on both of the other criteria---the smallest held-out set left to any client falls from 137 images to 116, and the number of per-node held-out class sets in which a single sequence supplies 90\% or more of the images rises from 2 of 55 to 8 of 53, so exactly the concentration that makes per-node metrics unreliable (Section~\ref{sec:limitations}) gets worse. The intermediate thresholds are not even reliably better on the residual they were meant to fix: at 4 bits the Dirichlet $\alpha{=}1$ partition improves only from 473 to 406 images, and at 3 bits it degrades to 520, because re-partitioning under a coarser grouping also reshuffles which images are held out at all. There is therefore no threshold that dominates the others, and we keep $\tau=8$ as the choice that is best on balance and on sequence dominance while leaving a residual that is measured rather than assumed, and handled by the clean-subset analysis of Section~\ref{sec:clean}. Table~\ref{tab:group_counts} lists the achieved per-node counts: the equal and label-skew designs are met to within a few dozen images, the Dirichlet skews are as extreme as intended (a node with 9\% fire next to a node with 95\%; one client with 911 images next to one with 41{,}786), and every client keeps at least 137 validation and 137 test images.
 
 \begin{table}[t]
 \centering
@@ -692,31 +581,15 @@ Worst per-node test leak rate (\%) & 99.88 & 0.00 \\
 \centering
 \caption{Effect of the Partitioning Protocol on the Reported \emph{Accuracy} (3-Node, mean $\pm$ std over seeds). Accuracy is the secondary metric of this study (Section~\ref{sec:primary}); it is the quantity shown here because the comparison is precisely about how much accuracy the leaked protocol added. Balanced accuracy, the primary metric, is in Table~\ref{tab:fullmetrics}}
 \label{tab:protocol_effect}
-\begin{tabular}{@{}llcc@{}}
-\toprule
-\textbf{Dist.} & \textbf{Method} & \textbf{Image-level (\%)} & \textbf{Group-level (\%)} \\
-\midrule
-\multirow{4}{*}{IID}
- & Centralized     & $99.65 \pm 0.13$ ($n{=}3$) & $93.4 \pm 1.2$ ($n{=}5$) \\
- & Local-only      & $99.49 \pm 0.08$ ($n{=}3$) & $86.9 \pm 1.4$ ($n{=}5$) \\
- & \fedavg{}       & $99.32 \pm 0.03$ ($n{=}2$) & $\PH \pm \PH$ \\
- & \fedprox{} 0.01 & $99.18 \pm 0.12$ ($n{=}3$) & $\PH \pm \PH$ \\
-\midrule
-\multirow{4}{*}{Non-IID}
- & Centralized     & $99.72 \pm 0.07$ ($n{=}3$) & $94.3 \pm 1.6$ ($n{=}5$) \\
- & Local-only      & $99.50 \pm 0.03$ ($n{=}3$) & $95.5 \pm 0.8$ ($n{=}5$) \\
- & \fedavg{}       & $99.31 \pm 0.39$ ($n{=}3$) & $\PH \pm \PH$ \\
- & \fedprox{} 0.01 & $99.22 \pm 0.24$ ($n{=}3$) & $\PH \pm \PH$ \\
-\bottomrule
-\end{tabular}
+\input{tables/protocol_effect_tabular.tex}
 \vspace{2pt}
-\footnotesize{The two columns are \emph{not} paired: they use different partitions and different seed sets. Image-level values are the v1 results of Table~\ref{tab:v1_ci} (validation accuracy for the federated rows, test accuracy for the baselines); every group-level cell, baseline and federated alike, is test accuracy at the round (baselines: epoch) selected by the rule of Section~\ref{sec:selection}. Local-only Non-IID accuracy is inflated by the class imbalance of each node's own test split; its balanced accuracy is $88.6$ against $93.8$\% for the centralized model as a mean over the three clients, and $95.3$ against $94.7$\% pooled over all held-out images (Table~\ref{tab:fullmetrics}; Section~\ref{sec:primary}). All group-level numbers are produced by \texttt{scripts/analyze\_results.py} into \texttt{analysis/summary\_table.csv} and are pinned to it by \texttt{tests/test\_paper\_numbers.py}. \todo{Fill the federated group-level cells from the \texttt{rev\_*} Jetson runs.}}
+\footnotesize{The two columns are \emph{not} paired: they use different partitions and different seed sets. Image-level values are the v1 results of the original submission (final-round validation accuracy for the federated rows, final-epoch test accuracy for the baselines), shown only for the configurations that exist under both protocols; every group-level cell, baseline and federated alike, is test accuracy at the round (baselines: epoch) selected by the rule of Section~\ref{sec:selection}. Local-only Non-IID accuracy is inflated by the class imbalance of each node's own test split; its balanced accuracy is $88.6$ against $93.8$\% for the centralized model as a mean over the three clients, and $95.3$ against $94.7$\% pooled over all held-out images (Table~\ref{tab:fullmetrics}; Section~\ref{sec:primary}). All numbers are produced by \texttt{scripts/analyze\_results.py} into \texttt{analysis/summary\_table.csv} and written into the table by \texttt{scripts/export\_latex\_tables.py}; the federated group-level rows are the three-round runs of the main matrix (heterogeneous power configuration).}
 \end{table}
 
 \subsection{Full Metric Set and Per-Client Confusion Matrices}
 \label{sec:res_metrics}
 
-The two reference conditions have been run under the audited protocol (Table~\ref{tab:fullmetrics}; five seeds, desktop GPU, Jetson hyperparameters). Removing the sequence leakage moves the centralized reference from 99.7\% to $93.4 \pm 1.2$\% (IID) and $94.3 \pm 1.6$\% (label skew) test accuracy, and the local-only reference from 99.5\% to $86.9 \pm 1.4$\% and $95.5 \pm 0.8$\%. Two consequences follow for the rest of the paper. First, the task is no longer saturated: the gap between the two references is 6.5 points of accuracy under IID and 6.1 points of balanced accuracy under label skew\todo{Aggregation fixed 27 Sep, Section~\ref{sec:primary}: label skew, pooled: local-only 95.3 vs centralized 94.7 (no band); client mean: 88.6 vs 93.8. IID, pooled: 85.3 vs 93.7; client mean: 84.5 vs 93.7.}, which is the room in which a federated strategy can show whether it helps.\todo{Revisit after the FL results: the size of this band, and every claim below that depends on it, must be written against where the federated strategies actually land inside it.} Second, the accuracy-only view that the reviewers criticised is misleading exactly where it matters. Under label skew the local-only models reach a \emph{higher} accuracy than the centralized model ($95.5$\% vs.\ $94.3$\%) while their balanced accuracy, specificity and MCC are clearly lower ($88.6$ vs.\ $94.7$, $83.8$ vs.\ $96.4$, $0.81$ vs.\ $0.88$)\todo{Aggregation fixed 27 Sep, Section~\ref{sec:primary}: pooled: BA 95.3 vs 94.7, specificity 94.3 vs 96.4, MCC 0.90 vs 0.88 (the specificity gap remains, BA and MCC reverse); client-mean BA 88.6 vs 93.8.}, because a node that trains on 80--88\% fire frames rarely predicts no-fire and is tested on an equally skewed split; accuracy alone would rank the wrong method first.\todo{Revisit after the FL results: this is now an accuracy inversion, not a tie, and the sentence should be written against the federated rows once they exist.} Table~\ref{tab:protocol_effect} places the two protocols side by side.
+The two reference conditions have been run under the audited protocol (Table~\ref{tab:fullmetrics}; five seeds, desktop GPU, Jetson hyperparameters). Under the audited protocol the centralized reference reaches $93.4 \pm 1.2$\% (IID) and $94.3 \pm 1.6$\% (label skew) test accuracy, and the local-only reference $86.9 \pm 1.4$\% and $95.5 \pm 0.8$\% (Table~\ref{tab:protocol_effect} gives the image-level values). Two consequences follow for the rest of the paper. First, the task is no longer saturated: the gap between the two references is 6.5 points of accuracy under IID and 6.1 points of balanced accuracy under label skew\todo{Aggregation fixed 27 Sep, Section~\ref{sec:primary}: label skew, pooled: local-only 95.3 vs centralized 94.7 (no band); client mean: 88.6 vs 93.8. IID, pooled: 85.3 vs 93.7; client mean: 84.5 vs 93.7.}, which is the room in which a federated strategy can show whether it helps.\todo{Revisit after the FL results: the size of this band, and every claim below that depends on it, must be written against where the federated strategies actually land inside it.} Second, the accuracy-only view that the reviewers criticised is misleading exactly where it matters. Under label skew the local-only models reach a \emph{higher} accuracy than the centralized model ($95.5$\% vs.\ $94.3$\%) while their balanced accuracy, specificity and MCC are clearly lower ($88.6$ vs.\ $94.7$, $83.8$ vs.\ $96.4$, $0.81$ vs.\ $0.88$)\todo{Aggregation fixed 27 Sep, Section~\ref{sec:primary}: pooled: BA 95.3 vs 94.7, specificity 94.3 vs 96.4, MCC 0.90 vs 0.88 (the specificity gap remains, BA and MCC reverse); client-mean BA 88.6 vs 93.8.}, because a node that trains on 80--88\% fire frames rarely predicts no-fire and is tested on an equally skewed split; accuracy alone would rank the wrong method first.\todo{Revisit after the FL results: this is now an accuracy inversion, not a tie, and the sentence should be written against the federated rows once they exist.} Table~\ref{tab:protocol_effect} places the two protocols side by side.
 
 The reporting protocol itself accounts for a large part of the reference gap, which is a finding about how such results are reported rather than a result about federation. Selecting the epoch by validation loss instead of reporting the final epoch raises the IID centralized reference from $90.9 \pm 2.4$\% to $93.4 \pm 1.2$\% and the local-only reference from $78.3 \pm 5.0$\% to $86.9 \pm 1.4$\%, so the centralized-to-local-only gap narrows from 12.6 to 6.5 points: final-epoch reporting more than doubles the apparent advantage of pooling the data. The effect is asymmetric because the local-only models are the unstable ones across epochs---on node~C the validation accuracy of the local-only IID baseline moves between 0.96 and 0.42 in consecutive epochs while its training loss stays below 0.05 (\texttt{results/rev\_baselines\_sel/rev\_iid\_local\_seed123})---so a final-epoch snapshot penalises them far more often than it penalises the pooled model. Both protocols are kept in the repository under separate labels (\texttt{group} and \texttt{group\_final\_epoch} in \texttt{analysis/runs.csv}); everything reported in this paper uses the declared selection rule.
 
@@ -866,7 +739,7 @@ Under the group-level split, \fedbn{} is run only with a ten-round budget, again
 
 Table~\ref{tab:time} reports the measured wall-clock cost and communication volume of the revision runs (group-level split, wired Gigabit Ethernet). \todo{From the \texttt{rev\_*} runs, state the three-round 3-node time of \fedavg{} and of \fedprox{} ($\mu=0.01$) under label skew and their ratio, with 95\% CIs. Do not reuse the v1 ratio.} Communication volume is identical for \fedavg{} and \fedprox{} ($165.5$\,MB cumulative over three rounds with $K=3$ and $|w| \approx 6.13$\,MB: three payloads per client per round, in agreement with~\eqref{eq:comm}), because \fedprox{} changes the local objective and not the payload. The v1 runs of the original submission were timed over WiFi and under the image-level split; because both the network and the data partition have changed, v1 and revision wall-clock numbers are not comparable, and the v1 timings are superseded by, not extended with, the revision timings. They are therefore not reported here.
 
-The distinction between cost per round and cost per second matters for the interpretation of the first-round advantage of \fedprox{}: an improvement that is obtained per \emph{round} is not necessarily an improvement per \emph{second}, so a fair claim requires the time-normalised curve of Fig.~\ref{fig:timecomm} rather than Table~\ref{tab:main_results}. \todo{From the \texttt{rev\_*} runs, state how the time \fedprox{} needs for its first round compares with the time \fedavg{} needs per round.}
+The distinction between cost per round and cost per second matters for the interpretation of the first-round advantage of \fedprox{}: an improvement that is obtained per \emph{round} is not necessarily an improvement per \emph{second}, so a fair claim requires the time-normalised curve of Fig.~\ref{fig:timecomm} rather than a round-indexed comparison. \todo{From the \texttt{rev\_*} runs, state how the time \fedprox{} needs for its first round compares with the time \fedavg{} needs per round.}
 
 \IfFileExists{tables/time.tex}{\input{tables/time.tex}}{%
 \begin{table}[t]
@@ -893,35 +766,6 @@ The distinction between cost per round and cost per second matters for the inter
 \caption{Accuracy versus communication round, elapsed wall-clock time and cumulative transmitted megabytes for the revision runs (group-level split, wired Gigabit Ethernet). v1 runs are not drawn: they were timed over WiFi and under a different partition, so their time axis is not comparable. \todo{Generate from the \texttt{rev\_*} runs with \texttt{scripts/analyze\_results.py}, which excludes image-level-split runs from the time and communication panels.}}
 \label{fig:timecomm}
 \end{figure}
-
-\subsection{Statistical Analysis}
-\label{sec:res_stats}
-
-Table~\ref{tab:stats} lists the paired comparisons of the v1 protocol. With $n \le 3$ seeds these tests have very low power, and we report them for completeness rather than as confirmatory evidence: only two of the fifteen pairs under IID and three under label skew reach $p<0.05$ uncorrected, and none survives a Bonferroni correction for the fifteen comparisons ($\alpha = 0.0033$). The Friedman omnibus test over the six methods is not significant in either distribution ($\chi^2 = 10.00$, $p = 0.075$ for IID and $\chi^2 = 8.29$, $p = 0.141$ for label skew), but it is computed on only $n = 2$ seeds that are complete across all six methods, so it is uninformative. Several paired effect sizes are numerically very large (for example $d = -7.30$ for \fedprox{}~0.01 versus local-only under IID, where the mean difference is only $-0.31$ percentage points); as argued in Section~\ref{sec:stats}, such values reflect a very small paired standard deviation at $n=3$ and must not be read as evidence of a practically important difference.
-
-\begin{table}[t]
-\centering
-\caption{Paired Comparisons of Final Accuracy, Image-Level Split ($n$ = Number of Paired Seeds)}
-\label{tab:stats}
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{@{}llccc@{}}
-\toprule
-\textbf{Dist.} & \textbf{Comparison} & $n$ & \textbf{Diff.\ (pp)} & \textbf{$d$ \; ($p$)} \\
-\midrule
-\multirow{3}{*}{IID}
- & \fedprox{} 0.01 vs.\ Local-only & 3 & $-0.31$ & $-7.30$ \; (0.006) \\
- & \fedprox{} 0.1 vs.\ Local-only  & 3 & $-1.19$ & $-3.03$ \; (0.034) \\
- & Centralized vs.\ \fedbn{}       & 3 & $+3.96$ & $+1.22$ \; (0.169) \\
-\midrule
-\multirow{3}{*}{Non-IID}
- & Centralized vs.\ \fedbn{}       & 3 & $+24.66$ & $+2.97$ \; (0.036) \\
- & \fedbn{} vs.\ Local-only        & 3 & $-24.44$ & $-2.93$ \; (0.037) \\
- & Centralized vs.\ Local-only     & 3 & $+0.22$  & $+2.84$ \; (0.039) \\
-\bottomrule
-\end{tabular}
-\vspace{2pt}
-\footnotesize{$d$ is the paired effect size of~\eqref{eq:cohend}; $p$ is the uncorrected paired $t$-test. Bonferroni threshold for 15 comparisons per distribution: $\alpha=0.0033$; no comparison meets it. \todo{Regenerate at $n=5$ under the group-level split from \texttt{analysis/\allowbreak pairwise\_\allowbreak tests.md}, and add the 95\% CI of the paired difference for each row.}}
-\end{table}
 
 \subsection{Cross-Sensor Generalisation (Leave-One-Scene-Out)}
 \label{sec:res_loso}
@@ -965,7 +809,7 @@ Within the scope defined in Section~\ref{sec:scope}, the results support the fol
 
 \textbf{The memory-accuracy trade-off is real on edge hardware.} The proximal term requires a copy of the global parameters. On the 8\,GB shared-memory Jetson Orin Nano this forced a CPU-resident copy with per-layer transfers, which is the main contributor to the wall-clock overhead of \fedprox{} \todo{overhead factor and 95\% CI from the \texttt{rev\_*} runs; the v1 factor is not reused}. This cost does not appear in GPU-rich simulation, and it is invisible in any comparison indexed by communication rounds.
 
-\textbf{Per-round and per-client reporting changes what one sees.} Under the image-level split of v1 the final-round accuracy was nearly identical for all aggregating strategies while their first-round per-client behaviour differed sharply; under the sequence-level split the strategies separate at the selected round as well (Tables~\ref{tab:fullmetrics} and~\ref{tab:dirichlet}). In both, aggregate accuracy is the least informative of the metrics we report for this task, and balanced accuracy, minority-class sensitivity and MCC should be preferred when client priors differ.
+\textbf{Per-round and per-client reporting changes what one sees.} \todo{Narrative from the revision results only (decision 7 Oct: v1 results appear only in Table~\ref{tab:protocol_effect}).}
 
 \todo{Extend once the Dirichlet, low-data and sensitivity blocks are available; in particular, state at which $\rho$ the federated advantage over local-only becomes larger than the width of its confidence interval.}
 

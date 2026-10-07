@@ -8,8 +8,8 @@ CLAUDE.md rule 4 says no number is typed into the paper by hand.
   them inside the right table, and re-derives every reference cell of the
   generated files -- balanced accuracy pooled (primary) and client mean
   (secondary), mean and 95 % CI -- from ``analysis/summary_table.csv``.
-* ``tab:protocol_effect`` still carries its group-level accuracy cells inline and
-  is pinned here cell by cell.
+* ``tab:protocol_effect`` is generated (tables/protocol_effect_tabular.tex); its
+  group-level accuracy cells are pinned here cell by cell.
 * The superseded final-epoch reference cells of tab:dirichlet / tab:lowdata and
   the old communication volume must not reappear.
 """
@@ -289,10 +289,12 @@ def test_communication_volume_is_the_measured_one():
     ("non_iid_label", "local", "Local-only"),
 ])
 def test_protocol_effect_group_column_matches_summary(distribution, kind, method):
-    """The group-level column of tab:protocol_effect is selected-round accuracy."""
-    tex = open(MAIN_TEX, encoding="utf-8").read()
+    """The group-level column of tab:protocol_effect is selected-round accuracy (the
+    tabular is generated: tables/protocol_effect_tabular.tex)."""
+    text = _generated("protocol_effect_tabular.tex")
     summary = _summary()
-    line = _row(tex, "tab:protocol_effect", method, distribution)
+    block = text.split(r"\multirow")[1 if distribution == "iid" else 2]
+    line = [l for l in block.splitlines() if "& %s &" % method in l][0]
     cells = _cells(line)
     assert len(cells) == 2, "expected an image-level and a group-level cell"
 
