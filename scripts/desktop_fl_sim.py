@@ -56,6 +56,8 @@ SPLITS_DIR = os.path.join("data", "splits")
 RESULTS_ROOT = os.path.join("results", "desktop_sim")
 DEFAULT_PORT = 8091
 DEFAULT_STOP_FILE = os.path.join("logs", "desktop_sim", "STOP")
+#: lanes sharing the GPU while a cell ran (recorded: wall-clock is not comparable across)
+LANES = 1
 
 
 def partition(alpha: str, draw: str) -> str:
@@ -206,7 +208,8 @@ def run_cell(alpha: str, draw: str, strategy: str, data_root: str, python: str,
             "rounds": rounds, "local_epochs": local_epochs, "lr": HYPER["lr"],
             "batch_size": HYPER["batch_size"], "seed": HYPER["seed"],
             "server_rc": rc, "client_rc": crc, "ok": ok, "started": started,
-            "wall_clock_s": round(seconds, 1), "commit": git_commit(),
+            "wall_clock_s": round(seconds, 1), "parallel_lanes": LANES, "port": port,
+            "commit": git_commit(),
             "host": socket.gethostname(), "python": platform.python_version(),
             "gpu": _gpu_name(python), "data_root": os.path.abspath(data_root)}
     if os.path.isdir(out):
@@ -249,7 +252,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     r.add_argument("--data_root", required=True)
     r.add_argument("--python", default=sys.executable)
     r.add_argument("--cells", nargs="*", default=None, metavar="SPLIT:STRATEGY")
-    r.add_argument("--port", type=int, default=DEFAULT_PORT)
+    r.add_argument("--port", type=int, default=DEFAULT_PORT,
+                   help="lane i uses port + i")
+    r.add_argument("--lanes", type=int, default=1,
+                   help="cells run in this many parallel lanes on the one GPU (each lane "
+                        "sequential); the training code and settings are unchanged")
     r.add_argument("--results_root", default=RESULTS_ROOT)
     r.add_argument("--stop_file", default=DEFAULT_STOP_FILE)
     r.add_argument("--rounds", type=int, default=HYPER["rounds"],
@@ -282,17 +289,47 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         for b in bad:
             print("PRE-FLIGHT FAIL: " + b)
         return 1
-    failed = 0
-    for a, d, s in todo:
-        if os.path.exists(args.stop_file):
-            print("stop file %s present: no new cell (camera work has priority)" % args.stop_file)
-            break
-        res = run_cell(a, d, s, args.data_root, args.python, args.port, args.results_root,
-                       args.rounds, args.local_epochs, split=args.validation_split)
-        print("[%s] %s: %s %s" % (time.strftime("%H:%M:%S"), res["cell"], res["status"],
-                                  res.get("seconds", "")), flush=True)
-        failed += res["status"] == "FAILED"
-    return 1 if failed else 0
+    global LANES
+    LANES = max(1, args.lanes)
+    results = run_lanes(todo, LANES, lambda a, d, s, port: run_cell(
+        a, d, s, args.data_root, args.python, port, args.results_root, args.rounds,
+        args.local_epochs, split=args.validation_split), args.port, args.stop_file)
+    return 1 if any(r["status"] == "FAILED" for r in results) else 0
+
+
+def lane_plan(todo: Sequence[Tuple[str, str, str]], lanes: int) -> List[List[Tuple[str, str, str]]]:
+    """Cells dealt round-robin to ``lanes`` lanes, in run order (each lane sequential)."""
+    return [list(todo[i::lanes]) for i in range(lanes)]
+
+
+def run_lanes(todo, lanes: int, run_one, base_port: int, stop_file: str) -> List[Dict]:
+    """Each lane runs its cells one after another on its own port (base_port + lane);
+    before every cell the stop file is checked, so no lane starts a new cell once it
+    exists (a running cell finishes)."""
+    import threading
+    results: List[Dict] = []
+    lock = threading.Lock()
+
+    def lane(i, cells_):
+        for a, d, s in cells_:
+            if os.path.exists(stop_file):
+                print("lane %d: stop file %s present: no new cell (camera work has priority)"
+                      % (i, stop_file), flush=True)
+                return
+            res = run_one(a, d, s, base_port + i)
+            with lock:
+                results.append(res)
+                print("[%s] lane %d %s: %s %s" % (time.strftime("%H:%M:%S"), i, res["cell"],
+                                                  res["status"], res.get("seconds", "")),
+                      flush=True)
+
+    threads = [threading.Thread(target=lane, args=(i, c)) for i, c in
+               enumerate(lane_plan(todo, lanes)) if c]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    return results
 
 
 if __name__ == "__main__":

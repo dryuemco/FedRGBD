@@ -77,3 +77,28 @@ def test_flame_analysis_skips_the_desktop_sim_tree(tmp_path):
     got = sorted(os.path.relpath(r, tmp_path) for r in iter_run_dirs(str(tmp_path)))
     assert got == [os.path.join("pc_maxn", "rev_iid_fedavg_r10_seed42"),
                    "rev_dirichlet0.1_fedavg_seed42"]
+
+
+def test_four_lanes_cover_every_cell_once_on_distinct_ports(tmp_path):
+    plan = sim.lane_plan(sim.cells(), 4)
+    assert sorted(c for lane in plan for c in lane) == sorted(sim.cells())
+    assert [len(l) for l in plan] == [5, 5, 4, 4]
+    seen = []
+    res = sim.run_lanes(sim.cells(), 4, lambda a, d, s, port: seen.append((port, (a, d, s)))
+                        or {"cell": s, "status": "ok"}, 9000, str(tmp_path / "none"))
+    assert len(res) == 18 and sorted(c for _, c in seen) == sorted(sim.cells())
+    ports = {c: p for p, c in seen}
+    for i, lane in enumerate(plan):
+        assert {ports[c] for c in lane} == {9000 + i}
+
+
+def test_stop_file_halts_every_lane(tmp_path):
+    stop = tmp_path / "STOP"
+    calls = []
+
+    def one(a, d, s, port):
+        calls.append(s)
+        stop.write_text("camera footage arrived")
+        return {"cell": s, "status": "ok"}
+    sim.run_lanes(sim.cells(), 2, one, 9000, str(stop))
+    assert 1 <= len(calls) <= 2
