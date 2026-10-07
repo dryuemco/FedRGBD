@@ -255,3 +255,11 @@ def test_loso_table_is_generated_from_the_analysis(analysis, tmp_path):
                   os.path.join(cet.REPO, "paper", "tables", "x.tex")])
     out = str(tmp_path / "t.tex")
     assert cet.main(["--analysis_dir", analysis, "--output", out]) == 0
+
+
+def test_loso_table_prints_no_signed_zero():
+    from scripts.camera_export_loso_table import _ci, _num
+    assert _num(-0.0004) == "0.0" and _num(-0.04, signed=True) == "0.0"
+    assert _num(0.04, signed=True) == "0.0" and _num(0.06, signed=True) == "+0.1"
+    assert _num(-0.06) == "-0.1"
+    assert _ci(-0.0004861, -0.0143, 0.0131, signed=True) == "0.0 [-1.4, 1.3]"
