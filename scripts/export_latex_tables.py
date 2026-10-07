@@ -1183,6 +1183,50 @@ def powercfg_straggler_tabular(analysis_dir: str) -> Optional[str]:
     return "\n".join(out) + "\n"
 
 
+#: tab:sensitivity: label skew, three rounds, main matrix; (factor, setting, strategy
+#: label, config_id).  One factor varied at a time about mu=0.01, E=5, eta=1e-3.
+_SENS_D = "non_iid_label"
+SENSITIVITY_ROWS = (
+    [(r"Proximal strength $\mu$", "0 (" + r"\fedavg{}" + ")", "group|fl|fedavg|%s|3|5|0.001|3" % _SENS_D)]
+    + [(r"Proximal strength $\mu$", "%g" % mu, "group|fl|fedprox_%g|%s|3|5|0.001|3" % (mu, _SENS_D))
+       for mu in (0.001, 0.01, 0.05, 0.1, 0.5)]
+    + [(r"Local epochs $E$", "%d, %s" % (e, name), "group|fl|%s|%s|3|%d|0.001|3" % (s, _SENS_D, e))
+       for e in (1, 2, 5) for s, name in (("fedavg", r"\fedavg{}"), ("fedprox_0.01", r"\fedprox{} 0.01"))]
+    + [(r"Learning rate $\eta$", "$10^{%d}$, %s" % (k, name), "group|fl|%s|%s|3|5|%s|3" % (s, _SENS_D, lr))
+       for k, lr in ((-4, "0.0001"), (-3, "0.001"))
+       for s, name in (("fedavg", r"\fedavg{}"), ("fedprox_0.01", r"\fedprox{} 0.01"))]
+)
+
+
+def sensitivity_tabular(summary: pd.DataFrame, scarce: set) -> Optional[str]:
+    """tab:sensitivity: selected-round test balanced accuracy, pooled and client mean, mean
+    [95% CI], and the number of seeds, for the mu grid (FedAvg = mu 0) and for E and eta
+    with FedAvg and FedProx(0.01) -- label skew, three rounds, main matrix."""
+    wanted = {cid for _, _, cid in SENSITIVITY_ROWS}
+    if summary.empty or not set(summary["config_id"].astype(str)) & wanted:
+        return None
+    pooled_flag, mean_flag = scarce_cells(scarce, _SENS_D)
+    out = [_GENERATED, r"\begin{tabular}{@{}llccc@{}}", r"\toprule",
+           _row([r"\textbf{Factor}", r"\textbf{Setting}", r"\textbf{Bal.\ acc.}",
+                 r"\textbf{Bal.\ acc., client mean}", r"$n$"]), r"\midrule"]
+    factors = []
+    for f, _, _ in SENSITIVITY_ROWS:
+        if f not in factors:
+            factors.append(f)
+    for i, factor in enumerate(factors):
+        if i:
+            out.append(r"\midrule")
+        rows = [r for r in SENSITIVITY_ROWS if r[0] == factor]
+        for j, (_, setting, cid) in enumerate(rows):
+            n = summary[(summary["config_id"] == cid) & (summary["metric"] == PRIMARY_BA)]
+            lead = (r"\multirow{%d}{*}{\shortstack[l]{%s}}" % (len(rows), factor)) if j == 0 else ""
+            out.append(_row([lead, setting, _ci_cell(summary, cid, PRIMARY_BA, pooled_flag),
+                             _ci_cell(summary, cid, SECONDARY_BA, mean_flag),
+                             str(int(n["n_seeds"].iloc[0])) if len(n) == 1 else MISSING]))
+    out += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(out) + "\n"
+
+
 def load_partition_skew(analysis_dir: str) -> Dict[str, float]:
     """{partition: size-weighted mean JSD} from scripts/partition_skew.py."""
     path = os.path.join(analysis_dir, "partition_skew.csv")
@@ -1375,6 +1419,7 @@ def export(analysis_dir: str, output_dir: str, metrics: Optional[Sequence[str]] 
            "dirichlet_tabular.tex")
     _write(lowdata_paper_tabular(summary, scarce), "lowdata_tabular.tex")
     _write(protocol_effect_tabular(summary), "protocol_effect_tabular.tex")
+    _write(sensitivity_tabular(summary, scarce), "sensitivity_tabular.tex")
     _write(fedbn10_tabular(summary, scarce), "fedbn10_tabular.tex")
     if power_config == DEFAULT_POWER_CONFIG:   # both declared families, one table
         _write(global_eval_tabular(analysis_dir), "global_eval_tabular.tex")

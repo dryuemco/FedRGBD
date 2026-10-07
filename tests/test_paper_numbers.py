@@ -79,7 +79,14 @@ def _lookup(summary, distribution, kind, metric):
 TABLES = os.path.join(ROOT, "paper", "tables")
 GENERATED = {"tab:fullmetrics": "fullmetrics_tabular.tex",
              "tab:dirichlet": "dirichlet_tabular.tex",
-             "tab:lowdata": "lowdata_tabular.tex"}
+             "tab:lowdata": "lowdata_tabular.tex",
+             "tab:protocol_effect": "protocol_effect_tabular.tex",
+             "tab:fedbn10": "maxn/fedbn10_tabular.tex",
+             "tab:sensitivity": "sensitivity_tabular.tex",
+             "tab:global_eval": "global_eval_tabular.tex",
+             "tab:powercfg_acc": "powercfg_acc_tabular.tex",
+             "tab:powercfg_time": "powercfg_time_tabular.tex",
+             "tab:powercfg_straggler": "powercfg_straggler_tabular.tex"}
 PRIMARY_BA = "selected_test_balanced_accuracy"
 SECONDARY_BA = "selected_test_clientmean_balanced_accuracy"
 
@@ -425,3 +432,26 @@ def test_powercfg_tables_are_the_declared_analysis_verbatim():
     for _, r in ratios.iterrows():
         assert "%.3f [%.3f, %.3f]" % (r["ratio"], r["ci_low"], r["ci_high"]) in text
         assert str(r["per_seed_ratios"]).replace(" ", ", ") in text
+
+
+def test_sensitivity_table_matches_summary():
+    """tab:sensitivity: every pooled balanced-accuracy cell is the summary's selected-round
+    value with its interval (label skew, three rounds, main matrix)."""
+    from scripts.export_latex_tables import SENSITIVITY_ROWS
+    summary = _summary()
+    text = _generated("sensitivity_tabular.tex")
+    lines = [l for l in text.splitlines() if l.count(" & ") == 4 and "textbf" not in l]
+    assert len(lines) == len(SENSITIVITY_ROWS) == 16
+    for line, (_, _, cid) in zip(lines, SENSITIVITY_ROWS):
+        r = summary[(summary["config_id"] == cid)
+                    & (summary["metric"] == "selected_test_balanced_accuracy")].iloc[0]
+        cis = _ci_cells(line)
+        _check_ci(cis[0], r, cid)
+
+
+def test_paper_figures_are_generated(tmp_path):
+    from scripts import make_paper_figures as mpf
+    assert mpf.main(["--output_dir", str(tmp_path)]) == 0
+    for name in ("fig_confmat", "fig_sensitivity", "fig_mu_tradeoff", "fig_dirichlet",
+                 "fig_timecomm"):
+        assert (tmp_path / (name + ".pdf")).stat().st_size > 1000
