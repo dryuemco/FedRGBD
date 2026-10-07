@@ -1,5 +1,10 @@
 # FedRGBD — project instructions
 
+> **Reminder: no case-insensitive matching.** Never use `grep -i`, `pgrep -i`, `rg -i`, the
+> Grep tool's `-i`, or PowerShell `-imatch` / `-ilike`. Match the exact case and list
+> the variants explicitly (e.g. `-E "ZED|zed"`). Instruction of the author, repeated
+> 2026-10-07 after it was broken twice on the night of 2026-10-07.
+
 Federated learning on a 3-node Jetson Orin Nano 8 GB cluster with heterogeneous RGB-D cameras.
 Manuscript **NCAA-D-26-02211**, *Neural Computing and Applications*, **major revision due
 2026-11-13**. All revision work happens on the branch `revision-ncaa`.
