@@ -88,3 +88,59 @@ that draw (paper, Limitations). A5 describes how much the results move between d
   rule 12).
 - A5 results are never pooled with the main study's Dirichlet results, and testbed and
   desktop results are never pooled with each other.
+
+## 5. Amendment A5-1 (2026-10-07, about 09:50; author's decision)
+
+**State of the data when this was written.**
+- Testbed: one A5 run has finished: `rev_dirichlet0.1_ps123_fedavg_r10_seed42`, at
+  06:22. Its result has not been opened or analysed.
+- The second run (`ps456`, FedAvg) started at 09:42.
+- Desktop simulation (§3b): no result exists and none ever did. No simulation path was
+  written.
+- Nothing in this amendment depends on any result.
+
+**(a) §3b is cancelled.**
+- There is no desktop simulation sensitivity analysis. Its 18 cells are not run.
+- A5 consists of §3a only: the 4 testbed runs.
+- The 3b-specific wording of §4 ("reported separately", "testbed and desktop results are
+  never pooled") no longer applies.
+
+**(b) Scheduling of the remaining 3 testbed runs.**
+- They run back to back as one block, starting 2026-10-07 09:42, in the order of §3a:
+  1. ps456 FedAvg;
+  2. ps123 FedProx;
+  3. ps456 FedProx.
+
+  This order is also shortest-first.
+- The 07:30 stop time of 2026-10-07 belonged to the first night and does not apply to
+  this block.
+- No new run is started after the block ends.
+- The camera experiment keeps priority for any later testbed time.
+
+**(c) Comparability across draws: confirmation, no change.** The original §3a and §4
+already define it as follows.
+- The seed-42 draw of α = 0.1 exists on the testbed only in the main study:
+  - heterogeneous power configuration;
+  - 3 rounds;
+  - training seeds 42, 123 and 456.
+
+  No MAXN_SUPER ten-round run of that draw exists (`results/pc_maxn/` holds only the
+  5b configurations and the A5 runs).
+- The A5 draws (ps123, ps456) run in MAXN_SUPER, 10 rounds, training seed 42.
+- The two settings differ in power configuration, round budget and seed set. The power
+  configuration alone changes the trained numbers (`docs/CROSS_CONFIG_COMPARISON.md`).
+- By §3a ("not re-run … under A5") and §4 ("never pooled with the main study's
+  Dirichlet results"):
+  - the "range and SD across the draws" of §4 is taken over the two A5 draws, ps123 and
+    ps456 (n = 2 per strategy);
+  - the seed-42 draw is not in it;
+  - no A5 figure is compared with, or differenced against, a main-study Dirichlet
+    figure.
+- Consequence for the wording:
+  - A5 describes how much the result moves between two further draws under one fixed
+    configuration (MAXN_SUPER, 10 rounds, seed 42).
+  - It does not describe where the main study's seed-42 draw lies relative to them.
+  - With §3b cancelled, nothing in A5 covers α = 0.5 or α = 1.0. Those stay single
+    draws.
+- Skew measures (§4) are computed for all three α = 0.1 draws, including ps42. They
+  describe partitions, not results, so this involves no pooling of results.
