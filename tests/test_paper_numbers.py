@@ -181,7 +181,7 @@ def test_fullmetrics_labels_are_where_the_cells_assume():
     positions = [header.index(h) for h in order]
     assert positions == sorted(positions), header
     blocks = text.split(r"\multirow")
-    assert blocks[1].startswith("{5}{*}{IID}") and blocks[2].startswith("{5}{*}{Non-IID}")
+    assert blocks[1].startswith("{4}{*}{IID}") and blocks[2].startswith("{4}{*}{Non-IID}")
 
 
 def _two_block_rows(text, method):
