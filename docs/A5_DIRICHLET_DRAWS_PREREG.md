@@ -144,3 +144,39 @@ already define it as follows.
     draws.
 - Skew measures (§4) are computed for all three α = 0.1 draws, including ps42. They
   describe partitions, not results, so this involves no pooling of results.
+
+## 6. Amendment A5-2 (2026-10-07, about 10:15; author's decision): §3b restored
+
+**State of the data when this was written.**
+- Testbed: the first A5 run finished at 06:22 and the second has been running since 09:42.
+- No testbed A5 result has been looked at. No metric, prediction or loss of any A5 run
+  was opened, printed or analysed. The only things seen are:
+  - the run_matrix log lines (status, duration, rc, power modes; the line for the first
+    run also states its selected round);
+  - the md5 of the first run's `results.json`.
+- Desktop simulation: no result exists and none ever did.
+
+**Reason.** The desktop RTX 5090 has no other work until the camera footage arrives.
+This is an availability reason. It is not a reaction to any result.
+
+**What is restored.** §3b exactly as declared in §3b and §4. Amendment A5-1 (a) is
+revoked.
+- **Cells:** 3 α × 3 draws (ps42 = the existing `dirichlet_<α>`, ps123, ps456) ×
+  {FedAvg, FedProx(μ = 0.01)} = 18 cells.
+- **Settings:** same code (`src/fl/server.py`, `src/fl/client.py`, unchanged) and the
+  same hyperparameters as §3a: 10 rounds, 5 local epochs, lr 1e-3, batch 8, training
+  seed 42.
+- **Execution:** a sequential FL simulation on the desktop GPU. The cells run one after
+  another. Each cell runs the unchanged server and its three clients as processes on
+  localhost (`scripts/desktop_fl_sim.py`). The partitions are replayed from
+  `data/splits` (`--from_manifest`; rule 2), and their manifest md5s are checked against
+  `P0_SUMMARY.md` before any cell runs.
+- **Label:** "desktop simulation sensitivity analysis" everywhere.
+- **Results:** in `results/desktop_sim/`. They are never read by the FLAME analysis
+  (`scripts/analyze_results.py` skips that tree).
+- **Reporting:** descriptive only, per §4. Testbed and desktop results are reported
+  separately and are never pooled. The paragraph of A5-1 (c) on comparability applies
+  to the testbed figures unchanged.
+- **Priority:** the camera experiment's desktop work (LOSO and baselines) has priority.
+  When camera footage arrives, no new cell is started (a stop file) until that work is
+  done. A cell that is already running finishes.
