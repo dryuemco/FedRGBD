@@ -1303,6 +1303,14 @@ def load_run(
 CAMERA_TREE = "camera"
 CAMERA_RUN_PREFIXES = ("rev_camera_", "diag_camera_")
 CAMERA_CONTENT_MARKER = "camera_fold"
+#: A5's "desktop simulation sensitivity analysis" (docs/A5_DIRICHLET_DRAWS_PREREG.md, A5-2)
+#: is reported separately and never pooled with the testbed: its tree is skipped too
+DESKTOP_SIM_TREE = "desktop_sim"
+
+
+def is_excluded_entry(entry: str) -> bool:
+    """A directory name the FLAME testbed analysis never enters."""
+    return is_camera_entry(entry) or entry.lower() == DESKTOP_SIM_TREE
 
 
 def is_camera_entry(entry: str) -> bool:
@@ -1336,7 +1344,7 @@ def iter_run_dirs(results_dir: str, include_test_runs: bool = False) -> Iterator
         lowered = entry.lower()
         if not include_test_runs and (lowered.startswith("test_") or lowered == "test"):
             continue
-        if is_camera_entry(entry):
+        if is_excluded_entry(entry):
             continue
         if any(os.path.isfile(os.path.join(path, n)) for n in ("results.json", "summary.json")):
             if not is_camera_run(path):
@@ -1359,7 +1367,7 @@ def collect_runs(
     # anywhere below results_dir, with or without a results.json: a gate that fails while
     # the run executes leaves the marker in a directory the loader would never visit
     for dirpath, _dirs, files in os.walk(results_dir):
-        _dirs[:] = [d for d in _dirs if not is_camera_entry(d)]   # FLAME only
+        _dirs[:] = [d for d in _dirs if not is_excluded_entry(d)]   # FLAME testbed only
         if IDENTITY_GATE_MARKER in files:
             raise IdentityGateError("{}: identity gate failed on the testbed ({}); resolve it "
                                     "before analysing".format(dirpath, IDENTITY_GATE_MARKER))
