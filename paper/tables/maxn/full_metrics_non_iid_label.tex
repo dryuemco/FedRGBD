@@ -4,6 +4,7 @@
 \caption{Test-set metrics for the Non-IID (label skew) partition (mean $\pm$ standard deviation over seeds).}
 \label{tab:full_metrics_non_iid_label}
 \small
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lcccccccccc}
 \toprule
 Configuration & Balanced accuracy & MCC & Accuracy & Precision & Recall & Specificity & F1 & Macro F1 & ROC AUC & Loss \\
@@ -14,7 +15,7 @@ FedProx($\mu$=0.01) (R=10) [3N] (group-level) & 0.9677 $\pm$ 0.0090 & 0.9195 $\p
 Centralized (group-level) & 0.9471 $\pm$ 0.0091 & 0.8831 $\pm$ 0.0289 & 0.9428 $\pm$ 0.0162 & 0.9780 $\pm$ 0.0114 & 0.9304 $\pm$ 0.0372 & 0.9638 $\pm$ 0.0203 & 0.9531 $\pm$ 0.0143 & 0.9399 $\pm$ 0.0162 & 0.9928 $\pm$ 0.0018 & 0.1625 $\pm$ 0.0451 \\
 Local-only (group-level) & 0.9528 $\pm$ 0.0065 & 0.9049 $\pm$ 0.0168 & 0.9554 $\pm$ 0.0083 & 0.9659 $\pm$ 0.0049 & 0.9630 $\pm$ 0.0152 & 0.9425 $\pm$ 0.0090 & 0.9644 $\pm$ 0.0070 & 0.9523 $\pm$ 0.0086 & 0.9730 $\pm$ 0.0022 & 0.4190 $\pm$ 0.0857 \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \par\smallskip
 \footnotesize Test metrics of the round (federated) or epoch (centralized, local-only) with the lowest validation loss (weighted by client validation-set size, earlier on ties). Produced from \texttt{summary\_table.csv}.
 \end{table}

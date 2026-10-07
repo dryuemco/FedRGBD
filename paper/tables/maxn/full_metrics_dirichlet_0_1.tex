@@ -4,6 +4,7 @@
 \caption{Test-set metrics for the Dirichlet($\alpha$=0.1) partition (mean $\pm$ standard deviation over seeds).}
 \label{tab:full_metrics_dirichlet_0_1}
 \small
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lcccccccccc}
 \toprule
 Configuration & Balanced accuracy & MCC & Accuracy & Precision & Recall & Specificity & F1 & Macro F1 & ROC AUC & Loss \\
@@ -11,7 +12,7 @@ Configuration & Balanced accuracy & MCC & Accuracy & Precision & Recall & Specif
 Centralized (group-level) & 0.9164 $\pm$ 0.0253 & 0.8222 $\pm$ 0.0590 & 0.9154 $\pm$ 0.0298 & 0.9523 $\pm$ 0.0073 & 0.9127 $\pm$ 0.0418 & 0.9200 $\pm$ 0.0096 & 0.9319 $\pm$ 0.0251 & 0.9101 $\pm$ 0.0307 & 0.9705 $\pm$ 0.0153 & 0.4986 $\pm$ 0.2355 \\
 Local-only (group-level) & 0.9261 $\pm$ 0.0145 & 0.8521 $\pm$ 0.0317 & 0.9316 $\pm$ 0.0148 & 0.9465 $\pm$ 0.0080 & 0.9460 $\pm$ 0.0157 & 0.9061 $\pm$ 0.0134 & 0.9463 $\pm$ 0.0118 & 0.9260 $\pm$ 0.0158 & 0.9713 $\pm$ 0.0100 & 0.5998 $\pm$ 0.3037 \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \par\smallskip
 \footnotesize Test metrics of the round (federated) or epoch (centralized, local-only) with the lowest validation loss (weighted by client validation-set size, earlier on ties). Produced from \texttt{summary\_table.csv}.
 \end{table}
