@@ -808,7 +808,7 @@ SECONDARY_BA = "selected_test_clientmean_balanced_accuracy"
 PAPER_PH = r"\PHs"
 #: (summary kind, row label) of the reference rows, in table order
 PAPER_REFERENCES = (("centralized", "Centralized"), ("local", "Local-only"))
-#: federated rows kept as placeholders, in table order.  No FedBN row: these tables
+#: federated rows, in table order (filled from the summary, decision 7 Oct).  No FedBN row: these tables
 #: report the three-round main matrix, and under the group-level split FedBN ran at
 #: ten rounds only (decision 2026-10-07: FedBN is reported for ten rounds only)
 PAPER_FL_ROWS = (r"\fedavg{}", r"\fedprox{} 0.01")
@@ -831,6 +831,31 @@ def reference_row(summary: pd.DataFrame, distribution: str, kind: str, metric: s
     row = sel.iloc[0]
     check_aggregation(row)
     return row
+
+
+#: the federated rows of the paper tables: the default point of each power
+#: configuration's export (main matrix: 3 rounds; MAXN_SUPER block: 10 rounds)
+PAPER_FL_STRATEGY = {r"\fedavg{}": "fedavg", r"\fedprox{} 0.01": "fedprox_0.01"}
+PAPER_FL_CONFIGS = ("group|fl|{s}|{d}|3|5|0.001|3", "group|fl|{s}|{d}|10|5|0.001|3|pc=maxn")
+
+
+def fl_paper_row(summary: pd.DataFrame, distribution: str, name: str, metric: str):
+    """The one selection-rule summary row of a federated paper row, or None.  The export
+    is filtered to one power configuration, so at most one of PAPER_FL_CONFIGS exists."""
+    if summary.empty:
+        return None
+    found = []
+    for pattern in PAPER_FL_CONFIGS:
+        cid = pattern.format(s=PAPER_FL_STRATEGY[name], d=distribution)
+        sel = summary[(summary["config_id"].astype(str) == cid)
+                      & (summary["metric"].astype(str) == metric)]
+        found += [r for _, r in sel.iterrows()]
+    if len(found) > 1:
+        raise ValueError("%d summary rows for %s %s %s" % (len(found), name, distribution, metric))
+    if not found:
+        return None
+    check_aggregation(found[0])
+    return found[0]
 
 
 def check_aggregation(row: Any) -> None:
@@ -921,7 +946,18 @@ def fullmetrics_paper_tabular(summary: pd.DataFrame, scarce: set) -> Optional[st
             first = False
             out.append(_row([lead, name] + cells))
         for name in PAPER_FL_ROWS:
-            out.append(_row(["", name] + [PAPER_PH] * len(FULLMETRICS_PAPER_COLUMNS)))
+            cells = []
+            for metric, _, fmt in FULLMETRICS_PAPER_COLUMNS:
+                row = fl_paper_row(summary, dist, name, metric)
+                if fmt == "ci":
+                    text = _pct_ci(row)
+                    flag = mean_flag if metric == SECONDARY_BA else pooled_flag
+                    cells.append(text + (DAGGER if flag and text != MISSING else ""))
+                elif fmt == "mcc":
+                    cells.append(_pm(row, 1.0, 2))
+                else:
+                    cells.append(_pm(row, 100.0, 1))
+            out.append(_row(["", name] + cells))
     out += [r"\bottomrule", r"\end{tabular}"]
     del ncol
     return "\n".join(out) + "\n"
@@ -1227,6 +1263,42 @@ def sensitivity_tabular(summary: pd.DataFrame, scarce: set) -> Optional[str]:
     return "\n".join(out) + "\n"
 
 
+#: tab:perclient_metrics: label skew, main matrix (three rounds), per node
+PERCLIENT_NODES = (("node_a", r"A (80\% F)"), ("node_b", r"B (88.5\% F)"), ("node_c", r"C (20\% F)"))
+PERCLIENT_METRICS = (("selected_test_balanced_accuracy", 100.0, 1),
+                     ("selected_test_recall", 100.0, 1),
+                     ("selected_test_specificity", 100.0, 1),
+                     ("selected_test_mcc", 1.0, 2))
+
+
+def perclient_paper_tabular(analysis_dir: str) -> Optional[str]:
+    """tab:perclient_metrics: each node's selected-round test balanced accuracy,
+    sensitivity, specificity and MCC under manual label skew, mean +- SD over seeds
+    (analysis/per_client_selected.csv), for FedAvg and FedProx(0.01)."""
+    path = os.path.join(analysis_dir, "per_client_selected.csv")
+    if not os.path.isfile(path):
+        return None
+    df = pd.read_csv(path)
+    out = [_GENERATED, r"\begin{tabular}{@{}llcccc@{}}", r"\toprule",
+           _row([r"\textbf{Method}", r"\textbf{Node}", r"\textbf{Bal.\ acc.}", r"\textbf{Sens.}",
+                 r"\textbf{Spec.}", r"\textbf{MCC}"]), r"\midrule"]
+    for i, name in enumerate(PAPER_FL_ROWS):
+        if i:
+            out.append(r"\midrule")
+        cid = PAPER_FL_CONFIGS[0].format(s=PAPER_FL_STRATEGY[name], d="non_iid_label")
+        for j, (node, label) in enumerate(PERCLIENT_NODES):
+            cells = []
+            for metric, scale, digits in PERCLIENT_METRICS:
+                sel = df[(df["config_id"] == cid) & (df["node"] == node) & (df["metric"] == metric)]
+                if len(sel) > 1:
+                    raise ValueError("%d per-client rows for %s %s %s" % (len(sel), cid, node, metric))
+                cells.append(MISSING if sel.empty else _pm(sel.iloc[0], scale, digits))
+            lead = (r"\multirow{%d}{*}{%s}" % (len(PERCLIENT_NODES), name)) if j == 0 else ""
+            out.append(_row([lead, label] + cells))
+    out += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(out) + "\n"
+
+
 def load_partition_skew(analysis_dir: str) -> Dict[str, float]:
     """{partition: size-weighted mean JSD} from scripts/partition_skew.py."""
     path = os.path.join(analysis_dir, "partition_skew.csv")
@@ -1257,7 +1329,13 @@ def _two_aggregation_blocks(summary, columns, scarce, fl_rows, lead_label=None):
                 cells.append(text + (DAGGER if flag and text != MISSING else ""))
             out.append(_row(([lead_label] if lead_label else []) + [name] + cells))
         for name in fl_rows:
-            out.append(_row(([""] if lead_label else []) + [name] + [PAPER_PH] * len(columns)))
+            cells = []
+            for dist in columns:
+                pooled_flag, mean_flag = scarce_cells(scarce, dist)
+                flag = mean_flag if metric == SECONDARY_BA else pooled_flag
+                text = _pct_ci(fl_paper_row(summary, dist, name, metric))
+                cells.append(text + (DAGGER if flag and text != MISSING else ""))
+            out.append(_row(([""] if lead_label else []) + [name] + cells))
     return out
 
 
@@ -1322,7 +1400,13 @@ def lowdata_paper_tabular(summary: pd.DataFrame, scarce: set) -> Optional[str]:
                 first = False
                 out.append(_row([lead, name] + cells))
             for name in fl_rows:
-                out.append(_row(["", name] + [PAPER_PH] * len(cols)))
+                cells = []
+                for col in cols:
+                    pooled_flag, mean_flag = scarce_cells(scarce, col)
+                    flag = mean_flag if metric == SECONDARY_BA else pooled_flag
+                    text = _pct_ci(fl_paper_row(summary, col, name, metric))
+                    cells.append(text + (DAGGER if flag and text != MISSING else ""))
+                out.append(_row(["", name] + cells))
     out += [r"\bottomrule", r"\end{tabular}"]
     return "\n".join(out) + "\n"
 
@@ -1423,6 +1507,7 @@ def export(analysis_dir: str, output_dir: str, metrics: Optional[Sequence[str]] 
     _write(fedbn10_tabular(summary, scarce), "fedbn10_tabular.tex")
     if power_config == DEFAULT_POWER_CONFIG:   # both declared families, one table
         _write(global_eval_tabular(analysis_dir), "global_eval_tabular.tex")
+        _write(perclient_paper_tabular(analysis_dir), "perclient_tabular.tex")
         _write(powercfg_acc_tabular(analysis_dir), "powercfg_acc_tabular.tex")
         _write(powercfg_time_tabular(analysis_dir), "powercfg_time_tabular.tex")
         _write(powercfg_straggler_tabular(analysis_dir), "powercfg_straggler_tabular.tex")

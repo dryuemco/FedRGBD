@@ -78,6 +78,7 @@ def _lookup(summary, distribution, kind, metric):
 
 TABLES = os.path.join(ROOT, "paper", "tables")
 GENERATED = {"tab:fullmetrics": "fullmetrics_tabular.tex",
+             "tab:perclient_metrics": "perclient_tabular.tex",
              "tab:dirichlet": "dirichlet_tabular.tex",
              "tab:lowdata": "lowdata_tabular.tex",
              "tab:protocol_effect": "protocol_effect_tabular.tex",
