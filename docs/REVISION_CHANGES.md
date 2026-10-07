@@ -1631,3 +1631,34 @@ read-only on all three nodes).
     depth scale, SDK and firmware, and is refused without them;
   - the ZED depth range is set to 0.3-20 m as in v1;
   - the depth-PNG test now checks values, not the Pillow-dependent dtype.
+
+## Camera LOSO on the desktop: data loading and parallel processes (implementation note, 2026-10-07)
+
+Measured on the SYNTHETIC dry run (`scripts/camera_synthetic_dryrun.py`, S = 15, random
+frames at the real study size; no real or pilot data). The pre-registration fixes the
+model, optimiser, epochs, batch size and selection rule (sections 5 and 6), not the data
+loader, `num_workers` or how runs are scheduled, so this is an implementation note, not an
+amendment.
+
+* **Data loading is not the bottleneck.** `CustomRGBDDataset(preprocess="camera")` already
+  reads and md5-checks each preprocessed 224 file once per process and keeps the decoded
+  streams in memory (the `cache` shared by every source x seed of one `camera_loso.py`
+  process). With that cache warm, reading and decoding cost nothing; the per-epoch time is
+  the augmentation/normalisation arithmetic in `__getitem__` (about 2.6 s per epoch of
+  3120 frames) plus the GPU step at batch 8 with deterministic cuDNN (about 3.4 s). Turning
+  the cache off is bitwise identical and no slower.
+* **Worker processes were tried and not adopted.** `num_workers > 0` with persistent workers
+  changes the shuffle order from epoch 2 on (a persistent pool skips the per-epoch base-seed
+  draw from the loader's generator); non-persistent workers are bitwise identical but on
+  Windows the per-epoch worker start-up cancels the gain. `camera_loso.py` keeps
+  `num_workers=0`.
+* **Decision: the real LOSO runs as 3 parallel processes** of the unchanged
+  `scripts/camera_loso.py`, split with `--sources` / `--seeds` (same `--output_root`; every
+  source x modality x seed writes its own run directory). Checked: one fold, 4 epochs, run
+  alone and as 3 and as 5 simultaneous processes -- the md5 digest of the selected model's
+  weights and test logits is identical in all 9 runs (1 + 3 + 5); throughput 2.0x with 3
+  processes, 2.25x with 5.
+* **Order of use of the GPU.** The A5 desktop simulation (`scripts/desktop_fl_sim.py`, 4
+  lanes) is paused with its stop file (`logs/desktop_sim/STOP`) when the camera data arrive;
+  LOSO has priority. The A5 path gets no decode cache (decided 2026-10-07: decoding is a
+  small part of its per-image cost and a cache would need tens of GB for 4 lanes).
