@@ -384,3 +384,22 @@ def test_fedbn_bn_share_is_the_computed_one():
     sys.path.insert(0, ROOT)
     from scripts.fedbn_payload import bn_payload_share
     assert bn_payload_share()["bn_share_of_bytes"] == pytest.approx(share, rel=0, abs=1e-12)
+
+
+def test_global_eval_table_is_the_declared_analysis_verbatim():
+    """tab:global_eval: every comparison of analysis/global_eval, its numbers and its
+    verdict phrases exactly as scripts/global_evaluation.py wrote them (GLOBAL_EVALUATION.md)."""
+    import pandas as pd
+    df = pd.read_csv(os.path.join(ROOT, "analysis", "global_eval", "global_eval_comparisons.csv"))
+    text = _generated("global_eval_tabular.tex")
+    rows = [l for l in text.splitlines() if l.count(" & ") == 8 and "textbf" not in l]
+    full = df[df["subset"] == "full"]
+    assert len(rows) == len(full) == 22
+    allowed = {"federation improves generalisation beyond the client's own distribution",
+               "no detectable difference", "federation worse"}
+    for line, (_, r) in zip(rows, full.iterrows()):
+        cells = [c.strip() for c in line.rstrip(" \\").split(" & ")]
+        assert cells[3] == "%.4f" % r["p_boot"] and cells[4] == "%.4f" % r["p_holm"]
+        assert cells[5] == r["verdict_holm"] and cells[6] == r["verdict"]
+        assert cells[5] in allowed and cells[6] in allowed and cells[8] in allowed
+        assert cells[2].startswith("$%+.1f$" % (100 * r["diff"]))
