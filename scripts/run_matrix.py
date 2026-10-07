@@ -542,6 +542,47 @@ def preflight(strict_commit=True, splits=(), power=None, measured=None):
     return problems
 
 
+# Page-cache release before every run, without sudo.  On the Jetson, CPU and GPU share
+# the 8 GB; after a manifest replay the page cache held ~6.4 GB on node_a and its client
+# died with CUDA out of memory at model load (2026-10-07, 02:28), before the kernel had
+# reclaimed the cache.  Touching anonymous memory up to MemAvailable minus a reserve makes
+# the kernel drop clean cache pages; the memory is released at once.  Data is unchanged.
+PAGE_CACHE_RESERVE_MB = 900
+RELEASE_PAGE_CACHE = r'''python3 - <<'PY'
+import mmap
+def mem(key):
+    for line in open('/proc/meminfo'):
+        if line.startswith(key + ':'):
+            return int(line.split()[1]) * 1024
+before = mem('MemFree')
+n = mem('MemAvailable') - %d * 1024 * 1024
+if n > 0:
+    m = mmap.mmap(-1, n)
+    for off in range(0, n, 4096):
+        m[off] = 1
+    m.close()
+print('PAGECACHE %%d %%d' %% (before >> 20, mem('MemFree') >> 20))
+PY''' % PAGE_CACHE_RESERVE_MB
+RE_PAGECACHE = re.compile(r'PAGECACHE (\d+) (\d+)')
+
+
+def release_page_cache():
+    """-> {node: (MemFree MB before, after) or None}; run on every node before a run."""
+    out = {}
+    for node, cfg in NODES.items():
+        try:
+            if cfg['local']:
+                text = subprocess.run(['bash', '-c', RELEASE_PAGE_CACHE], stdout=subprocess.PIPE,
+                                      stderr=subprocess.STDOUT, text=True, timeout=180).stdout
+            else:
+                text = ssh(node, RELEASE_PAGE_CACHE, timeout=180).stdout or ''
+        except subprocess.TimeoutExpired:
+            text = ''
+        m = RE_PAGECACHE.search(text or '')
+        out[node] = (int(m.group(1)), int(m.group(2))) if m else None
+    return out
+
+
 def kill_stragglers():
     for node, cfg in NODES.items():
         # our own tegrastats only (their logfile lives under logs/energy/)
@@ -1276,6 +1317,10 @@ def main():
                     log('      - %s' % p)
                 preflight_failed = True
                 break
+            freed = release_page_cache()
+            log('    page cache released (MemFree MB before -> after): %s'
+                % ', '.join('%s %s' % (n, '%d -> %d' % f if f else 'unreadable')
+                            for n, f in freed.items()))
             if run.get('gates'):
                 if attempt > 1:
                     reason = gated_rounds_on_disk_differ(run)

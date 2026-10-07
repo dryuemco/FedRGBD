@@ -210,3 +210,30 @@ def test_repository_holds_no_node_usernames():
     ignored = subprocess.run(["git", "check-ignore", "-q", "configs/testbed.local.yaml"],
                              cwd=_REPO)
     assert ignored.returncode == 0
+
+
+def test_release_page_cache_snippet_is_valid_python():
+    body = run_matrix.RELEASE_PAGE_CACHE.split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    compile(body, "release_page_cache", "exec")
+    assert "%d * 1024 * 1024" % run_matrix.PAGE_CACHE_RESERVE_MB in body
+    assert "sudo" not in run_matrix.RELEASE_PAGE_CACHE
+
+
+def test_release_page_cache_runs_on_every_node(monkeypatch):
+    nodes = {"node_a": {"local": False}, "node_b": {"local": False}, "node_c": {"local": False}}
+    monkeypatch.setattr(run_matrix, "NODES", nodes)
+    calls = []
+
+    class Done:
+        def __init__(self, stdout):
+            self.stdout = stdout
+
+    def fake_ssh(node, command, timeout=60, capture=True):
+        calls.append((node, command))
+        return Done("" if node == "node_c" else "PAGECACHE 650 5800\n")
+
+    monkeypatch.setattr(run_matrix, "ssh", fake_ssh)
+    out = run_matrix.release_page_cache()
+    assert [n for n, _ in calls] == ["node_a", "node_b", "node_c"]
+    assert all(c == run_matrix.RELEASE_PAGE_CACHE for _, c in calls)
+    assert out == {"node_a": (650, 5800), "node_b": (650, 5800), "node_c": None}
