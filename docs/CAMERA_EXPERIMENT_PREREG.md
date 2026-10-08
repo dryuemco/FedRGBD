@@ -363,18 +363,159 @@ family, verdict phrase or interpretation rule, and not the preprocessing of sect
   lens options of the ZED 2i, but the lens is not recorded. Commit `2dab803` called the
   old number a transcription error; that was wrong and is corrected here.*
 
-## 13. Amendment 4 (in preparation; the flame-source criterion and source committed 2026-10-08, before e5)
+## 13. Amendment 4 (DRAFT 2026-10-07 -- after the pilot, before any study footage)
 
-> Amendment 4 is written after the pilot of section 10 (scene `s01`, four captures on
-> 2026-10-07, all PASS) and before any study footage. The pilot frames were looked at
-> for technical image properties only: exposure, framing, depth validity, flame size in
-> pixels. No accuracy, loss or prediction quality was computed or inspected.
-> Only the flame-source acceptance criterion (committed 2026-10-08, `ce85a0d`), the choice
-> of source and "One lit source per capture" (committed 2026-10-08, before any e5
-> capture) are committed so far, so that the e5 acceptance test is judged by rules fixed
-> beforehand. The other items of
-> this amendment, including 13.1, are committed before the first study capture. Values
-> marked `[e5]` are filled from the e5 acceptance test (`docs/POST_5B_CHECKLIST.md`).
+> **DRAFT.** Values marked `[e5]` come from the e5 acceptance test
+> (`docs/POST_5B_CHECKLIST.md`). Nothing here is in force until the draft is completed,
+> committed and pushed, and that happens before the first study capture.
+> **Exception:** the flame-source acceptance criterion of 13.2 (N = 5 px, median over 40
+> frames per camera x distance) was committed and pushed on 2026-10-08, before any e5
+> capture. So were the choice of source (four candles) and "One lit source per capture".
+> These parts are in force as committed, and only their `[e5]` values are still to be
+> filled.
+> **Committed 2026-10-08, during e5, before the s03 acceptance test and before any
+> calibration value existed:** the whole of section 13 as it stands then, including
+> the exposure and white-balance policy of 13.1, sequential capture (13.2) and the
+> cancelled e5 steps. The `[e5]` values are filled later, each as a dated change.
+
+Written after the pilot of section 10 (scene `s01`, four captures on 2026-10-07, all
+PASS), and after its frames were looked at for technical image properties only:
+exposure, framing, depth validity, flame size in pixels. No accuracy, loss or prediction
+quality was computed or inspected. No study footage exists (`data/raw/camera` is absent
+on all three nodes). Each item says what the pilot revealed, what changes, and whether
+the change is one of the technical changes that section 10 permits after the pilot, or
+a change to section 2 that has to be disclosed in the paper and the response letter.
+
+### 13.1 Technical changes (permitted by section 10)
+
+* **Rig geometry for simultaneous capture.** *Pilot:* one tripod was available. Mounting
+  the cameras one after another would have broken the simultaneous capture of section 2.
+  A rig near the floor gave grazing-angle depth (valid depth 61-88 %, none in the bottom
+  quarter of the ZED image); raised and tilted it gave 99 %. With that tilt, a flame at
+  1 m fell below the RealSense colour field of view, which is narrower (vertical about
+  42 deg against about 70 deg for the ZED). *Change:* the three cameras are on one rigid
+  plate on one tripod, at one height, pointing the same way. Before every capture, one
+  snapshot per camera shows the flame position inside all three colour images and inside
+  the 224 centre crop (section 3). Rig height above the floor, plate tilt and the
+  distances used are recorded per scene. Distances are measured on the floor tape from
+  the plate's front edge. A distance at which the flame is not in all three colour
+  images is not captured for that scene.
+* **USB 3.x gate.** *Pilot:* node_a's D435if enumerated at USB 2.1 (480 Mb/s), where the
+  colour and depth profile of section 2 does not resolve. The v1 records did not log the
+  USB type. *Change:* a capture FAILs unless every RealSense reports
+  `usb_type_descriptor` 3.x and the ZED's USB device runs at >= 5000 Mb/s (sysfs
+  `speed`). Both values go into the capture record and are checked in
+  `camera_capture_session.py --check`.
+* **Lighting and exposure handling.** *Pilot:* in all 320 RealSense frames the logged
+  exposure, gain and white balance are the sensor option values
+  (`exposure_source: sensor_option`), not the values auto exposure applied. Both nodes
+  build librealsense 2.55.1 with `FORCE_RSUSB_BACKEND=true` (CMakeCache). A probe on
+  node_a (2026-10-07, no frames kept) showed why: under this backend the D435 colour
+  frame delivers per-frame metadata (auto-exposure flag, timestamps) but not
+  `actual_exposure`, `gain_level` or `white_balance`, and the depth frame does deliver
+  them. The ZED logs its applied values. *Change:*
+  - *Lighting.* Room lighting is fixed for the duration of a scene: the same lamps on,
+    curtains closed, no daylight change between the fire and no-fire captures. The lamps
+    are recorded in the scene sheet.
+  - *Exposure and white balance: one fixed setting per camera (DRAFT 2026-10-08).* This
+    replaces the earlier draft, in which the lock was "determined on the no-fire capture
+    of each scene x distance": auto exposure and auto white balance settled on the
+    no-fire setup, their values were fixed, and the fire capture at the same distance
+    reused them. The new draft was written after the e5 geometry captures (s09), before
+    the s03 acceptance test and before any calibration value existed. It is committed
+    before the acceptance test.
+    - *Policy.* Each camera has one exposure, one gain and one white balance. Auto
+      exposure and auto white balance are off, and the same values are used in every
+      scene, at every distance and under every condition, for fire and no-fire alike.
+      Nothing is determined per capture. The ZED follows the same rule, set manually
+      through `sl.VIDEO_SETTINGS` (`AEC_AGC` and `WHITEBALANCE_AUTO` off; `EXPOSURE`,
+      `GAIN` and `WHITEBALANCE_TEMPERATURE` fixed).
+    - *Calibration scene.* The current setup with the candles in place and unlit,
+      `lamps_on=tavan lambasi`. The cameras are calibrated one after another from the
+      same tripod position. The calibration `--notes` must parse as a no-fire capture
+      (`source=none`, `flame_height_cm=0`) and must name the lamps that are on.
+    - *Step 1, gain.* The camera's default gain: for a RealSense, the colour option
+      range's `default`. The ZED SDK reports no default gain, so the ZED gain starts at
+      0 (decided by the author on 2026-10-08). The gain changes only by the rule of
+      step 3.
+    - *Step 2, white balance.* Gain and exposure are at their defaults (ZED exposure: the
+      geometric middle of 1-100 % of the frame period). The white balance is the grid
+      value (RealSense step 10 K, ZED 100 K) that minimises |mean R - mean B| inside a
+      neutral rectangle on the white wall. The rectangle is defined per camera in
+      normalized coordinates (`configs/camera_wb_region.json`). It excludes the curtain,
+      the floor, the skirting board, the objects and the flame position. The search
+      bisects on the sign of R - B, assuming that a higher white balance setting makes
+      the image warmer, and then takes the better of the two neighbouring grid values;
+      a tie goes to the lower value. If R - B does not change sign over the range, the
+      better end of the range is taken.
+    - *Step 3, exposure.* Gain and white balance are fixed. The exposure is the first
+      value reached by a bisection on a log scale, starting at the camera's default,
+      whose section-3 224 input image has a mean 8-bit luma in [100, 130]. A frame that
+      is too bright lowers the upper bound, and one that is too dark raises the lower
+      bound. The RealSense exposure is capped at one frame period of the 30 fps stream
+      (333 x 100 us); the ZED exposure is capped at 100 % of the frame period.
+      *If the exposure reaches the cap and the 224 luma is still below 100* (decided by
+      the author on 2026-10-08): the exposure stays at the cap, and the gain is raised by
+      the same bisection, between the starting gain and the gain maximum (RealSense
+      128, ZED 100), until the luma lies in [100, 130]. The same rule holds for the
+      ZED: exposure first, up to the cap, then gain. If neither reaches the target, the
+      calibration fails and writes nothing.
+    - *Measurement at each step:* apply the setting, discard 15 frames, then measure 10
+      frames: the median 224 mean luma, and the mean R, G and B over the rectangle.
+    - *Step 4, verification.* A last measurement with the final values. It reports the
+      224 mean luma and the rectangle's mean R, G and B (with R - B). If the luma falls
+      outside [100, 130], the calibration fails.
+    - *Record.* Only measured values are kept, no calibration frame. They go into
+      `<root>/<node>/_exposure/exposure.json`, with every step of both searches, the
+      verification, the camera serial, the rectangle, `lamps_on` and the calibration
+      notes.
+    - *Refusals.* A capture is refused if this file is missing, if it belongs to another
+      serial, or if the capture's `lamps_on` differs from the calibration's. **If the
+      lamp condition changes, the camera is recalibrated.** Recalibrating moves the old
+      file to `_superseded/` and is disclosed.
+    - *No flame frame is used.* The values are chosen without looking at any frame with
+      a flame. They are committed before the acceptance test.
+    - The values go into every frame's metadata (`exposure_source: manual_lock`) and
+      into the capture record.
+    - Code (draft, not committed): `src/data/camera_exposure.py`,
+      `configs/camera_wb_region.json`, and `--calibrate_exposure` in
+      `realsense_capture.py` and `zed_capture.py`.
+  - *Gate.* A locked capture FAILs if the auto-exposure flag is on in any colour frame:
+    the RealSense colour frame's `auto_exposure` metadata, which this backend does
+    deliver, and the ZED's `AEC_AGC` setting. e5's lock test was to check that the gate sees
+    the flag change.
+  - *What e5 showed (2026-10-08, node_b D435i, scene s09, one camera at a time).*
+    - *Lock values.* After auto exposure was switched off, the colour sensor options
+      read exposure 166, gain 64 and white balance 4600. These are the option range's
+      defaults (`get_option_range(...).default`). The "lock" was therefore the sensor
+      defaults, not values auto exposure had applied. Under this backend `get_option`
+      does not return the applied exposure while auto exposure runs.
+    - *Camera state.* Auto exposure and auto white balance stay off after a capture
+      (`enable_auto_exposure` reads 0).
+    - *Brightness, descriptive only.* The 224 mean luma of the locked
+      `s09_no_fire_d100` frames was 65.38-65.40. Two framing-only frames taken with
+      auto exposure on and the candles lit gave 122.4 and 123.3. Those two frames are
+      not e5 data.
+    - *AE gate triggered on real hardware.* In `s09_no_fire_d300`, auto exposure was on
+      in 5 of 5 colour frames, while the settings read back off. The capture is kept as
+      it is (status incomplete, not moved to `_retakes/`). The cause was not
+      investigated.
+    - [e5: the s03 acceptance test runs under the policy above once it is decided]
+* **ZED raw calibration.** *Pilot:* the ZED record holds the calibration of the
+  rectified images (all distortion coefficients 0, correct for the saved frames). The
+  factory calibration is not kept. *Change:* every ZED capture record also stores
+  `calibration_parameters_raw` (both cameras, with distortion, and the stereo
+  transform), plus the factory file `SN35201583.conf` (from `/usr/local/zed/settings/`,
+  byte copy, with its md5).
+* **Mandatory capture notes.** *Pilot:* no `--notes` were given. The session log
+  therefore does not say which source was lit or how large the flame was; the number of
+  candles had to be read off the frames afterwards. *Change:* `--notes` is required and
+  parsed: `source=<id>; distance_measured_m=<x.xx>; flame_height_cm=<x>`. For a
+  no-fire capture, `source=none` and `flame_height_cm=0`. A capture with a missing or
+  unparseable field FAILs before it starts. The lock values are not typed into the
+  notes: each node writes them into its camera's exposure file
+  (`_exposure/exposure.json`, draft policy above) and into every capture record and
+  frame, so they cannot be mistyped.
 
 ### 13.2 Changes to section 2 (beyond section 10's technical list; to be disclosed)
 
@@ -438,6 +579,66 @@ sections 1 and 4-6.
     candle**, the one nearest the camera.
   - Every capture's `--notes` records the arrangement as
     `arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle`.
+* **Scene diversity.** Scenes differ in background *and* floor (surface material or
+  colour), not only in the set of distractors. Each scene's background and floor are
+  recorded in the scene sheet. This narrows section 2's definition ("two scenes differ
+  in location or background"). The pilot's room, with its curtain and one laminate floor,
+  could supply only a single scene under this rule.
+
+* **Distance set (conditional on e5).** *Pilot:* with the plate tilted for valid
+  near-field depth, a flame at 1 m fell below the RealSense colour field of view, so the
+  pilot captured 2 and 3 m only. e5 tests whether some tilt keeps a 1 m flame inside
+  all three colour images *and* inside the 224 crop, while also keeping the 3 m flame
+  there and depth valid. If no tilt does, the study's distance set is {2, 3} m for every
+  scene, and that narrowing of section 2's {1, 2, 3} m (2 or 3 per scene) is disclosed
+  here. [e5: outcome]
+
+* **Sequential capture: one tripod, one camera at a time** (decided by the author on
+  2026-10-08, during e5, before the s03 acceptance test). This changes section 2 and
+  13.1 ("Rig geometry for simultaneous capture"), and is disclosed in the paper and the
+  response letter.
+  - *What happened first.* At the start of e5 the author decided that e5 would capture
+    one camera at a time, starting with the D435i on node_b. Each capture was started
+    with the per-node script (`src/data/realsense_capture.py` / `zed_capture.py --node
+    <node>`), not with the three-node orchestrator. The camera order and each capture's
+    time went into its `--notes` and the e5 log.
+  - *Decision.* The study captures are sequential as well. There is a single tripod at
+    a fixed position, and the cameras are mounted on it and captured one after another.
+    The three cameras therefore do not see the same flame instant.
+  - *What this changes:*
+    - Each camera has its own fixed (exposure, gain, white balance), by the 13.1
+      policy. Its calibration runs on that camera, from the same tripod position.
+    - The flame and its height can differ between the cameras of one scene x distance.
+      The 13.2 criterion is still evaluated per camera x distance, and a distance that
+      fails on any camera is still removed for all three cameras and every scene.
+    - Section 2's paired cross-sensor design (questions (a) and (b)) pairs captures of
+      one scene and distance taken one after another, not at the same instant. This is
+      disclosed with the results.
+  - *e5 steps cancelled because of it, with the reasons:*
+    - **Depth-hole diagnosis s06-s08.** It asked whether the second RealSense's
+      projector causes the dotted holes in the D435if depth. In a sequential capture no
+      second camera streams while the D435if captures, so the question does not arise
+      in the study. Instead, the D435if's own hole fraction is measured on its s03
+      no-fire frames, inside the rectangle fixed before e5 (`baccca6`,
+      `configs/e5_depth_hole_region.json`, `scripts/camera_depth_holes.py`). The
+      firmware decision of 13.3 is taken from that measurement.
+    - **The lock test (s04/s05) and its per-frame AE-flag check.** It tested the
+      per-capture lock that the 13.1 policy replaces. Its place is taken by three
+      things: the calibration, the verification frames of each camera, and the AE gate
+      that already triggered on real hardware (`s09_no_fire_d300`, 13.1 "What e5
+      showed").
+    - **The 3 m pair of s09.** The geometry is judged from the framing frames and from
+      s03. The failed capture `s09_no_fire_d300` stays as it is: incomplete, not moved
+      to `_retakes/`, and not used.
+
+### 13.3 Deferred
+
+* **D435 firmware.** librealsense 2.55.1 recommends D4xx firmware 5.16.0.1. node_a's
+  D435if runs 5.13.0.55 and node_b's D435i 5.17.0.10, the same as in v1. This is
+  decided after e5, together with the dotted depth holes seen on the wall in the D435if
+  depth (fewer in the D435i's). Since capture is sequential (13.2), the holes are
+  measured on the D435if's own s03 no-fire frames, inside the `baccca6` rectangle; the
+  test against the second camera's projector (s06-s08) is cancelled.
 
 ## 14. Erratum (2026-10-07)
 
