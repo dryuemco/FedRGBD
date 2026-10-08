@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """FedRGBD -- flame height in pixels at the classifier's input vs the ruler (e5).
 
-The flame-source acceptance criterion of the camera prereg (section 13.2 draft,
-``docs/POST_5B_CHECKLIST.md`` e5): the study's source must show a visible flame of at
-least about 10 cm at 3 m.  This tool measures how tall the flame actually is in the
-224 x 224 input of section 3 (``camera_preprocess.rgb_224``, the very function the study
-uses) and compares it with what the ruler predicts from the recorded intrinsics:
+The flame-source acceptance criterion of the camera prereg (Amendment 4, section 13.2,
+committed ce85a0d before e5): for every camera x distance, the median vertical flame
+height in the 224 input image over the 40 frames of the fire capture must be at least
+N = 5 px; a distance that fails on any camera leaves the study's distance set.  This tool
+measures how tall the flame actually is in the 224 x 224 input of section 3
+(``camera_preprocess.rgb_224``, the very function the study uses), prints PASS / FAIL per
+camera x distance and the decision for the distance, and compares the height with what
+the ruler predicts from the recorded intrinsics:
 
     expected_px = flame_height_cm / 100 * fy_224 / distance_m
     fy_224      = fy * (height after the shorter side is resized to 224) / height
@@ -13,8 +16,10 @@ uses) and compares it with what the ruler predicts from the recorded intrinsics:
 Measurement, per node, for one scene x distance: the no-fire capture (same exposure
 lock) gives a per-pixel median reference at 224; in every fire frame the flame is the
 largest 8-connected region where some channel is at least ``--threshold`` brighter than
-the reference; its height is its row span.  The median over the fire frames is reported,
-with min and max (flicker).  The flame height (cm) and measured distance come from the
+the reference; its height is its row span, and a frame with no such region counts as
+0 px (no visible flame).  The median over all fire frames is the criterion's statistic,
+reported with min and max (flicker).  A capture with fewer or more than 40 fire frames is
+INCOMPLETE, never PASS.  The flame height (cm) and measured distance come from the
 fire capture's parsed ``--notes`` unless given on the command line.
 
     python scripts/camera_flame_height.py --root data/raw/camera_pilot --scene s01 \\
@@ -42,19 +47,22 @@ if _REPO not in sys.path:
     sys.path.insert(0, _REPO)
 
 from src.data.camera_capture_common import (  # noqa: E402
-    CAPTURES_DIR, NODE_NAMES, make_capture_id, make_frame_id, parse_notes,
+    CAPTURES_DIR, DEFAULT_FRAMES, NODE_NAMES, make_capture_id, make_frame_id, parse_notes,
 )
 from src.data.camera_preprocess import SIZE, _crop_box, rgb_224  # noqa: E402
 
 STUDY_ROOT = os.path.join("data", "raw", "camera")
 DEFAULT_ROOT = os.path.join("data", "raw", "camera_pilot")
 DEFAULT_THRESHOLD = 40
-#: the acceptance criterion's flame height (prereg sec. 13.2 draft)
-CRITERION_CM = 10.0
+#: the acceptance criterion (prereg Amendment 4, sec. 13.2, ce85a0d): the median vertical
+#: flame height at 224 over the CRITERION_FRAMES frames of a camera x distance >= CRITERION_PX
+CRITERION_PX = 5
+CRITERION_FRAMES = DEFAULT_FRAMES
 COLUMNS = ("node", "scene", "distance_m", "distance_measured_m", "flame_height_cm",
-           "fy_native", "fy_224", "px_per_10cm", "expected_px", "measured_px_median",
+           "fy_native", "fy_224", "expected_px", "measured_px_median",
            "measured_px_min", "measured_px_max", "measured_cm_median", "ratio_measured_expected",
-           "n_fire_frames", "n_frames_detected", "touches_crop_border", "threshold")
+           "n_fire_frames", "n_frames_detected", "touches_crop_border", "threshold",
+           "criterion_px", "criterion")
 
 
 def _is_study_root(root: str) -> bool:
@@ -152,33 +160,58 @@ def measure_node(root: str, node: str, scene: str, distance_m: float,
     if not fire or not ref_frames:
         raise SystemExit("%s: no frames (fire %d, no-fire %d)" % (node, len(fire), len(ref_frames)))
     reference = np.median(np.stack(ref_frames), axis=0).astype(np.uint8)
-    heights, border = [], False
+    heights, detected, border = [], 0, False
     for fr in fire:
         reg = flame_region(fr, reference, threshold)
         if reg is None:
+            heights.append(0)                  # no visible flame in this frame
             continue
+        detected += 1
         top, left, bottom, right = reg
         heights.append(bottom - top + 1)
         border = border or top == 0 or left == 0 or bottom == SIZE - 1 or right == SIZE - 1
     med_frame = np.median(np.stack(fire), axis=0).astype(np.uint8)
     med_region = flame_region(med_frame, reference, threshold)
     exp = expected_px(flame_cm, measured_m, f224) if flame_cm else None
-    med = float(np.median(heights)) if heights else None
+    med = float(np.median(heights))
     row = {
         "node": node, "scene": scene, "distance_m": distance_m,
         "distance_measured_m": measured_m, "flame_height_cm": flame_cm,
         "fy_native": float(rgb["fy"]), "fy_224": round(f224, 2),
-        "px_per_10cm": round(expected_px(CRITERION_CM, measured_m, f224), 2),
         "expected_px": None if exp is None else round(exp, 2),
         "measured_px_median": med,
-        "measured_px_min": min(heights) if heights else None,
-        "measured_px_max": max(heights) if heights else None,
-        "measured_cm_median": None if med is None else round(med * 100.0 * measured_m / f224, 1),
-        "ratio_measured_expected": None if (med is None or not exp) else round(med / exp, 2),
-        "n_fire_frames": len(fire), "n_frames_detected": len(heights),
+        "measured_px_min": min(heights),
+        "measured_px_max": max(heights),
+        "measured_cm_median": round(med * 100.0 * measured_m / f224, 1),
+        "ratio_measured_expected": None if not exp else round(med / exp, 2),
+        "n_fire_frames": len(fire), "n_frames_detected": detected,
         "touches_crop_border": border, "threshold": threshold,
+        "criterion_px": CRITERION_PX, "criterion": criterion(med, len(fire)),
     }
     return row, med_frame, med_region
+
+
+def criterion(median_px: float, n_frames: int) -> str:
+    """PASS / FAIL of one camera x distance; INCOMPLETE unless exactly CRITERION_FRAMES."""
+    if n_frames != CRITERION_FRAMES:
+        return "INCOMPLETE"
+    return "PASS" if median_px >= CRITERION_PX else "FAIL"
+
+
+def distance_decision(rows: Sequence[Dict]) -> str:
+    """The distance stays in the study set only if every one of the three cameras PASSes."""
+    verdicts = {r["node"]: r["criterion"] for r in rows}
+    d = rows[0]["distance_m"]
+    detail = ", ".join("%s %s" % (n, verdicts[n]) for n in sorted(verdicts))
+    if set(verdicts) != set(NODE_NAMES):
+        return "distance %g m: NOT DECIDED -- only %d of %d cameras measured (%s)" % (
+            d, len(verdicts), len(NODE_NAMES), detail)
+    if all(v == "PASS" for v in verdicts.values()):
+        return "distance %g m: PASS on all three cameras (%s)" % (d, detail)
+    if any(v == "INCOMPLETE" for v in verdicts.values()):
+        return "distance %g m: NOT DECIDED -- a capture does not have %d frames (%s)" % (
+            d, CRITERION_FRAMES, detail)
+    return "distance %g m: FAIL -- removed from the study's distance set (%s)" % (d, detail)
 
 
 def overlay(frames: Sequence[Tuple[str, np.ndarray, Optional[Tuple[int, int, int, int]]]],
@@ -231,6 +264,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     w = csv.DictWriter(sys.stdout, fieldnames=COLUMNS, lineterminator="\n")
     w.writeheader()
     w.writerows(rows)
+    for r in rows:
+        print("%s %g m: %s (median %.1f px over %d frames, criterion >= %d px over %d)" % (
+            r["node"], r["distance_m"], r["criterion"], r["measured_px_median"],
+            r["n_fire_frames"], CRITERION_PX, CRITERION_FRAMES), file=sys.stderr)
+    print(distance_decision(rows), file=sys.stderr)
     if args.out_csv:
         with open(args.out_csv, "w", newline="", encoding="utf-8") as f:
             cw = csv.DictWriter(f, fieldnames=COLUMNS, lineterminator="\n")

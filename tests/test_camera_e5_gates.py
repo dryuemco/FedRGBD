@@ -345,9 +345,10 @@ def _write_capture(root, node, scene, label, dist_m, fy, size_hw, notes, flame_r
     os.makedirs(os.path.join(d, "_captures"), exist_ok=True)
     for i in range(n):
         img = np.full((h, w, 3), 90, np.uint8)
-        if flame_rows:
-            top = h // 2 - flame_rows // 2
-            img[top:top + flame_rows, w // 2 - 6:w // 2 + 6] = (250, 200, 60)
+        rows_i = flame_rows[i] if isinstance(flame_rows, (list, tuple)) else flame_rows
+        if rows_i:
+            top = h // 2 - rows_i // 2
+            img[top:top + rows_i, w // 2 - 6:w // 2 + 6] = (250, 200, 60)
         Image.fromarray(img).save(os.path.join(d, ccc.make_frame_id(cid, i) + "_rgb.png"))
     rec = {"capture_id": cid, "n_frames_written": n, "notes": notes,
            "notes_parsed": ccc.parse_notes(notes),
@@ -368,17 +369,60 @@ def test_flame_height_tool_measures_at_224_and_compares_with_the_ruler(tmp_path,
     f224 = fy * 224 / 1080
     assert row["fy_224"] == pytest.approx(f224, abs=0.01)
     assert row["expected_px"] == pytest.approx(0.12 * f224 / 3.02, abs=0.01)
-    assert row["px_per_10cm"] == pytest.approx(0.10 * f224 / 3.02, abs=0.01)
     assert abs(row["measured_px_median"] - 22.4) <= 1.5
     assert row["n_frames_detected"] == row["n_fire_frames"] == 5
     assert not row["touches_crop_border"] and frame.shape == (224, 224, 3)
     assert reg is not None and row["ratio_measured_expected"] > 0
+    assert row["criterion_px"] == 5 and row["criterion"] == "INCOMPLETE"   # 5 frames, not 40
 
     out_png = str(tmp_path / "overlay.png")
     assert cfh.main(["--root", root, "--scene", "s01", "--distance_m", "3", "--nodes",
                      "node_c", "--overlay", out_png]) == 0
     assert os.path.isfile(out_png)
     assert capsys.readouterr().out.splitlines()[0].startswith("node,scene,distance_m")
+
+
+def _criterion_row(tmp_path, node, flame_rows, n=40):
+    from scripts import camera_flame_height as cfh
+
+    root = str(tmp_path / "camera_pilot")
+    _write_capture(root, node, "s02", "no_fire", 3.0, 1050.0, (1080, 1920), NOFIRE_NOTES, 0, n)
+    _write_capture(root, node, "s02", "fire", 3.0, 1050.0, (1080, 1920), FIRE_NOTES,
+                   flame_rows, n)
+    return cfh.measure_node(root, node, "s02", 3.0)[0]
+
+
+def test_flame_criterion_is_the_median_over_40_frames_at_5_px(tmp_path):
+    from scripts import camera_flame_height as cfh
+
+    assert not hasattr(cfh, "CRITERION_CM")
+    assert cfh.CRITERION_PX == 5 and cfh.CRITERION_FRAMES == 40
+    # 1080 -> 224: 30 rows are 6.2 px, 19 rows are 3.9 px
+    ok = _criterion_row(tmp_path, "node_a", 30)
+    assert ok["n_fire_frames"] == 40 and ok["measured_px_median"] >= 5
+    assert ok["criterion"] == "PASS"
+    small = _criterion_row(tmp_path, "node_b", 19)
+    assert small["measured_px_median"] < 5 and small["criterion"] == "FAIL"
+    # 21 of 40 frames without a visible flame count as 0 px: the median is 0 -> FAIL
+    flicker = _criterion_row(tmp_path, "node_c", [108] * 19 + [0] * 21)
+    assert flicker["n_frames_detected"] == 19 and flicker["measured_px_min"] == 0
+    assert flicker["measured_px_median"] == 0 and flicker["criterion"] == "FAIL"
+    assert cfh.criterion(5.0, 40) == "PASS" and cfh.criterion(4.5, 40) == "FAIL"
+    assert cfh.criterion(9.0, 39) == "INCOMPLETE"
+
+
+def test_a_distance_stays_only_if_all_three_cameras_pass():
+    from scripts import camera_flame_height as cfh
+
+    def rows(**v):
+        return [{"node": n, "distance_m": 3.0, "criterion": c} for n, c in v.items()]
+    assert "PASS on all three" in cfh.distance_decision(
+        rows(node_a="PASS", node_b="PASS", node_c="PASS"))
+    assert "FAIL -- removed from the study's distance set" in cfh.distance_decision(
+        rows(node_a="PASS", node_b="PASS", node_c="FAIL"))
+    assert "NOT DECIDED" in cfh.distance_decision(rows(node_a="PASS", node_b="PASS"))
+    assert "NOT DECIDED" in cfh.distance_decision(
+        rows(node_a="PASS", node_b="INCOMPLETE", node_c="PASS"))
 
 
 def test_flame_height_tool_refuses_the_study_footage():

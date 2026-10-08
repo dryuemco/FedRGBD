@@ -300,6 +300,51 @@ capture when you say "ready". Four captures:
   properties only: exposure, framing, depth validity. Any technical change that follows
   is a dated amendment (prereg section 10) committed before the first study capture.
 
+**e5 [YOU] + [CLAUDE] Flame-source acceptance test and depth-hole diagnosis.** Still
+pilot: every frame only under `data/raw/camera_pilot/`, scene `s02` there; only
+technical image properties (flame size in pixels, depth validity), never accuracy, loss
+or prediction quality.
+- *Flame source.* The torch, alone (one lit source), with a ruler standing vertically
+  beside the flame in the frame. One `fire` capture each at 1, 2 and 3 m (rig-to-flame
+  on the floor tape), with the Amendment 4 `--notes` (source, measured distance, flame
+  height in cm read off the ruler). At 1 m, only if the plate tilt keeps the flame in all
+  three colour images; otherwise say so and skip.
+- *Tool [CLAUDE] (`scripts/camera_flame_height.py`).* For every camera and distance:
+  flame height in pixels on the 224 RGB crop (row span of the largest region brighter
+  than the no-fire median, per frame; a frame without one counts as 0 px), its median
+  over the 40 fire frames, next to the height predicted from the ruler reading and the
+  recorded intrinsics,
+  h_px = h_cm x fy_224 / Z with fy_224 = fy x 224/1080 (pilot intrinsics: 283.5 px D435if,
+  282.1 px D435i, 218.0 px ZED 2i). Its output fills the values marked `[e5]` in
+  Amendment 4.
+- *Acceptance (Amendment 4 criterion, committed `ce85a0d` before e5).* For every camera
+  x distance, the median vertical flame height in the 224 input over the 40 frames is
+  >= N = 5 px. The tool prints PASS / FAIL per camera x distance (INCOMPLETE if a
+  capture does not have 40 frames). A distance passes only if all three cameras PASS; a
+  distance that fails on any camera is removed from the distance set for every scene.
+- *Depth holes.* node_a only (`realsense_capture.py --frames 5` into the pilot tree),
+  same plate and scene, twice: (i) all cameras as in e3; (ii) node_b's D435i emitter off
+  -- simplest by unplugging the D435i for the shot, which removes its projector. Compare
+  the invalid-depth fraction on the right-hand wall region between (i) and (ii). If the
+  holes vanish in (ii), they come from the second projector and Amendment 4 decides how
+  to handle it; if not, firmware is the next suspect.
+- *Exposure lock behaviour (Amendment 4, 13.1).* On each RealSense: let auto exposure
+  settle on the scene, read the depth frame's `actual_exposure` and the colour option
+  values, then switch auto exposure off. Check whether the colour image keeps its
+  brightness (it holds the last auto value) or jumps to the manual option value. Compare
+  the mean 224 luminance of 5 frames before and after the switch. On the ZED, check the
+  same thing with `AEC_AGC` off. Record what happens; the locking procedure follows it.
+  Also verify the Amendment 4 gate: the colour frame's `auto_exposure` metadata (ZED:
+  `AEC_AGC`) reads on before the switch and off after it, so that a locked capture with
+  the flag on in any frame would FAIL.
+- *1 m geometry.* Find a plate tilt that keeps a flame at 1 m inside all three colour
+  images and inside the 224 crop, while the 3 m flame stays there too and depth stays
+  valid (check with the snapshot of 13.1). Record rig height and tilt. If no tilt works,
+  the distance set becomes {2, 3} m (Amendment 4, 13.2).
+- *Firmware decision* is taken after e5. librealsense 2.55.1 recommends D4xx firmware
+  5.16.0.1 (`common/fw/firmware-version.h` on node_a); node_a runs 5.13.0.55 and node_b
+  5.17.0.10, the same as in v1 (April 2026 capture metadata). An update is [YOU] (sudo).
+
 **What one scene cannot test.** The leave-one-scene-out manifests need at least 3 scenes,
 and the five federated folds are dealt from the complete set of kept scenes. So
 `camera_manifests.py`, `camera_fl_prepare.py`, `camera_loso.py` and the FL runs cannot be
