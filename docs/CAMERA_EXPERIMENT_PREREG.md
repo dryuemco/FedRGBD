@@ -780,6 +780,13 @@ sections 1 and 4-6.
     unchanged on the D435if's s11 no-fire frames. It is labelled "not plain wall in the
     s11 view": there it covers the curtain, the skirting board and the floor. It is not
     used for the decision.
+  - *After the update* (decided by the author on 2026-10-09; committed before the
+    update). The D435if's hole fraction is measured again by the same method, on its
+    repeated s11 no-fire frames in the same rectangle. This measurement is descriptive
+    only. If the fraction is still high, nothing further is done; it is reported as a
+    property of the unit / its filter. The update itself is recorded before and after
+    (`rs-enumerate-devices` and `rs-enumerate-devices -c`: firmware, serial,
+    calibration), with the firmware file's source, URL and checksum.
 
 ## 14. Erratum (2026-10-07)
 
