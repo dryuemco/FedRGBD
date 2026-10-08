@@ -428,6 +428,16 @@ sections 1 and 4-6.
   the same one in every fire capture of a scene. It is recorded through the notes of
   13.1. The four candles side by side count as one source with one source id
   (`candles4`): always the same four candles, in the same arrangement, all lit together.
+* **Arrangement of `candles4`** (decided by the author on 2026-10-08, committed and pushed
+  before any e5 capture). Before this decision, two framing-only frames were taken with
+  the D435i, auto exposure on and the candles lit. They were stored outside
+  `data/raw/camera_pilot` and are not e5 data.
+  - The four candles stand in **one row along the camera's optical axis**, with **5 cm
+    between neighbouring candles, edge to edge**. This replaces "side by side" above.
+  - The capture distance is measured from the plate's front edge to the **front
+    candle**, the one nearest the camera.
+  - Every capture's `--notes` records the arrangement as
+    `arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle`.
 
 ## 14. Erratum (2026-10-07)
 
