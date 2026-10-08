@@ -64,7 +64,7 @@ def test_white_balance_then_exposure_then_verification(tmp_path):
                             "white_balance": rec["white_balance"]}
     assert abs(v["r_minus_b"]) <= 2.0 and len(v["region_rgb_mean"]) == 3
     assert rec["lamps_on"] == "tavan lambasi" and rec["flame_frames_used"] is False
-    assert rec["wb_region"] == {"x0": 0.25, "x1": 0.50, "y0": 0.08, "y1": 0.40}
+    assert rec["wb_region"] == {"x0": 0.10, "x1": 0.40, "y0": 0.08, "y1": 0.38}
     assert cam.closed
     stored = json.loads((tmp_path / "node_b" / "_exposure" / "exposure.json").read_text())
     assert stored["exposure"] == rec["exposure"] and stored["serial"] == "123"
