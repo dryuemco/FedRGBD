@@ -363,6 +363,65 @@ family, verdict phrase or interpretation rule, and not the preprocessing of sect
   lens options of the ZED 2i, but the lens is not recorded. Commit `2dab803` called the
   old number a transcription error; that was wrong and is corrected here.*
 
+## 13. Amendment 4 (in preparation; the flame-source criterion committed 2026-10-08, before e5)
+
+> Amendment 4 is written after the pilot of section 10 (scene `s01`, four captures on
+> 2026-10-07, all PASS) and before any study footage. The pilot frames were looked at
+> for technical image properties only: exposure, framing, depth validity, flame size in
+> pixels. No accuracy, loss or prediction quality was computed or inspected.
+> Only the flame-source acceptance criterion is committed now, before any e5 capture, so
+> that the e5 acceptance test is judged by a rule fixed beforehand. The other items of
+> this amendment, including 13.1, are committed before the first study capture. Values
+> marked `[e5]` are filled from the e5 acceptance test (`docs/POST_5B_CHECKLIST.md`).
+
+### 13.2 Changes to section 2 (beyond section 10's technical list; to be disclosed)
+
+These are changes after footage exists, because the pilot frames count as footage
+(section 10). They are disclosed as such in the paper and the response letter. None of
+them touches the questions, metrics, splits, selection or interpretation rules of
+sections 1 and 4-6.
+
+* **Flame-source acceptance criterion.** This is a *new acceptance criterion*; it was
+  not part of the original pre-registration.
+  - *When it was written.* In this pixel form on 2026-10-08: **after the pilot frames had
+    been seen** (technical image properties only, as stated above), and **before any e5
+    data existed**. The author set N and the statistic on 2026-10-08, and they were
+    committed and pushed before the e5 acceptance test was captured.
+  - *Earlier wording.* The draft of 2026-10-07 stated the criterion as "a visible flame
+    height of at least about 10 cm at 3 m". That wording is replaced, and it was never
+    applied to any data.
+  - *Criterion:* the visible vertical height of the flame source in the 224 input image
+    of section 3 is **at least N = 5 px at every distance used and on every camera**.
+    - It is measured in e5 at every candidate distance (1, 2 and 3 m) on all three
+      cameras: the D435if, the D435i and the ZED 2i.
+    - *Statistic:* for each camera x distance, the **median** of the vertical flame
+      height over the **40 frames** of that camera's capture at that distance, measured
+      in the 224 input image. It passes if the median is >= 5 px.
+  - *Consequence:*
+    - A distance at which the source falls below N px on any camera is removed from the
+      study's distance set, for every scene. Because the capture is simultaneous, it is
+      removed for all three cameras.
+    - If no distance passes, the source is not accepted, and another candidate is tested
+      before any study capture.
+  - *Rationale for a pixel threshold:* what the classifier sees is the flame's extent in
+    the 224 crop. A source of a given physical size spans different numbers of pixels on
+    each camera and at each distance. From the recorded pilot intrinsics, one pixel of
+    the 224 crop covers 1.38 cm at 3 m on the ZED 2i (fy_224 = 218.0 px) and 1.06 cm on
+    the RealSense cameras (282-284 px). Below some size, the flame is a few saturated
+    pixels rather than a region, unlike the flames in FLAME.
+  - *Source: not yet fixed.* Candidates, in this order:
+    1. a torch, re-tested with its wick adjusted;
+    2. as the alternative, four candles side by side, as one fixed unit.
+
+    The source is the first candidate that passes the criterion at the distances
+    needed.
+  - *To be filled from e5:* the chosen source, the median flame height per camera x
+    distance in 224-pixels, the height in cm against the ruler, and the resulting
+    distance set. [e5]
+  - The two pillar candles of the pilot are not used further.
+  - Section 2 already allows the source type to be chosen per scene. What is new is the
+    size criterion.
+
 ## 14. Erratum (2026-10-07)
 
 **The preamble (2026-09-28) says:** "on that day no camera capture of any kind was
