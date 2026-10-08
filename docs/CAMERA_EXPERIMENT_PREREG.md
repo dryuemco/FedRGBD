@@ -642,6 +642,12 @@ sections 1 and 4-6.
       the D435i's s03 and s09 captures stay on record unchanged. The old calibration file
       moves to `_exposure/_superseded/`.
     - *D435if and ZED* are calibrated at the reference position too.
+    - *WB rectangle check before each calibration* (decided by the author on
+      2026-10-08). Before a camera is calibrated at the reference position, one framing
+      frame (not e5 data, source unlit) is taken there, and the camera's neutral
+      rectangle (`configs/camera_wb_region.json`) is drawn on it. If the rectangle does
+      not cover only plain white wall, it is redefined from that frame and committed
+      before the calibration. No value is derived from the framing frame.
     - *s10, the clean acceptance geometry.* The source stands on a matte, non-reflective
       base. The 1, 2 and 3 m marks are measured from the reference position, and at 3 m
       the source is at least 1 m from every wall. The source is now 1 m in front of the
