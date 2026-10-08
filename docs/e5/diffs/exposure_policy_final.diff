@@ -1,0 +1,1149 @@
+diff --git a/configs/camera_wb_region.json b/configs/camera_wb_region.json
+new file mode 100644
+index 0000000..13403d5
+--- /dev/null
++++ b/configs/camera_wb_region.json
+@@ -0,0 +1,9 @@
++{
++  "_what": "Neutral white-wall rectangle per camera for the white-balance step of the exposure calibration (src/data/camera_exposure.py, prereg 13.1 draft): the white balance minimises |mean R - mean B| inside it. Normalized to the colour image (0 = left/top), half-open [x0, x1) x [y0, y1).",
++  "_provenance": "node_b defined 2026-10-08 from the D435i framing-only frame framing_20261008_214855 (node_b ~/e5_framing/, not e5 data): plain white wall left of the room corner; excludes the curtain, the dark switch plate, the room corner, the skirting board, the floor, the objects and the flame position. No value was derived from that frame. node_a and node_c: to be defined from a framing frame of each camera at the same tripod position before their calibration.",
++  "regions": {
++    "node_b": {"x0": 0.25, "x1": 0.50, "y0": 0.08, "y1": 0.40},
++    "node_a": null,
++    "node_c": null
++  }
++}
+diff --git a/scripts/camera_capture_session.py b/scripts/camera_capture_session.py
+index 0a62414..27742e0 100644
+--- a/scripts/camera_capture_session.py
++++ b/scripts/camera_capture_session.py
+@@ -13,7 +13,7 @@ scheduled.
+     python scripts/camera_capture_session.py --check
+ 
+     # one capture: (scene, label, distance) on node_a/node_b (RealSense) and node_c (ZED);
+-    # no-fire first (it fixes the exposure lock of this scene x distance), then fire
++    # each camera uses its one fixed exposure (--calibrate_exposure on every node first)
+     python scripts/camera_capture_session.py --scene s01 --label no_fire --distance_m 2 \\
+         --notes "source=none; distance_measured_m=2.01; flame_height_cm=0"
+     python scripts/camera_capture_session.py --scene s01 --label fire --distance_m 2 \\
+@@ -69,8 +69,8 @@ EXPECTED_SERIAL = {"node_a": "239722070442", "node_b": "405622076256", "node_c":
+ PROBE_CMD = "python src/data/camera_capture_common.py --probe"
+ CLOCK_CMD = 'python3 -c "import time; print(repr(time.time()))"'
+ CONTROL_PATH = "~/.ssh/cm-fedrgbd-%r@%h:%p"
+-#: 25 s: the nodes open the camera and, for a no-fire capture, let auto exposure settle
+-#: before the exposure lock is read (prereg sec. 13 draft); 15 s left no margin for that
++#: 25 s: the nodes open the camera and apply the fixed exposure before the start
++#: (prereg sec. 13 draft); kept from the per-capture lock, which needed the margin
+ DEFAULT_LEAD_S = 25.0
+ SESSION_LOG = "session_log.jsonl"
+ 
+diff --git a/src/data/camera_capture_common.py b/src/data/camera_capture_common.py
+index ba24a46..6bfbe41 100644
+--- a/src/data/camera_capture_common.py
++++ b/src/data/camera_capture_common.py
+@@ -246,9 +246,10 @@ class CameraBackend:
+     def info(self) -> Dict[str, Any]:  # pragma: no cover - interface
+         raise NotImplementedError
+ 
+-    def settle_auto(self, n_frames: int) -> Dict[str, Any]:  # pragma: no cover - interface
+-        """Auto exposure and auto white balance on, ``n_frames`` grabbed and discarded,
+-        then -> {exposure, gain, white_balance, source}: the values to lock."""
++    def exposure_defaults(self) -> Dict[str, Any]:  # pragma: no cover - interface
++        """{gain, gain_range, exposure_range, white_balance_range} for the one-setting
++        calibration (``camera_exposure.calibrate_camera``); ranges are
++        {min, max, step, default}; ``gain`` is the starting (default) gain."""
+         raise NotImplementedError
+ 
+     def apply_lock(self, lock: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cover
+@@ -476,7 +477,6 @@ MEASURED_DISTANCE_RANGE_M = (0.3, 10.0)
+ #: a ZED on a USB 3.x link runs at >= 5000 Mb/s (sysfs ``speed``)
+ USB3_MIN_SPEED_MBPS = 5000
+ ZED_USB_VENDOR = "2b03"
+-LOCKS_DIR = "_locks"
+ 
+ 
+ def parse_notes(notes: Optional[str]) -> Dict[str, str]:
+@@ -589,53 +589,6 @@ def zed_usb_speed_mbps(devices: List[Dict[str, Any]]) -> Optional[float]:
+ LOCK_KEYS = ("exposure", "gain", "white_balance")
+ 
+ 
+-def lock_path(root: str, node: str, scene: str, distance_m) -> str:
+-    """``<root>/<node>/_locks/<scene>_d<cm>.json``: one exposure lock per scene x distance."""
+-    d = validate_distance(distance_m)
+-    return os.path.join(root, node, LOCKS_DIR, "%s_d%d.json" % (validate_scene(scene),
+-                                                               int(round(d * 100))))
+-
+-
+-def resolve_lock(backend: "CameraBackend", root: str, node: str, scene: str, label: str,
+-                 distance_m, settle_frames: int,
+-                 clock: Callable[[], float] = time.time) -> Dict[str, Any]:
+-    """The exposure lock of this capture.
+-
+-    No-fire: auto exposure and auto white balance settle on the no-fire setup
+-    (``backend.settle_auto``), their values become the lock and are written to
+-    :func:`lock_path`.  If the fire capture of the same scene x distance already exists,
+-    the stored lock is reused instead, so the pair keeps identical values.  Fire: the
+-    stored lock is required and reused unchanged.  Returns
+-    {exposure, gain, white_balance, source, how, lock_file}.
+-    """
+-    path = lock_path(root, node, scene, distance_m)
+-    fire_rec = capture_paths(root, node, make_capture_id(scene, "fire", distance_m))["record"]
+-    if label == "fire" or os.path.isfile(fire_rec):
+-        if not os.path.isfile(path):
+-            raise CaptureError("no exposure lock %s: capture the no-fire setup of this scene "
+-                               "and distance first (its lock is reused for fire)" % path)
+-        with open(path, encoding="utf-8") as f:
+-            lock = json.load(f)
+-        lock["how"] = "reused"
+-    else:
+-        lock = dict(backend.settle_auto(int(settle_frames)))
+-        missing = [k for k in LOCK_KEYS if lock.get(k) is None]
+-        if missing:
+-            raise CaptureError("auto exposure did not report %s; no lock" % ", ".join(missing))
+-        lock.update(scene=scene, distance_m=validate_distance(distance_m), node=node,
+-                    determined_unix=clock())
+-        os.makedirs(os.path.dirname(path), exist_ok=True)
+-        if os.path.isfile(path):  # a no-fire retake before any fire capture: keep the old one
+-            stamp = time.strftime("%Y%m%dT%H%M%S", time.localtime(clock()))
+-            old = os.path.join(os.path.dirname(path), "_superseded")
+-            os.makedirs(old, exist_ok=True)
+-            shutil.move(path, os.path.join(old, "%s_%s" % (stamp, os.path.basename(path))))
+-        write_json(path, lock, exclusive=True)
+-        lock["how"] = "determined"
+-    lock["lock_file"] = path
+-    return lock
+-
+-
+ def lock_mismatch(lock: Dict[str, Any], applied: Dict[str, Any],
+                   rel_tol: float = 0.02) -> List[str]:
+     """Locked values the camera did not take (read back after applying)."""
+@@ -655,8 +608,7 @@ def run_capture(backend: CameraBackend, scene: str, label: str, distance_m, node
+                 clock: Callable[[], float] = time.time,
+                 sleep: Callable[[float], None] = time.sleep,
+                 log: Callable[[str], None] = print,
+-                study_gates: bool = False, exposure_lock: bool = False,
+-                lock_settle_frames: int = 45) -> Dict[str, Any]:
++                study_gates: bool = False, exposure_lock: bool = False) -> Dict[str, Any]:
+     """Open the camera, wait for ``start_at``, keep ``frames`` frames at ``fps``.
+ 
+     Writes every frame and, once the camera has opened, the capture record -- also on
+@@ -666,8 +618,8 @@ def run_capture(backend: CameraBackend, scene: str, label: str, distance_m, node
+ 
+     ``study_gates`` (every study capture; prereg sec. 13 draft): the --notes must parse
+     (:func:`notes_problems`, checked before the camera opens) and the camera must be on a
+-    USB 3.x link (:func:`usb_problems`).  ``exposure_lock``: exposure, gain and white
+-    balance fixed per scene x distance (:func:`resolve_lock`), and the capture FAILs if
++    USB 3.x link (:func:`usb_problems`).  ``exposure_lock``: the camera's one fixed
++    exposure, gain and white balance (``camera_exposure.fixed_exposure``), and the capture FAILs if
+     any colour frame reports auto exposure on (or does not report it).
+     """
+     node = validate_node(node)
+@@ -706,8 +658,13 @@ def run_capture(backend: CameraBackend, scene: str, label: str, distance_m, node
+             if bad:
+                 raise CaptureError("USB 3.x gate, capture refused: %s" % "; ".join(bad))
+         if exposure_lock:
+-            lock = resolve_lock(backend, root, node, scene, label, distance_m,
+-                                lock_settle_frames, clock=clock)
++            # one fixed manual exposure per camera, the same for fire and no-fire, every
++            # scene and distance (prereg 13.1 draft; src/data/camera_exposure.py)
++            from src.data.camera_exposure import ExposureError, fixed_exposure
++            try:
++                lock = fixed_exposure(root, node, info, notes=notes)
++            except ExposureError as e:
++                raise CaptureError(str(e))
+             applied = dict(backend.apply_lock({k: lock[k] for k in LOCK_KEYS}))
+             lock["applied"] = applied
+             bad = lock_mismatch(lock, applied)
+@@ -910,8 +867,11 @@ def add_capture_args(parser, default_node: str, frames_default=DEFAULT_FRAMES,
+     parser.add_argument("--notes", default="", help="required, parsed: " + NOTES_FORMAT)
+     parser.add_argument("--no_lock", action="store_true",
+                         help="TEST ONLY (e5): no exposure lock; never a study capture")
+-    parser.add_argument("--lock_settle_frames", type=int, default=45,
+-                        help="frames auto exposure runs before the no-fire lock is read")
++    parser.add_argument("--calibrate_exposure", action="store_true",
++                        help="set this camera's one fixed exposure on a flame-free scene "
++                             "(prereg 13.1 draft); no capture")
++    parser.add_argument("--recalibrate", action="store_true",
++                        help="with --calibrate_exposure: replace an existing exposure file")
+ 
+ 
+ def probe_sdks() -> Dict[str, Any]:
+@@ -947,6 +907,29 @@ def probe_sdks() -> Dict[str, Any]:
+     return out
+ 
+ 
++def run_exposure_calibration(backend: "CameraBackend", root: str, node: str, notes: str,
++                             gain=None, recalibrate: bool = False,
++                             log: Callable[[str], None] = print) -> Dict[str, Any]:
++    """``--calibrate_exposure``: open the camera; gain (default unless given), white
++    balance, exposure and a verification on the flame-free scene; close the camera."""
++    from src.data.camera_exposure import calibrate_camera, exposure_path
++    node = validate_node(node)
++    backend.open()
++    try:
++        info = dict(backend.info())
++        bad = usb_problems(info)
++        if bad:
++            raise CaptureError("USB 3.x gate, calibration refused: %s" % "; ".join(bad))
++        rec = calibrate_camera(backend, root, node, dict(backend.exposure_defaults()),
++                               notes=notes, gain=gain, recalibrate=recalibrate, log=log)
++    finally:
++        backend.close()
++    log("fixed exposure %s, gain %s, white balance %s (224 mean luma %s) -> %s"
++        % (rec["exposure"], rec["gain"], rec["white_balance"], rec["luma_224_median"],
++           exposure_path(root, node)))
++    return rec
++
++
+ if __name__ == "__main__":  # pragma: no cover - run on the nodes by the orchestrator
+     if "--probe" in sys.argv[1:]:
+         print(json.dumps(probe_sdks()))
+diff --git a/src/data/camera_exposure.py b/src/data/camera_exposure.py
+new file mode 100644
+index 0000000..0dbfec4
+--- /dev/null
++++ b/src/data/camera_exposure.py
+@@ -0,0 +1,318 @@
++#!/usr/bin/env python3
++"""FedRGBD -- one fixed (exposure, gain, white balance) per camera (prereg 13.1, DRAFT).
++
++Every study capture of a camera uses the same exposure, gain and white balance, in every
++scene, at every distance and for fire and no-fire alike, with auto exposure and auto
++white balance off.  The values are set once per camera by :func:`calibrate_camera`, on a
++**flame-free** calibration scene (the capture setup with the source in place and unlit;
++``--notes`` must parse as a no-fire capture and name the lamps that are on):
++
++1. **gain**: the camera's default (RealSense: the option range's ``default``; ZED: 0,
++   the SDK reports no default);
++2. **white balance**: with gain at its default and exposure at the camera's default, the
++   value on the white balance grid that minimises |mean R - mean B| inside the camera's
++   neutral wall rectangle (``configs/camera_wb_region.json``, normalized coordinates).
++   Bisection on the sign of R - B (a higher white balance setting makes the image
++   warmer), then the better of the two bracketing grid values;
++3. **exposure**: gain and white balance fixed, the first exposure met by a bisection on
++   a log scale (start: the camera's default) whose 224 input image (section 3 geometry)
++   has a mean 8-bit luma in :data:`LUMA_TARGET`.  If the exposure cap is reached and the
++   luma is still below the target, the exposure stays at the cap and the **gain** is
++   raised by the same bisection (between the default gain and the gain maximum);
++4. **verification**: a last set of frames with the final values; its 224 luma and the
++   rectangle's mean R, G, B are reported and stored.
++
++No calibration frame is written, only the measured values, into
++``<root>/<node>/_exposure/exposure.json`` with every step of both searches.  A capture
++is refused when the camera has no such file, when the file belongs to another camera,
++or when its ``lamps_on`` differ from the capture's (a lamp change needs a new
++calibration).  No frame with a flame is used to choose the values.
++
++    python3 src/data/realsense_capture.py --calibrate_exposure --node node_b \\
++        --root data/raw/camera_pilot --notes "source=none; distance_measured_m=3.00; \\
++        flame_height_cm=0; lamps_on=tavan lambasi"
++    python3 src/data/zed_capture.py --calibrate_exposure --node node_c --root ... --notes ...
++"""
++
++from __future__ import annotations
++
++import json
++import math
++import os
++import shutil
++import time
++from typing import Any, Callable, Dict, List, Optional, Tuple
++
++import numpy as np
++
++_REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
++#: the 224-input mean luma (8-bit) the exposure search aims for (author, 2026-10-08)
++LUMA_TARGET = (100.0, 130.0)
++SETTLE_FRAMES = 15      # frames grabbed and discarded after each setting change
++MEASURE_FRAMES = 10     # frames measured per step
++MAX_STEPS = 24
++EXPOSURE_DIR = "_exposure"
++EXPOSURE_FILE = "exposure.json"
++WB_REGION_FILE = os.path.join(_REPO, "configs", "camera_wb_region.json")
++
++
++class ExposureError(RuntimeError):
++    """No fixed exposure available, or the calibration could not complete."""
++
++
++def exposure_path(root: str, node: str) -> str:
++    """``<root>/<node>/_exposure/exposure.json``: the one setting of this camera."""
++    return os.path.join(root, node, EXPOSURE_DIR, EXPOSURE_FILE)
++
++
++def load_wb_region(node: str, path: str = WB_REGION_FILE) -> Dict[str, float]:
++    with open(path, encoding="utf-8") as f:
++        r = (json.load(f).get("regions") or {}).get(node)
++    if not r:
++        raise ExposureError("no neutral white-balance rectangle for %s in %s: define it "
++                            "from a framing frame of this camera first" % (node, path))
++    if not (0 <= r["x0"] < r["x1"] <= 1 and 0 <= r["y0"] < r["y1"] <= 1):
++        raise ExposureError("bad rectangle for %s in %s" % (node, path))
++    return r
++
++
++def region_box(width: int, height: int, r: Dict[str, float]) -> Tuple[int, int, int, int]:
++    """Pixel bounds (left, top, right, bottom), half-open, of a normalized rectangle."""
++    return (int(round(r["x0"] * width)), int(round(r["y0"] * height)),
++            int(round(r["x1"] * width)), int(round(r["y1"] * height)))
++
++
++def mean_luma_224(rgb: np.ndarray) -> float:
++    """Mean 8-bit luma (Pillow ``L``) of the section-3 224 input image of an RGB frame."""
++    from PIL import Image
++    from src.data.camera_preprocess import rgb_224
++    img = rgb_224(Image.fromarray(np.ascontiguousarray(rgb, dtype=np.uint8), "RGB"))
++    return float(np.asarray(img.convert("L"), dtype=np.float64).mean())
++
++
++def region_rgb(rgb: np.ndarray, r: Dict[str, float]) -> Tuple[float, float, float]:
++    left, top, right, bottom = region_box(rgb.shape[1], rgb.shape[0], r)
++    patch = np.asarray(rgb[top:bottom, left:right], dtype=np.float64)
++    return tuple(float(patch[..., c].mean()) for c in range(3))
++
++
++def _snap(value: float, lo: float, hi: float, step: float) -> float:
++    step = float(step) or 1.0
++    v = lo + round((float(value) - lo) / step) * step
++    return float(min(max(v, lo), hi))
++
++
++def measure(backend, setting: Dict[str, float], region: Dict[str, float],
++            settle: int = SETTLE_FRAMES, n: int = MEASURE_FRAMES) -> Dict[str, Any]:
++    """Apply ``setting`` (AE/AWB off), discard ``settle`` frames, measure ``n``:
++    the median 224 mean luma and the mean R, G, B in the neutral rectangle."""
++    applied = dict(backend.apply_lock(setting))
++    for _ in range(int(settle)):
++        backend.skip()
++    lum, rgbm = [], []
++    for _ in range(int(n)):
++        rgb = backend.grab().rgb
++        lum.append(mean_luma_224(rgb))
++        rgbm.append(region_rgb(rgb, region))
++    m = np.mean(np.array(rgbm), axis=0)
++    return {"setting": dict(setting), "applied": applied,
++            "luma_224_median": round(float(np.median(lum)), 3),
++            "region_rgb_mean": [round(float(v), 3) for v in m],
++            "r_minus_b": round(float(m[0] - m[2]), 3)}
++
++
++def search_white_balance(backend, gain, exposure, wb_range, region, max_steps=MAX_STEPS,
++                         log=print) -> Tuple[float, List[Dict[str, Any]]]:
++    """The grid value minimising |R - B| in ``region`` (bisection on the sign of R - B)."""
++    lo, hi = float(wb_range["min"]), float(wb_range["max"])
++    step = float(wb_range.get("step") or 1.0)
++    trace: List[Dict[str, Any]] = []
++    seen: Dict[float, Dict[str, Any]] = {}
++
++    def at(wb):
++        if wb not in seen:
++            seen[wb] = measure(backend, {"exposure": exposure, "gain": gain,
++                                         "white_balance": wb}, region)
++            trace.append(dict(seen[wb], step="white_balance"))
++            log("calibration WB %g: R-B %.2f (R,G,B %s)"
++                % (wb, seen[wb]["r_minus_b"], seen[wb]["region_rgb_mean"]))
++        return seen[wb]["r_minus_b"]
++
++    d_lo, d_hi = at(lo), at(hi)
++    if d_lo >= 0 or d_hi <= 0:          # no sign change: the better end
++        return (lo if abs(d_lo) <= abs(d_hi) else hi), trace
++    for _ in range(int(max_steps)):
++        if hi - lo <= step:
++            break
++        mid = _snap((lo + hi) / 2.0, lo, hi, step)
++        if mid in (lo, hi):
++            break
++        if at(mid) < 0:
++            lo = mid
++        else:
++            hi = mid
++    best = lo if abs(seen[lo]["r_minus_b"]) <= abs(seen[hi]["r_minus_b"]) else hi
++    return best, trace
++
++
++def search_gain(backend, exposure, wb, gain0, gain_range, region, target=LUMA_TARGET,
++                max_steps=MAX_STEPS, log=print) -> Tuple[Optional[float], List[Dict[str, Any]]]:
++    """Exposure at its cap and still too dark: the first gain of the same log-scale
++    bisection, between ``gain0`` and the gain maximum, whose 224 mean luma is in target."""
++    g_max = float(gain_range["max"])
++    step = float(gain_range.get("step") or 1.0)
++    lo, hi = float(gain0), g_max
++    trace: List[Dict[str, Any]] = []
++    g = _snap(math.sqrt(max(lo, step) * hi), float(gain_range["min"]), g_max, step)
++    for _ in range(int(max_steps)):
++        m = measure(backend, {"exposure": exposure, "gain": g, "white_balance": wb}, region)
++        trace.append(dict(m, step="gain"))
++        log("calibration gain %g (exposure at cap %g): 224 mean luma %.2f"
++            % (g, exposure, m["luma_224_median"]))
++        if target[0] <= m["luma_224_median"] <= target[1]:
++            return g, trace
++        if m["luma_224_median"] < target[0]:
++            lo = g
++        else:
++            hi = g
++        nxt = _snap(math.sqrt(max(lo, step) * hi), float(gain_range["min"]), g_max, step)
++        if nxt == g:
++            break
++        g = nxt
++    return None, trace
++
++
++def search_exposure(backend, gain, wb, exp_range, region, target=LUMA_TARGET,
++                    max_steps=MAX_STEPS, log=print) -> Tuple[Optional[float], List[Dict[str, Any]]]:
++    """The first exposure of a log-scale bisection whose 224 mean luma lies in ``target``."""
++    e_min, e_max = float(exp_range["min"]), float(exp_range["max"])
++    step = float(exp_range.get("step") or 1.0)
++    lo, hi = e_min, e_max
++    e = _snap(exp_range.get("default") or math.sqrt(max(e_min, step) * e_max),
++              e_min, e_max, step)
++    trace: List[Dict[str, Any]] = []
++    for _ in range(int(max_steps)):
++        m = measure(backend, {"exposure": e, "gain": gain, "white_balance": wb}, region)
++        trace.append(dict(m, step="exposure"))
++        log("calibration exposure %g: 224 mean luma %.2f" % (e, m["luma_224_median"]))
++        if target[0] <= m["luma_224_median"] <= target[1]:
++            return e, trace
++        if m["luma_224_median"] < target[0]:
++            lo = e
++        else:
++            hi = e
++        nxt = _snap(math.sqrt(max(lo, step) * hi), e_min, e_max, step)
++        if nxt == e:
++            break
++        e = nxt
++    return None, trace
++
++
++def calibrate_camera(backend, root: str, node: str, defaults: Dict[str, Any],
++                     notes: str = "", gain: Optional[float] = None,
++                     region: Optional[Dict[str, float]] = None, recalibrate: bool = False,
++                     target=LUMA_TARGET, clock: Callable[[], float] = time.time,
++                     log: Callable[[str], None] = print) -> Dict[str, Any]:
++    """Gain (default), then white balance, then exposure, then a verification; write and
++    return ``<root>/<node>/_exposure/exposure.json``.  ``backend`` is open."""
++    from src.data.camera_capture_common import notes_problems, parse_notes, write_json
++    bad = notes_problems(notes, "no_fire")
++    if bad:
++        raise ExposureError("calibration scene must be flame-free and its --notes complete: "
++                            + "; ".join(bad))
++    lamps = parse_notes(notes).get("lamps_on")
++    if not lamps:
++        raise ExposureError("calibration --notes must name the lamps that are on "
++                            "(lamps_on=...)")
++    path = exposure_path(root, node)
++    if os.path.isfile(path) and not recalibrate:
++        raise ExposureError("%s exists: one setting per camera; --recalibrate moves it to "
++                            "_superseded/ (and is disclosed)" % path)
++    region = region or load_wb_region(node)
++    g = float(gain if gain is not None else defaults["gain"])
++    exp_range, wb_range = defaults["exposure_range"], defaults["white_balance_range"]
++    e_min, e_max = float(exp_range["min"]), float(exp_range["max"])
++    e0 = _snap(exp_range.get("default") or math.sqrt(max(e_min, 1.0) * e_max),
++               e_min, e_max, float(exp_range.get("step") or 1.0))
++    wb, wb_trace = search_white_balance(backend, g, e0, wb_range, region, log=log)
++    e, e_trace = search_exposure(backend, g, wb, exp_range, region, target=target, log=log)
++    if e is None:
++        # too dark even at the exposure cap: exposure stays at the cap, gain is raised
++        cap = float(exp_range["max"])
++        at_cap = [t for t in e_trace if t["setting"]["exposure"] == cap]
++        if not at_cap:
++            m = measure(backend, {"exposure": cap, "gain": g, "white_balance": wb}, region)
++            at_cap = [dict(m, step="exposure")]
++            e_trace.append(at_cap[0])
++            log("calibration exposure %g (cap): 224 mean luma %.2f"
++                % (cap, m["luma_224_median"]))
++        if at_cap[-1]["luma_224_median"] < target[0]:
++            g_new, g_trace = search_gain(backend, cap, wb, g, defaults["gain_range"], region,
++                                         target=target, log=log)
++            e_trace += g_trace
++            if g_new is not None:
++                e, g = cap, g_new
++    if e is None:
++        raise ExposureError("no exposure (and gain at the exposure cap) gives a 224 mean "
++                            "luma in [%g, %g]; trace: %s"
++                            % (target[0], target[1],
++                               [(t["setting"]["exposure"], t["setting"]["gain"],
++                                 t["luma_224_median"]) for t in e_trace]))
++    check = measure(backend, {"exposure": e, "gain": g, "white_balance": wb}, region)
++    log("verification: exposure %g, gain %g, white balance %g -> 224 mean luma %.2f, "
++        "rectangle R,G,B %s, R-B %.2f" % (e, g, wb, check["luma_224_median"],
++                                          check["region_rgb_mean"], check["r_minus_b"]))
++    if not target[0] <= check["luma_224_median"] <= target[1]:
++        raise ExposureError("verification frames left the target: 224 mean luma %.2f"
++                            % check["luma_224_median"])
++    os.makedirs(os.path.dirname(path), exist_ok=True)
++    if os.path.isfile(path):
++        old = os.path.join(os.path.dirname(path), "_superseded")
++        os.makedirs(old, exist_ok=True)
++        stamp = time.strftime("%Y%m%dT%H%M%S", time.localtime(clock()))
++        shutil.move(path, os.path.join(old, "%s_%s" % (stamp, EXPOSURE_FILE)))
++    rec = {"policy": "one fixed (exposure, gain, white balance) per camera, AE and AWB off "
++                     "(prereg 13.1 draft)",
++           "node": node, "serial": (backend.info() or {}).get("serial"),
++           "exposure": e, "gain": g, "white_balance": wb, "lamps_on": lamps,
++           "luma_target_224": list(target), "wb_region": region,
++           "verification": check, "luma_224_median": check["luma_224_median"],
++           "exposure_range": exp_range, "white_balance_range": wb_range,
++           "gain_range": defaults.get("gain_range"), "gain_default": defaults["gain"],
++           "settle_frames": SETTLE_FRAMES, "measure_frames": MEASURE_FRAMES,
++           "calibration_notes": notes, "trace": wb_trace + e_trace,
++           "determined_unix": clock(), "flame_frames_used": False}
++    write_json(path, rec, exclusive=True)
++    return rec
++
++
++def fixed_exposure(root: str, node: str, info: Optional[Dict[str, Any]] = None,
++                   notes: Optional[str] = None) -> Dict[str, Any]:
++    """The camera's fixed setting for a capture (fire and no-fire alike).
++
++    Raises :class:`ExposureError` when the camera was not calibrated, when the file
++    belongs to another camera (serial), or when the capture's ``lamps_on`` differ from
++    the calibration's (a lamp change needs a new calibration)."""
++    path = exposure_path(root, node)
++    if not os.path.isfile(path):
++        raise ExposureError("no fixed exposure %s: run --calibrate_exposure on the "
++                            "flame-free calibration scene first" % path)
++    with open(path, encoding="utf-8") as f:
++        rec = json.load(f)
++    serial = (info or {}).get("serial")
++    if serial is not None and rec.get("serial") is not None \
++            and str(rec["serial"]) != str(serial):
++        raise ExposureError("%s was calibrated on camera %s, this is %s"
++                            % (path, rec["serial"], serial))
++    if notes is not None and rec.get("lamps_on") is not None:
++        from src.data.camera_capture_common import parse_notes
++        lamps = parse_notes(notes).get("lamps_on")
++        if lamps != rec["lamps_on"]:
++            raise ExposureError("lamps_on %r differs from the calibration's %r: the lamp "
++                                "condition changed, recalibrate" % (lamps, rec["lamps_on"]))
++    return {"exposure": rec["exposure"], "gain": rec["gain"],
++            "white_balance": rec["white_balance"], "how": "fixed_camera",
++            "source": "calibrated %s, 224 mean luma %s" % (
++                time.strftime("%Y-%m-%d %H:%M", time.localtime(rec.get("determined_unix", 0))),
++                rec.get("luma_224_median")),
++            "lock_file": path}
+diff --git a/src/data/realsense_capture.py b/src/data/realsense_capture.py
+index 1edef11..752e41b 100644
+--- a/src/data/realsense_capture.py
++++ b/src/data/realsense_capture.py
+@@ -44,8 +44,10 @@ if _REPO not in sys.path:
+ 
+ from src.data.camera_capture_common import (  # noqa: E402
+     DEFAULT_FPS, DEFAULT_FRAMES, DEFAULT_ROOT, LABELS, NOTES_FORMAT, CameraBackend,
+-    CaptureError, Frame, depth_to_mm_uint16, run_capture, smoke_test,
++    CaptureError, Frame, depth_to_mm_uint16, run_capture, run_exposure_calibration,
++    smoke_test,
+ )
++from src.data.camera_exposure import ExposureError  # noqa: E402
+ 
+ #: pyrealsense2, imported lazily (only node_a / node_b have it; tests run without it)
+ rs = None
+@@ -578,38 +580,23 @@ class RealSenseBackend(CameraBackend):
+         except Exception:  # noqa: BLE001
+             return float(round(float(value)))
+ 
+-    def settle_auto(self, n_frames):
+-        """Auto exposure / white balance run for ``n_frames``; -> the values to lock.
+-
+-        Where the colour frame carries ``actual_exposure`` / ``gain_level`` /
+-        ``white_balance`` metadata, the lock is what auto exposure applied to the last
+-        frame.  Under the RSUSB backend of the nodes it does not (prereg sec. 13 draft);
+-        auto exposure is then switched off and the sensor options are read -- whether
+-        they hold the last auto value is what e5 tests."""
+-        self._set("enable_auto_exposure", 1)
+-        self._set("enable_auto_white_balance", 1)
+-        last = None
+-        for _ in range(max(1, int(n_frames))):
+-            last = self.grab()
+-        m = last.meta if last is not None else {}
+-        if m.get("exposure_source") == "frame_metadata":
+-            lock = {"exposure": m.get("exposure"), "gain": m.get("gain"),
+-                    "white_balance": m.get("white_balance"),
+-                    "source": "colour frame metadata after %d auto frames" % n_frames}
+-            self._set("enable_auto_exposure", 0)
+-            self._set("enable_auto_white_balance", 0)
+-        else:
+-            self._set("enable_auto_exposure", 0)
+-            self._set("enable_auto_white_balance", 0)
+-            lock = {"exposure": _option(self.color_sensor, "exposure"),
+-                    "gain": _option(self.color_sensor, "gain"),
+-                    "white_balance": _option(self.color_sensor, "white_balance"),
+-                    "source": "sensor options read after auto exposure was switched off "
+-                              "(%d auto frames; no colour exposure metadata)" % n_frames}
+-        for k in ("exposure", "gain", "white_balance"):
+-            if lock[k] is not None:
+-                lock[k] = self._snap(k, lock[k])
+-        return lock
++    def exposure_defaults(self):
++        """Default gain (option range), the white balance range, and the exposure range
++        in the sensor's unit (UVC, 100 us), capped at one frame period of the stream so
++        the frame rate does not drop."""
++        r = {k: self.color_sensor.get_option_range(getattr(rs.option, k))
++             for k in ("exposure", "gain", "white_balance")}
++        cap = float(int(1e4 / float(self.stream_fps)))
++        wb, gn = r["white_balance"], r["gain"]
++        return {"gain": float(gn.default),
++                "gain_range": {"min": float(gn.min), "max": float(gn.max),
++                               "step": float(gn.step), "default": float(gn.default)},
++                "white_balance_range": {"min": float(wb.min), "max": float(wb.max),
++                                        "step": float(wb.step), "default": float(wb.default)},
++                "exposure_range": {"min": float(r["exposure"].min),
++                                   "max": min(float(r["exposure"].max), cap),
++                                   "step": float(r["exposure"].step),
++                                   "default": float(r["exposure"].default)}}
+ 
+     def apply_lock(self, lock):
+         self._set("enable_auto_exposure", 0)
+@@ -661,8 +648,11 @@ def build_parser():
+     parser.add_argument("--notes", default="", help="required, parsed: " + NOTES_FORMAT)
+     parser.add_argument("--no_lock", action="store_true",
+                         help="TEST ONLY (e5): no exposure lock; never a study capture")
+-    parser.add_argument("--lock_settle_frames", type=int, default=45,
+-                        help="frames auto exposure runs before the no-fire lock is read")
++    parser.add_argument("--calibrate_exposure", action="store_true",
++                        help="set this camera's one fixed exposure on a flame-free scene "
++                             "(prereg 13.1 draft); no capture")
++    parser.add_argument("--recalibrate", action="store_true",
++                        help="with --calibrate_exposure: replace an existing exposure file")
+     parser.add_argument("--stream_fps", type=int, default=EXP_STREAM_FPS,
+                         help="[camera experiment] stream rate, sampled down to --fps")
+     return parser
+@@ -670,7 +660,8 @@ def build_parser():
+ 
+ def main(argv=None, backend_factory=None):
+     args = build_parser().parse_args(argv)
+-    experiment = args.scene is not None or (args.test and args.node is not None)
++    experiment = (args.scene is not None or args.calibrate_exposure
++                  or (args.test and args.node is not None))
+     if not experiment:  # the original CLI, unchanged
+         if args.list:
+             list_cameras()
+@@ -692,6 +683,17 @@ def main(argv=None, backend_factory=None):
+                                                            stream_fps=args.stream_fps))
+     if args.test:
+         return 0 if smoke_test(factory(), args.node) else 1
++    if args.calibrate_exposure:
++        if args.node is None:
++            print("--calibrate_exposure needs --node (node_a or node_b)", file=sys.stderr)
++            return 2
++        try:
++            run_exposure_calibration(factory(), args.root, args.node, args.notes,
++                                     recalibrate=args.recalibrate)
++        except (CaptureError, ValueError, ExposureError) as e:
++            print("ERROR: %s" % e, file=sys.stderr)
++            return 1
++        return 0
+     if args.node is None or args.label is None or args.distance_m is None:
+         print("--scene needs --label, --distance_m and --node (node_a or node_b)",
+               file=sys.stderr)
+@@ -700,8 +702,7 @@ def main(argv=None, backend_factory=None):
+         rec = run_capture(factory(), args.scene, args.label, args.distance_m, args.node,
+                           root=args.root, frames=frames, fps=fps, start_at=args.start_at,
+                           retake=args.retake, notes=args.notes, study_gates=True,
+-                          exposure_lock=not args.no_lock,
+-                          lock_settle_frames=args.lock_settle_frames)
++                          exposure_lock=not args.no_lock)
+     except (CaptureError, ValueError) as e:
+         print("ERROR: %s" % e, file=sys.stderr)
+         return 1
+diff --git a/src/data/zed_capture.py b/src/data/zed_capture.py
+index 74d0f5b..2ae5930 100644
+--- a/src/data/zed_capture.py
++++ b/src/data/zed_capture.py
+@@ -33,8 +33,9 @@ if _REPO not in sys.path:
+ 
+ from src.data.camera_capture_common import (  # noqa: E402
+     CameraBackend, CaptureError, Frame, add_capture_args, depth_to_mm_uint16,
+-    run_capture, smoke_test, zed_usb_devices, zed_usb_speed_mbps,
++    run_capture, run_exposure_calibration, smoke_test, zed_usb_devices, zed_usb_speed_mbps,
+ )
++from src.data.camera_exposure import ExposureError  # noqa: E402
+ 
+ DEFAULT_DEPTH_MODE = "NEURAL"
+ DEFAULT_RESOLUTION = "HD1080"
+@@ -234,21 +235,15 @@ class ZedBackend(CameraBackend):
+         if err is not None and err != sl.ERROR_CODE.SUCCESS:
+             raise CaptureError("ZED set_camera_settings(%s, %s) failed: %s" % (name, value, err))
+ 
+-    def settle_auto(self, n_frames) -> Dict[str, Any]:
+-        """AEC/AGC and auto white balance run for ``n_frames``; -> the values they applied
+-        (the ZED reports applied values while auto is on).  White balance on the SDK's
+-        100 K grid."""
+-        sl = self.sl
+-        self._set("AEC_AGC", 1)
+-        self._set("WHITEBALANCE_AUTO", 1)
+-        for _ in range(max(1, int(n_frames))):
+-            self._grab_ok()
+-        wb = _setting(self.zed, sl, "WHITEBALANCE_TEMPERATURE")
+-        return {"exposure": _setting(self.zed, sl, "EXPOSURE"),
+-                "gain": _setting(self.zed, sl, "GAIN"),
+-                "white_balance": None if wb is None else int(round(wb / 100.0) * 100),
+-                "source": "get_camera_settings with AEC_AGC and auto white balance on, "
+-                          "after %d frames" % n_frames}
++    def exposure_defaults(self) -> Dict[str, Any]:
++        """ZED (sl.VIDEO_SETTINGS): EXPOSURE in percent of the frame period (1-100),
++        searched from the geometric middle; WHITEBALANCE_TEMPERATURE 2800-6500 K on the
++        SDK's 100 K grid; GAIN 0-100, starting at 0 (the SDK reports no default)."""
++        return {"gain": 0.0,
++                "gain_range": {"min": 0.0, "max": 100.0, "step": 1.0, "default": 0.0},
++                "white_balance_range": {"min": 2800.0, "max": 6500.0, "step": 100.0,
++                                        "default": None},
++                "exposure_range": {"min": 1.0, "max": 100.0, "step": 1.0, "default": None}}
+ 
+     def apply_lock(self, lock) -> Dict[str, Any]:
+         sl = self.sl
+@@ -306,6 +301,14 @@ def main(argv=None, backend_factory=None) -> int:
+         return 0
+     if args.test:
+         return 0 if smoke_test(factory(), args.node) else 1
++    if args.calibrate_exposure:
++        try:
++            run_exposure_calibration(factory(), args.root, args.node, args.notes,
++                                     recalibrate=args.recalibrate)
++        except (CaptureError, ValueError, ExposureError) as e:
++            print("ERROR: %s" % e, file=sys.stderr)
++            return 1
++        return 0
+     if not (args.scene and args.label and args.distance_m is not None):
+         print("--scene, --label and --distance_m are required for a capture", file=sys.stderr)
+         return 2
+@@ -313,8 +316,7 @@ def main(argv=None, backend_factory=None) -> int:
+         rec = run_capture(factory(), args.scene, args.label, args.distance_m, args.node,
+                           root=args.root, frames=args.frames, fps=args.fps,
+                           start_at=args.start_at, retake=args.retake, notes=args.notes,
+-                          study_gates=True, exposure_lock=not args.no_lock,
+-                          lock_settle_frames=args.lock_settle_frames)
++                          study_gates=True, exposure_lock=not args.no_lock)
+     except (CaptureError, ValueError) as e:
+         print("ERROR: %s" % e, file=sys.stderr)
+         return 1
+diff --git a/tests/test_camera_capture.py b/tests/test_camera_capture.py
+index a254931..be7c67e 100644
+--- a/tests/test_camera_capture.py
++++ b/tests/test_camera_capture.py
+@@ -71,13 +71,13 @@ class FakeCamera(CameraBackend):
+                 "stereo_baseline_mm": 50.0, "depth_scale_mm": 1.0, "depth_range_mm": None,
+                 "usb_type": self.usb_type}
+ 
+-    def settle_auto(self, n_frames):
+-        self.ae = True
+-        for _ in range(n_frames):
+-            self.grab()
+-        self.settled = n_frames
++    def exposure_defaults(self):
+         e, g, w = self.auto_values
+-        return {"exposure": e, "gain": g, "white_balance": w, "source": "fake auto"}
++        return {"gain": float(g),
++                "gain_range": {"min": 0.0, "max": 128.0, "step": 1.0, "default": float(g)},
++                "white_balance_range": {"min": 2800.0, "max": 6500.0, "step": 10.0,
++                                        "default": float(w)},
++                "exposure_range": {"min": 1.0, "max": 333.0, "step": 1.0, "default": float(e)}}
+ 
+     def apply_lock(self, lock):
+         self.ae = self.ae_stuck
+@@ -108,6 +108,18 @@ class FakeCamera(CameraBackend):
+         self.closed = True
+ 
+ 
++def _calibrate(root, node, serial="123", exposure=166, gain=64, white_balance=4600):
++    """The camera's fixed exposure file, as --calibrate_exposure writes it."""
++    from src.data.camera_exposure import exposure_path
++    path = exposure_path(str(root), node)
++    os.makedirs(os.path.dirname(path), exist_ok=True)
++    with open(path, "w", encoding="utf-8") as f:
++        json.dump({"node": node, "serial": serial, "exposure": exposure, "gain": gain,
++                   "white_balance": white_balance, "luma_224_median": 115.0,
++                   "determined_unix": 1_790_000_000.0}, f)
++    return path
++
++
+ def _capture(tmp_path, node="node_a", clock=None, **kw):
+     clock = clock or FakeClock()
+     cam = kw.pop("camera", None) or FakeCamera(clock=clock, ir=(node != "node_c"))
+@@ -351,6 +363,7 @@ def test_realsense_module_imports_without_the_sdk_and_captures_via_cli(tmp_path)
+     assert rsc.build_parser().parse_args([]).frames is None  # legacy default resolved later
+     base = ["--scene", "s02", "--distance_m", "3", "--node", "node_b", "--frames", "3",
+             "--root", str(tmp_path)]
++    _calibrate(tmp_path, "node_b")
+     assert rsc.main(base + ["--label", "no_fire", "--notes", NOFIRE_NOTES],
+                     backend_factory=lambda: FakeCamera()) == 0
+     rc = rsc.main(base + ["--label", "fire", "--notes", FIRE_NOTES],
+@@ -358,7 +371,7 @@ def test_realsense_module_imports_without_the_sdk_and_captures_via_cli(tmp_path)
+     assert rc == 0
+     rec = json.loads((tmp_path / "node_b" / "_captures" / "s02_fire_d300.json").read_text())
+     assert rec["n_frames_written"] == 3 and rec["fps"] == 5.0
+-    assert rec["exposure_lock"]["how"] == "reused" and rec["ae_on_frames"] == 0
++    assert rec["exposure_lock"]["how"] == "fixed_camera" and rec["ae_on_frames"] == 0
+     assert rec["notes_parsed"]["source"] == "torch1"
+     assert rsc.main(base + ["--label", "fire", "--notes", FIRE_NOTES],
+                     backend_factory=lambda: FakeCamera()) == 1  # refuses to overwrite
+@@ -386,6 +399,7 @@ def test_zed_cli_defaults_and_capture(tmp_path):
+     args = zc.build_parser().parse_args([])
+     assert (args.depth_mode, args.resolution, args.node) == ("NEURAL", "HD1080", "node_c")
+     assert (args.frames, args.fps, args.root) == (40, 5.0, ccc.DEFAULT_ROOT)
++    _calibrate(tmp_path, "node_c")
+     rc = zc.main(["--scene", "s05", "--label", "no_fire", "--distance_m", "1", "--frames",
+                   "2", "--root", str(tmp_path), "--notes", NOFIRE_NOTES],
+                  backend_factory=lambda: FakeCamera(ir=False, depth_mode="NEURAL"))
+diff --git a/tests/test_camera_e5_gates.py b/tests/test_camera_e5_gates.py
+index 54226a1..06b9330 100644
+--- a/tests/test_camera_e5_gates.py
++++ b/tests/test_camera_e5_gates.py
+@@ -1,7 +1,7 @@
+ """Study-capture gates of the camera prereg's section 13 draft (e5 code), fake cameras only.
+ 
+-Mandatory parsed --notes, the USB 3.x gate, the exposure lock (fixed on the no-fire
+-capture, reused unchanged for fire) with its auto-exposure gate, their checks in the
++Mandatory parsed --notes, the USB 3.x gate, the exposure lock (one fixed exposure per
++camera, the same for fire and no-fire) with its auto-exposure gate, their checks in the
+ orchestrator, and the flame-height tool.  No camera SDK is needed.
+ """
+ 
+@@ -15,16 +15,23 @@ from PIL import Image
+ 
+ from src.data import camera_capture_common as ccc
+ from tests.test_camera_capture import (
+-    FAKE_NODES, FIRE_NOTES, NOFIRE_NOTES, FakeCamera, FakeClock, _capture, _rec, _session,
++    FAKE_NODES, FIRE_NOTES, NOFIRE_NOTES, FakeCamera, FakeClock, _calibrate, _capture, _rec,
++    _session,
+ )
+ 
+ 
+ def _study(tmp_path, label, camera=None, clock=None, **kw):
+     clock = clock or FakeClock()
+     notes = FIRE_NOTES if label == "fire" else NOFIRE_NOTES
+-    args = dict(label=label, notes=notes, study_gates=True, exposure_lock=True,
+-                lock_settle_frames=3, clock=clock)
++    calibrated = kw.pop("calibrated", True)
++    args = dict(label=label, notes=notes, study_gates=True, exposure_lock=True, clock=clock)
+     args.update(kw)
++    node = args.get("node", "node_a")
++    if args["exposure_lock"] and calibrated:
++        from src.data.camera_exposure import exposure_path
++        if not os.path.isfile(exposure_path(str(tmp_path), node)):
++            cam = args.get("camera") or camera
++            _calibrate(tmp_path, node, serial=cam.info().get("serial") if cam else "123")
+     return _capture(tmp_path, camera=camera or FakeCamera(clock=clock), **args)
+ 
+ 
+@@ -63,7 +70,7 @@ def test_complete_notes_pass():
+ def test_study_capture_without_notes_is_refused_before_anything_is_written(tmp_path):
+     cam = FakeCamera()
+     with pytest.raises(ccc.CaptureError, match="refused before it started"):
+-        _study(tmp_path, "fire", camera=cam, notes="source=torch1")
++        _study(tmp_path, "fire", camera=cam, notes="source=torch1", calibrated=False)
+     assert not cam.opened
+     assert not (tmp_path / "node_a").exists()
+ 
+@@ -110,49 +117,33 @@ def test_zed_usb_devices_from_sysfs(tmp_path):
+ # --------------------------------------------------------------------------- #
+ # exposure lock
+ # --------------------------------------------------------------------------- #
+-def test_no_fire_fixes_the_lock_and_fire_reuses_it_unchanged(tmp_path):
++def test_fire_and_no_fire_use_the_one_fixed_exposure_of_the_camera(tmp_path):
++    _calibrate(tmp_path, "node_a", exposure=210, gain=64, white_balance=4600)
+     rec_n, cam_n = _study(tmp_path, "no_fire")
+-    assert rec_n["status"] == "complete" and cam_n.settled == 3
+-    lock_file = tmp_path / "node_a" / "_locks" / "s03_d200.json"
+-    stored = json.loads(lock_file.read_text())
+-    assert (stored["exposure"], stored["gain"], stored["white_balance"]) == (166, 64, 4600)
+-    assert rec_n["exposure_lock"]["how"] == "determined" and rec_n["ae_on_frames"] == 0
+-
+-    # the fire capture's camera would settle elsewhere: the lock must not change
+-    clock = FakeClock()
+-    cam_f = FakeCamera(clock=clock, auto_values=(20, 16, 3000))
+-    rec_f, _ = _study(tmp_path, "fire", camera=cam_f, clock=clock)
+-    assert rec_f["status"] == "complete" and cam_f.settled is None
+-    assert rec_f["exposure_lock"]["how"] == "reused"
+-    assert cam_f.applied == {"exposure": 166, "gain": 64, "white_balance": 4600}
++    rec_f, cam_f = _study(tmp_path, "fire")
++    for rec, cam in ((rec_n, cam_n), (rec_f, cam_f)):
++        assert rec["status"] == "complete" and rec["ae_on_frames"] == 0
++        assert rec["exposure_lock"]["how"] == "fixed_camera"
++        assert cam.applied == {"exposure": 210, "gain": 64, "white_balance": 4600}
+     meta = json.loads((tmp_path / "node_a" / "s03_fire_d200_0000_meta.json").read_text())
+     assert meta["exposure_source"] == "manual_lock" and meta["auto_exposure"] is False
+-    assert meta["exposure_lock"] == {"exposure": 166, "gain": 64, "white_balance": 4600}
+-
+-
+-def test_fire_without_a_no_fire_lock_is_refused(tmp_path):
+-    with pytest.raises(ccc.CaptureError, match="no exposure lock"):
+-        _study(tmp_path, "fire")
++    assert meta["exposure_lock"] == {"exposure": 210, "gain": 64, "white_balance": 4600}
++    # another distance and another scene: the same values, nothing determined per capture
++    rec_o, cam_o = _study(tmp_path, "no_fire", scene="s07", distance_m=3.0)
++    assert cam_o.applied == {"exposure": 210, "gain": 64, "white_balance": 4600}
++    assert not (tmp_path / "node_a" / "_locks").exists()
+ 
+ 
+-def test_no_fire_retake_after_fire_keeps_the_pair_on_one_lock(tmp_path):
+-    _study(tmp_path, "no_fire")
+-    _study(tmp_path, "fire")
+-    clock = FakeClock()
+-    cam = FakeCamera(clock=clock, auto_values=(20, 16, 3000))
+-    rec, _ = _study(tmp_path, "no_fire", camera=cam, clock=clock, retake=True)
+-    assert rec["exposure_lock"]["how"] == "reused" and cam.settled is None
+-    assert cam.applied["exposure"] == 166
++@pytest.mark.parametrize("label", ["no_fire", "fire"])
++def test_a_capture_without_a_calibrated_exposure_is_refused(tmp_path, label):
++    with pytest.raises(ccc.CaptureError, match="no fixed exposure"):
++        _study(tmp_path, label, calibrated=False)
+ 
+ 
+-def test_no_fire_retake_before_fire_relocks_and_keeps_the_old_lock(tmp_path):
+-    _study(tmp_path, "no_fire")
+-    clock = FakeClock()
+-    cam = FakeCamera(clock=clock, auto_values=(20, 16, 3000))
+-    rec, _ = _study(tmp_path, "no_fire", camera=cam, clock=clock, retake=True)
+-    assert rec["exposure_lock"]["how"] == "determined" and rec["exposure_lock"]["exposure"] == 20
+-    old = list((tmp_path / "node_a" / "_locks" / "_superseded").iterdir())
+-    assert len(old) == 1 and json.loads(old[0].read_text())["exposure"] == 166
++def test_an_exposure_file_of_another_camera_is_refused(tmp_path):
++    _calibrate(tmp_path, "node_a", serial="999")
++    with pytest.raises(ccc.CaptureError, match="calibrated on camera 999"):
++        _study(tmp_path, "no_fire")
+ 
+ 
+ def test_auto_exposure_on_in_a_locked_capture_fails_it(tmp_path):
+@@ -189,7 +180,7 @@ def test_unlocked_capture_records_no_lock(tmp_path):
+ # --------------------------------------------------------------------------- #
+ # back-ends (fake SDK objects)
+ # --------------------------------------------------------------------------- #
+-def test_realsense_lock_reads_options_after_auto_off_without_colour_metadata(monkeypatch):
++def test_realsense_exposure_defaults_and_lock(monkeypatch):
+     from src.data import realsense_capture as rsc
+ 
+     opts = NS(enable_auto_exposure="ae", enable_auto_white_balance="awb", exposure="exp",
+@@ -212,36 +203,30 @@ def test_realsense_lock_reads_options_after_auto_off_without_colour_metadata(mon
+             self.v[a] = value
+ 
+         def get_option_range(self, a):
+-            return {"wb": NS(min=2800.0, max=6500.0, step=10.0)}.get(
+-                a, NS(min=1.0, max=10000.0, step=1.0))
++            return {"wb": NS(min=2800.0, max=6500.0, step=10.0, default=4600.0),
++                    "gain": NS(min=0.0, max=128.0, step=1.0, default=64.0)}.get(
++                a, NS(min=1.0, max=10000.0, step=1.0, default=166.0))
+ 
+     b = rsc.RealSenseBackend()
+     b.color_sensor = Sensor()
+-    grabbed = []
+-    b.grab = lambda: grabbed.append(1) or NS(meta={"exposure_source": "sensor_option"})
+-    lock = b.settle_auto(5)
+-    assert len(grabbed) == 5
+-    assert b.color_sensor.log[:2] == [("ae", 1.0), ("awb", 1.0)]
+-    assert ("ae", 0.0) in b.color_sensor.log and ("awb", 0.0) in b.color_sensor.log
+-    assert (lock["exposure"], lock["gain"], lock["white_balance"]) == (156.0, 64.0, 4600.0)
+-    assert "switched off" in lock["source"]
+-    applied = b.apply_lock({"exposure": 156.0, "gain": 64.0, "white_balance": 4600.0})
+-    assert applied["exposure"] == 156.0 and applied["auto_exposure"] == 0.0
++    d = b.exposure_defaults()
++    assert d["gain"] == 64.0 and d["gain_range"]["max"] == 128.0
++    assert d["white_balance_range"] == {"min": 2800.0, "max": 6500.0, "step": 10.0,
++                                        "default": 4600.0}
++    # 30 fps stream: exposure (100 us units) capped at one frame period
++    assert d["exposure_range"] == {"min": 1.0, "max": 333.0, "step": 1.0, "default": 166.0}
++    applied = b.apply_lock({"exposure": 210.0, "gain": 64.0, "white_balance": 4600.0})
++    assert applied["exposure"] == 210.0 and applied["auto_exposure"] == 0.0
+     assert applied["white_balance"] == 4600.0 and applied["auto_white_balance"] == 0.0
+ 
+ 
+-def test_zed_lock_settles_reads_and_applies(monkeypatch):
++def test_zed_exposure_defaults_and_lock(monkeypatch):
+     from src.data import zed_capture as zc
+ 
+     class Zed:
+         def __init__(self):
+             self.v = {"AEC_AGC": 1, "WHITEBALANCE_AUTO": 1, "EXPOSURE": 37, "GAIN": 52,
+                       "WHITEBALANCE_TEMPERATURE": 4620}
+-            self.grabs = 0
+-
+-        def grab(self, rt):
+-            self.grabs += 1
+-            return "SUCCESS"
+ 
+         def get_camera_settings(self, key):
+             return ("SUCCESS", self.v[key])
+@@ -255,11 +240,13 @@ def test_zed_lock_settles_reads_and_applies(monkeypatch):
+             ERROR_CODE=NS(SUCCESS="SUCCESS"))
+     b = zc.ZedBackend()
+     b.sl, b.zed, b.runtime = sl, Zed(), None
+-    lock = b.settle_auto(4)
+-    assert b.zed.grabs == 4
+-    assert (lock["exposure"], lock["gain"], lock["white_balance"]) == (37, 52, 4600)
++    d = b.exposure_defaults()
++    assert d["gain"] == 0.0 and d["gain_range"]["max"] == 100.0   # starts at 0
++    assert d["white_balance_range"]["step"] == 100.0
++    assert d["exposure_range"]["min"] == 1.0 and d["exposure_range"]["max"] == 100.0
++    lock = {"exposure": 30, "gain": 40, "white_balance": 4600}
+     applied = b.apply_lock(lock)
+-    assert applied == {"exposure": 37, "gain": 52, "white_balance": 4600, "auto_exposure": 0,
++    assert applied == {"exposure": 30, "gain": 40, "white_balance": 4600, "auto_exposure": 0,
+                        "auto_white_balance": 0}
+     b.zed.set_camera_settings = lambda k, v: "FAILURE"
+     with pytest.raises(ccc.CaptureError, match="set_camera_settings"):
+diff --git a/tests/test_camera_exposure.py b/tests/test_camera_exposure.py
+new file mode 100644
+index 0000000..3d41fec
+--- /dev/null
++++ b/tests/test_camera_exposure.py
+@@ -0,0 +1,160 @@
++"""src/data/camera_exposure.py: one fixed (exposure, gain, white balance) per camera
++(prereg 13.1 draft).  White balance first (|R - B| in the neutral rectangle), then the
++exposure (224 mean luma in [100, 130]), then a verification; fake cameras only.
++"""
++
++import json
++
++import numpy as np
++import pytest
++
++from src.data import camera_capture_common as ccc
++from src.data import camera_exposure as cex
++from tests.test_camera_capture import NOFIRE_NOTES, FIRE_NOTES, FakeCamera, FakeClock, _capture
++
++LAMPS = "lamps_on=tavan lambasi"
++CAL_NOTES = NOFIRE_NOTES + "; " + LAMPS
++
++
++class SceneCamera(FakeCamera):
++    """Uniform frames: level = k * exposure; the white balance tilts R against B,
++    neutral (R == B) at ``neutral_wb``."""
++
++    def __init__(self, k=0.4, neutral_wb=4800.0, **kw):
++        super().__init__(**kw)
++        self.k, self.neutral_wb = k, neutral_wb
++        self.setting = {"exposure": 0.0, "white_balance": neutral_wb}
++        self.log = []
++
++    def apply_lock(self, lock):
++        self.setting = dict(lock)
++        self.log.append(dict(lock))
++        return super().apply_lock(lock)
++
++    def grab(self):
++        fr = super().grab()
++        level = min(250.0, self.k * float(self.setting["exposure"])
++                    * (1.0 + float(self.setting["gain"]) / 64.0) / 2.0)
++        tilt = 0.5 * (float(self.setting["white_balance"]) - self.neutral_wb) / 1000.0
++        fr.rgb[..., 0] = np.uint8(np.clip(level * (1 + tilt), 0, 255))
++        fr.rgb[..., 1] = np.uint8(np.clip(level, 0, 255))
++        fr.rgb[..., 2] = np.uint8(np.clip(level * (1 - tilt), 0, 255))
++        return fr
++
++
++def _cal(tmp_path, cam, node="node_b", **kw):
++    args = dict(notes=CAL_NOTES, log=lambda m: None)
++    args.update(kw)
++    return ccc.run_exposure_calibration(cam, str(tmp_path), node, **args)
++
++
++def test_white_balance_then_exposure_then_verification(tmp_path):
++    cam = SceneCamera(k=0.8, clock=FakeClock())      # default 166 -> luma 66: too dark
++    rec = _cal(tmp_path, cam)
++    steps = [t["step"] for t in rec["trace"]]
++    assert steps == sorted(steps, key=lambda s: s != "white_balance")   # WB first
++    assert abs(rec["white_balance"] - 4800.0) <= 10.0                     # |R - B| minimal
++    wb_steps = [t for t in rec["trace"] if t["step"] == "white_balance"]
++    assert all(t["setting"]["exposure"] == 166.0 and t["setting"]["gain"] == 64.0
++               for t in wb_steps)                       # default exposure and gain
++    assert rec["gain"] == 64.0                          # the camera's default gain
++    assert 100 <= rec["luma_224_median"] <= 130
++    v = rec["verification"]
++    assert v["setting"] == {"exposure": rec["exposure"], "gain": 64.0,
++                            "white_balance": rec["white_balance"]}
++    assert abs(v["r_minus_b"]) <= 2.0 and len(v["region_rgb_mean"]) == 3
++    assert rec["lamps_on"] == "tavan lambasi" and rec["flame_frames_used"] is False
++    assert rec["wb_region"] == {"x0": 0.25, "x1": 0.50, "y0": 0.08, "y1": 0.40}
++    assert cam.closed
++    stored = json.loads((tmp_path / "node_b" / "_exposure" / "exposure.json").read_text())
++    assert stored["exposure"] == rec["exposure"] and stored["serial"] == "123"
++
++
++def test_the_search_is_deterministic(tmp_path):
++    a = _cal(tmp_path / "a", SceneCamera(clock=FakeClock()))
++    b = _cal(tmp_path / "b", SceneCamera(clock=FakeClock()))
++    key = lambda r: [(t["step"], t["setting"], t["luma_224_median"], t["r_minus_b"])
++                     for t in r["trace"]]
++    assert key(a) == key(b) and (a["exposure"], a["white_balance"]) == (b["exposure"],
++                                                                        b["white_balance"])
++
++
++def test_brighter_than_target_lowers_the_exposure(tmp_path):
++    rec = _cal(tmp_path, SceneCamera(k=2.4, clock=FakeClock()))   # 166 -> luma 199
++    assert rec["exposure"] < 166 and 100 <= rec["luma_224_median"] <= 130
++
++
++@pytest.mark.parametrize("notes,match", [
++    (FIRE_NOTES + "; " + LAMPS, "flame-free"),
++    (NOFIRE_NOTES, "lamps_on"),
++])
++def test_calibration_scene_is_flame_free_and_names_its_lamps(tmp_path, notes, match):
++    with pytest.raises(cex.ExposureError, match=match):
++        _cal(tmp_path, SceneCamera(clock=FakeClock()), notes=notes)
++
++
++def test_a_camera_without_a_neutral_rectangle_is_not_calibrated(tmp_path):
++    with pytest.raises(cex.ExposureError, match="no neutral white-balance rectangle"):
++        _cal(tmp_path, SceneCamera(clock=FakeClock()), node="node_a")
++
++
++def test_one_setting_per_camera_unless_recalibrated(tmp_path):
++    _cal(tmp_path, SceneCamera(clock=FakeClock()))
++    with pytest.raises(cex.ExposureError, match="one setting per camera"):
++        _cal(tmp_path, SceneCamera(clock=FakeClock()))
++    rec = _cal(tmp_path, SceneCamera(k=2.4, clock=FakeClock()), recalibrate=True)
++    old = list((tmp_path / "node_b" / "_exposure" / "_superseded").iterdir())
++    assert len(old) == 1 and rec["exposure"] < 166
++
++
++def test_too_dark_at_the_exposure_cap_raises_the_gain(tmp_path):
++    # k = 0.25: 333 at gain 64 gives luma 83, so the exposure stays at the cap (333) and
++    # the gain goes up until the luma is in [100, 130]
++    cam = SceneCamera(k=0.25, clock=FakeClock())
++    rec = _cal(tmp_path, cam)
++    assert rec["exposure"] == 333.0 and rec["gain"] > 64.0
++    assert 100 <= rec["luma_224_median"] <= 130
++    steps = [t["step"] for t in rec["trace"]]
++    assert steps.index("gain") > max(i for i, s in enumerate(steps) if s == "exposure")
++    assert all(t["setting"]["exposure"] == 333.0 for t in rec["trace"] if t["step"] == "gain")
++
++
++def test_unreachable_target_is_an_error_and_writes_nothing(tmp_path):
++    with pytest.raises(cex.ExposureError, match="no exposure"):
++        _cal(tmp_path, SceneCamera(k=0.001, clock=FakeClock()))
++    assert not (tmp_path / "node_b" / "_exposure" / "exposure.json").exists()
++
++
++def test_a_lamp_change_refuses_the_capture(tmp_path):
++    _cal(tmp_path, SceneCamera(clock=FakeClock()))
++    base = dict(node="node_b", study_gates=True, exposure_lock=True)
++    rec, cam = _capture(tmp_path, notes=NOFIRE_NOTES + "; " + LAMPS, **base)
++    assert rec["status"] == "complete" and rec["exposure_lock"]["how"] == "fixed_camera"
++    with pytest.raises(ccc.CaptureError, match="recalibrate"):
++        _capture(tmp_path, notes=NOFIRE_NOTES + "; lamps_on=tavan lambasi, masa lambasi",
++                 retake=True, **base)
++
++
++def test_zed_gain_starts_at_0_and_white_balance_is_searched_on_its_grid(tmp_path):
++    class ZedLike(SceneCamera):
++        def exposure_defaults(self):
++            return {"gain": 0.0,
++                    "gain_range": {"min": 0.0, "max": 100.0, "step": 1.0, "default": 0.0},
++                    "white_balance_range": {"min": 2800.0, "max": 6500.0, "step": 100.0,
++                                            "default": None},
++                    "exposure_range": {"min": 1.0, "max": 100.0, "step": 1.0,
++                                       "default": None}}
++    rec = _cal(tmp_path, ZedLike(k=8.0, clock=FakeClock()))
++    assert rec["gain"] == 0.0 and rec["white_balance"] % 100 == 0
++    assert abs(rec["white_balance"] - 4800.0) <= 100.0
++    assert 100 <= rec["luma_224_median"] <= 130
++
++
++def test_rectangle_and_224_luma_measure_what_they_say():
++    rgb = np.zeros((1080, 1920, 3), np.uint8)
++    rgb[:, :420] = 255                                 # outside the 224 centre square only
++    assert cex.mean_luma_224(rgb) < 1.0
++    r = {"x0": 0.25, "x1": 0.50, "y0": 0.08, "y1": 0.40}
++    assert cex.region_box(1920, 1080, r) == (480, 86, 960, 432)
++    rgb[86:432, 480:960] = (200, 100, 50)
++    assert cex.region_rgb(rgb, r) == (200.0, 100.0, 50.0)

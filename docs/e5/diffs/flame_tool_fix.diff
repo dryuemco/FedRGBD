@@ -1,0 +1,129 @@
+diff --git a/scripts/camera_flame_height.py b/scripts/camera_flame_height.py
+index 96694dc..ac4ca1a 100644
+--- a/scripts/camera_flame_height.py
++++ b/scripts/camera_flame_height.py
+@@ -13,11 +13,22 @@ the ruler predicts from the recorded intrinsics:
+     expected_px = flame_height_cm / 100 * fy_224 / distance_m
+     fy_224      = fy * (height after the shorter side is resized to 224) / height
+ 
+-Measurement, per node, for one scene x distance: the no-fire capture (same exposure
+-lock) gives a per-pixel median reference at 224; in every fire frame the flame is the
+-largest 8-connected region where some channel is at least ``--threshold`` brighter than
+-the reference; its height is its row span, and a frame with no such region counts as
+-0 px (no visible flame).  The median over all fire frames is the criterion's statistic,
++Measurement, per node, for one scene x distance: the no-fire capture (same fixed
++exposure) gives a per-pixel median reference at 224.  In every fire frame a pixel is a
++*flame pixel* if some channel is at least ``--threshold`` brighter than the reference
++AND the pixel itself looks like flame: either a near-saturated core (max channel >=
++:data:`FLAME_CORE_V`, any hue) or bright and warm (max channel >= :data:`FLAME_V_MIN`,
++R >= G >= B, saturation >= :data:`FLAME_WARM_S_MIN`).  Diffuse, low-saturation glow on
++walls and floor fails both.  The flame is the single 8-connected component of flame
++pixels that contains the brightest flame pixel (ties: larger brightness increase, then
++the topmost, i.e. the flame above its floor reflection).  Its height is its row span,
++and a frame without flame pixels counts as 0 px (no visible flame).
++
++Tool fix (2026-10-08, after e5 data had been seen; prereg 13.2): the first version took
++the *largest* region of any brightness increase, which in s03 included the flame's
++glow on the walls and the floor.  The pixel rule and the component choice above replace
++it; their constants were fixed from the image properties of flame vs glow, before the
++fixed tool was run on any fire frame, and are not tuned to the distance results.  The median over all fire frames is the criterion's statistic,
+ reported with min and max (flicker).  A capture with fewer or more than 40 fire frames is
+ INCOMPLETE, never PASS.  The flame height (cm) and measured distance come from the
+ fire capture's parsed ``--notes`` unless given on the command line.
+@@ -107,18 +118,39 @@ def _label(mask: np.ndarray) -> Tuple[np.ndarray, int]:
+         return lab, n
+ 
+ 
++#: flame-pixel rule (tool fix 2026-10-08, see the module docstring)
++FLAME_CORE_V = 245        # near-saturated flame core: any hue
++FLAME_V_MIN = 200         # otherwise bright ...
++FLAME_WARM_S_MIN = 0.25   # ... and warm (R >= G >= B) with at least this saturation
++
++
++def flame_mask(fire: np.ndarray, reference: np.ndarray, threshold: int
++               ) -> Tuple[np.ndarray, np.ndarray]:
++    """(flame-pixel mask, brightness increase) of one 224 frame against the reference."""
++    f = fire.astype(np.int16)
++    diff = (f - reference.astype(np.int16)).max(axis=2)
++    r, g, b = f[..., 0], f[..., 1], f[..., 2]
++    v = f.max(axis=2)
++    s = (v - f.min(axis=2)) / np.maximum(v, 1).astype(np.float64)
++    core = v >= FLAME_CORE_V
++    warm = (v >= FLAME_V_MIN) & (r >= g) & (g >= b) & (s >= FLAME_WARM_S_MIN)
++    return (diff >= int(threshold)) & (core | warm), diff
++
++
+ def flame_region(fire: np.ndarray, reference: np.ndarray, threshold: int
+                  ) -> Optional[Tuple[int, int, int, int]]:
+-    """(top, left, bottom, right), inclusive, of the largest brighter-than-reference
+-    region of one 224 frame, or None if no pixel passes the threshold."""
+-    diff = (fire.astype(np.int16) - reference.astype(np.int16)).max(axis=2)
+-    mask = diff >= int(threshold)
++    """(top, left, bottom, right), inclusive, of the flame in one 224 frame: the
++    component of flame pixels holding the brightest one; None if there is none."""
++    mask, diff = flame_mask(fire, reference, threshold)
+     if not mask.any():
+         return None
+-    lab, n = _label(mask)
+-    sizes = np.bincount(lab.ravel())
+-    sizes[0] = 0
+-    ys, xs = np.nonzero(lab == int(sizes.argmax()))
++    lab, _ = _label(mask)
++    v = fire.max(axis=2).astype(np.int32)
++    ys, xs = np.nonzero(mask)
++    # brightest flame pixel; ties -> larger increase, then topmost, then leftmost
++    order = np.lexsort((xs, ys, -diff[ys, xs], -v[ys, xs]))
++    seed = lab[ys[order[0]], xs[order[0]]]
++    ys, xs = np.nonzero(lab == seed)
+     return int(ys.min()), int(xs.min()), int(ys.max()), int(xs.max())
+ 
+ 
+diff --git a/tests/test_camera_e5_gates.py b/tests/test_camera_e5_gates.py
+index 06b9330..5c12500 100644
+--- a/tests/test_camera_e5_gates.py
++++ b/tests/test_camera_e5_gates.py
+@@ -379,6 +379,44 @@ def _criterion_row(tmp_path, node, flame_rows, n=40):
+     return cfh.measure_node(root, node, "s02", 3.0)[0]
+ 
+ 
++def test_flame_region_ignores_glow_and_reflection_and_takes_the_flame():
++    from scripts import camera_flame_height as cfh
++
++    ref = np.full((224, 224, 3), 150, np.uint8)            # white wall / floor at 150
++    fire = ref.copy()
++    fire[60:140, 40:200] = (215, 190, 200)                 # wide diffuse pink glow
++    fire[90:110, 100:108] = (255, 230, 150)                # the flame: 20 rows
++    fire[150:156, 98:110] = (250, 220, 140)                # floor reflection below
++    top, left, bottom, right = cfh.flame_region(fire, ref, 40)
++    assert (top, bottom) == (90, 109) and (left, right) == (100, 107)
++    # the old rule (largest brighter region) would have taken the glow: 80 rows
++    old = (fire.astype(np.int16) - ref.astype(np.int16)).max(axis=2) >= 40
++    assert old[60:140].any(axis=1).sum() == 80
++
++
++def test_flame_region_is_none_on_a_flame_free_frame():
++    from scripts import camera_flame_height as cfh
++
++    ref = np.full((224, 224, 3), 120, np.uint8)
++    frame = ref.copy()
++    frame[:, :112] = (170, 168, 172)    # a +50 brightness change, grey (e.g. someone's shadow
++                                         # leaving, a lamp flicker): not flame-like
++    assert cfh.flame_region(frame, ref, 40) is None
++    assert cfh.flame_region(ref, ref, 40) is None
++
++
++def test_lit_candle_body_below_the_flame_is_part_of_the_component():
++    from scripts import camera_flame_height as cfh
++
++    ref = np.full((224, 224, 3), 120, np.uint8)
++    fire = ref.copy()
++    fire[100:110, 110:114] = (255, 235, 170)               # flame, 10 rows
++    fire[110:130, 108:116] = (235, 170, 110)               # lit wax, warm and bright
++    top, _, bottom, _ = cfh.flame_region(fire, ref, 40)
++    # documented limitation: a lit, warm candle body joins the flame (1 m in s03)
++    assert (top, bottom) == (100, 129)
++
++
+ def test_flame_criterion_is_the_median_over_40_frames_at_5_px(tmp_path):
+     from scripts import camera_flame_height as cfh
+ 

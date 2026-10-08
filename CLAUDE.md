@@ -1,3 +1,5 @@
+Yeni oturumda önce en güncel docs/SESSION_HANDOFF_*.md dosyasını oku.
+
 # FedRGBD — project instructions
 
 > **Reminder: no case-insensitive matching.** Never use `grep -i`, `pgrep -i`, `rg -i`, the
