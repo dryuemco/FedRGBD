@@ -763,6 +763,24 @@ sections 1 and 4-6.
   measured on the D435if's own s03 no-fire frames, inside the `baccca6` rectangle; the
   test against the second camera's projector (s06-s08) is cancelled.
 
+* **Depth holes and the D435 firmware: measurement and rule** (decided by the author on
+  2026-10-09; committed and pushed before any hole fraction of s11 was computed).
+  - *Region.* Each RealSense's own WB rectangle (`configs/camera_wb_region.json`: node_a
+    for the D435if, node_b for the D435i). Both were defined on the RGB image without
+    looking at depth. Depth is aligned to RGB, so the same rectangle applies.
+  - *Frames.* The s11 no-fire captures at 1, 2 and 3 m, the D435if and the D435i
+    separately.
+  - *Metric.* The fraction of invalid (0) depth pixels in the rectangle, averaged over
+    the frames of each capture.
+  - *Rule.* If the D435if's fraction is more than 2 x the D435i's **and** more than 1 %,
+    the D435if is updated to firmware 5.17.0.10 before the study capture, and the
+    D435if's calibration and its s11 are repeated. Otherwise the firmware stays as it
+    is, and the versions are reported.
+  - *The `baccca6` rectangle* (`configs/e5_depth_hole_region.json`) is computed
+    unchanged on the D435if's s11 no-fire frames. It is labelled "not plain wall in the
+    s11 view": there it covers the curtain, the skirting board and the floor. It is not
+    used for the decision.
+
 ## 14. Erratum (2026-10-07)
 
 **The preamble (2026-09-28) says:** "on that day no camera capture of any kind was
