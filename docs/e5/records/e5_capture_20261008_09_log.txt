@@ -1,0 +1,741 @@
+[2026-10-08 21:40:57] e5 log opened. Author decision: cameras captured one at a time, D435i (node_b) first; per-node script src/data/realsense_capture.py --node node_b, root data/raw/camera_pilot. Orchestrator not used (no single-node option).
+[2026-10-08 21:45:21] FRAMING ONLY, NOT E5 DATA: one D435i (node_b) RGB frame, AE on, no lock, candles lit, written to node_b ~/e5_framing/ (not data/raw/camera_pilot); excluded from every measurement and acceptance test.
+{"framing_only_not_e5_data": true, "serial": "405622076256", "resolution": [1920, 1080], "auto_exposure_flag": 1, "crop_rect_native_xyxy": [420, 0, 1499, 1079], "files": {"/home/jetson-b/e5_framing/framing_20261008_214522_d435i_full_1920x1080_crop224rect.png": "5b207846fbd044ab1bd7c7f6cc549709", "/home/jetson-b/e5_framing/framing_20261008_214522_d435i_crop224_x3.png": "8be2400fde24083e8933db49699e33f7"}}
+[2026-10-08 21:45:33] framing PNGs copied to desktop logs/e5/framing/ (framing only, not e5 data)
+[2026-10-08 21:48:54] FRAMING ONLY, NOT E5 DATA: second framing frame, D435i (node_b), AE on, no lock, to node_b ~/e5_framing/; excluded from every measurement and acceptance test.
+{"framing_only_not_e5_data": true, "serial": "405622076256", "resolution": [1920, 1080], "auto_exposure_flag": 1, "crop_rect_native_xyxy": [420, 0, 1499, 1079], "files": {"/home/jetson-b/e5_framing/framing_20261008_214855_d435i_full_1920x1080_crop224rect.png": "69a746aedfdc92606bcc135f18afdda0", "/home/jetson-b/e5_framing/framing_20261008_214855_d435i_crop224_x3.png": "c146a26b4f31cc7188fac66ab0a8aed6"}}
+[2026-10-08 21:52:51] prereg 13.2 candles4 arrangement committed+pushed: 56599a1 (arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle)
+[2026-10-08 21:55:16] AUXILIARY, NOT E5 DATA: tilt source: D435i IMU accelerometer, uncalibrated (node_b, ~2 s at rest, separate script, capture code unchanged)
+Traceback (most recent call last):
+  File "<stdin>", line 22, in <module>
+RuntimeError: Frame didn't arrive within 2000
+rc=1
+devices visible after release: 1
+Intel RealSense D435I 5.17.0.10 3.2
+sensor: Stereo Module
+sensor: RGB Camera
+sensor: Motion Module
+    stream.accel format.motion_xyz32f 200
+    stream.accel format.motion_xyz32f 100
+    stream.gyro format.motion_xyz32f 400
+    stream.gyro format.motion_xyz32f 200
+no accel frame in 4 s
+rc=1
+[2026-10-08 21:57:15] tilt source: phone inclinometer (D435i IMU gave no data under RSUSB; not used, not investigated). Tripod fixed: one tilt reading for the whole session.
+[2026-10-08 21:59:16] s09 no_fire d100 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s09 --label no_fire --distance_m 1 --frames 5 --notes "source=none; distance_measured_m=1.00; flame_height_cm=0; tilt_deg=unknown; tilt_source=phone inclinometer, not read; rig_height_cm=56.5; e5 geometry; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=21:59:16; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (determined): exposure 166.0, gain 64.0, white balance 4600.0
+{"capture_id": "s09_no_fire_d100", "node": "node_b", "n_frames_written": 5, "n_frames_requested": 5, "start_scheduled_unix": null, "start_actual_unix": 1791485962.6888182, "status": "complete"}
+rc=0
+20
+[2026-10-08 21:59:26] s09 no_fire d100 node_b END
+[2026-10-08 22:01:45] s09 fire d100 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s09 --label fire --distance_m 1 --frames 5 --notes "source=candles4; distance_measured_m=1.00; flame_height_cm=3.5; tilt_deg=unknown; tilt_source=phone inclinometer, not read; rig_height_cm=56.5; e5 geometry; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=22:01:45; source chosen by author ruler comparison: torch flame smaller than the 4 candles; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (reused): exposure 166.0, gain 64.0, white balance 4600.0
+{"capture_id": "s09_fire_d100", "node": "node_b", "n_frames_written": 5, "n_frames_requested": 5, "start_scheduled_unix": null, "start_actual_unix": 1791486108.5701165, "status": "complete"}
+rc=0
+20
+[2026-10-08 22:01:52] s09 fire d100 node_b END
+[2026-10-08 22:02:05] AUXILIARY, NOT E5 DATA: D435i RGB option defaults (get_option/get_option_range, read only) + descriptive 224 mean luma s09_no_fire_d100 vs framing frames
+option enable_auto_exposure       current=0.0  range min=0.0 max=1.0 step=1.0 default=1.0
+option enable_auto_white_balance  current=0.0  range min=0.0 max=1.0 step=1.0 default=1.0
+option exposure                   current=166.0  range min=1.0 max=10000.0 step=1.0 default=166.0
+option gain                       current=64.0  range min=0.0 max=128.0 step=1.0 default=64.0
+option white_balance              current=4600.0  range min=2800.0 max=6500.0 step=10.0 default=4600.0
+s09_no_fire_d100 locked  s09_no_fire_d100_0000_rgb.png  mean_luma_224=65.392
+s09_no_fire_d100 locked  s09_no_fire_d100_0001_rgb.png  mean_luma_224=65.393
+s09_no_fire_d100 locked  s09_no_fire_d100_0002_rgb.png  mean_luma_224=65.382
+s09_no_fire_d100 locked  s09_no_fire_d100_0003_rgb.png  mean_luma_224=65.402
+s09_no_fire_d100 locked  s09_no_fire_d100_0004_rgb.png  mean_luma_224=65.398
+framing AE on (candles lit, NOT e5 data)  framing_20261008_214522_d435i_crop224_x3.png  mean_luma_224=123.340
+framing AE on (candles lit, NOT e5 data)  framing_20261008_214855_d435i_crop224_x3.png  mean_luma_224=122.373
+[2026-10-08 22:13:01] s09 no_fire d300 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s09 --label no_fire --distance_m 3 --frames 5 --notes "source=none; distance_measured_m=3.00; flame_height_cm=0; tilt_deg=unknown; tilt_source=phone inclinometer, not read; rig_height_cm=56.5; e5 geometry; lock = sensor defaults, not AE-derived; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=22:13:01; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (determined): exposure 166.0, gain 64.0, white balance 4600.0
+{"capture_id": "s09_no_fire_d300", "node": "node_b", "n_frames_written": 5, "n_frames_requested": 5, "start_scheduled_unix": null, "start_actual_unix": 1791486787.162586, "status": "incomplete"}
+rc=1
+20
+[2026-10-08 22:13:11] s09 no_fire d300 node_b END
+ERRORS: exposure lock gate: auto exposure on in 5 and unreported in 0 of 5 colour frames
+ae_on_frames 5 ae_unknown_frames 0 written 5
+lock {"applied": {"auto_exposure": 0.0, "auto_white_balance": 0.0, "exposure": 166.0, "gain": 64.0, "white_balance": 4600.0}, "determined_unix": 1791486786.5942101, "distance_m": 3.0, "exposure": 166.0, "gain": 64.0, "how": "determined", "lock_file": "data/raw/camera_pilot/node_b/_locks/s09_d300.json", "node": "node_b", "scene": "s09", "source": "sensor options read after auto exposure was switched off (45 auto frames; no colour exposure metadata)", "white_balance": 4600.0}
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: 'data/raw/camera_pilot/node_b/s09_no_fire_d300_0000\\_meta.json'
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: 'data/raw/camera_pilot/node_b/s09_no_fire_d300_0001\\_meta.json'
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: 'data/raw/camera_pilot/node_b/s09_no_fire_d300_0002\\_meta.json'
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: 'data/raw/camera_pilot/node_b/s09_no_fire_d300_0003\\_meta.json'
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: 'data/raw/camera_pilot/node_b/s09_no_fire_d300_0004\\_meta.json'
+s09_no_fire_d100 0 auto_exposure=False exposure=166 gain=64 white_balance=4600.0 exposure_source=manual_lock
+s09_no_fire_d100 1 auto_exposure=False exposure=166 gain=64 white_balance=4600.0 exposure_source=manual_lock
+s09_no_fire_d100 2 auto_exposure=False exposure=166 gain=64 white_balance=4600.0 exposure_source=manual_lock
+s09_no_fire_d100 3 auto_exposure=False exposure=166 gain=64 white_balance=4600.0 exposure_source=manual_lock
+s09_no_fire_d100 4 auto_exposure=False exposure=166 gain=64 white_balance=4600.0 exposure_source=manual_lock
+s09_fire_d100 0 auto_exposure=False exposure=166 gain=64 white_balance=4600.0 exposure_source=manual_lock
+s09_fire_d100 1 auto_exposure=False exposure=166 gain=64 white_balance=4600.0 exposure_source=manual_lock
+s09_fire_d100 2 auto_exposure=False exposure=166 gain=64 white_balance=4600.0 exposure_source=manual_lock
+s09_fire_d100 3 auto_exposure=False exposure=166 gain=64 white_balance=4600.0 exposure_source=manual_lock
+s09_fire_d100 4 auto_exposure=False exposure=166 gain=64 white_balance=4600.0 exposure_source=manual_lock
+s09_no_fire_d300 0 auto_exposure=True exposure=166.0 gain=64.0 white_balance=4600.0 exposure_source=manual_lock
+s09_no_fire_d300 1 auto_exposure=True exposure=166.0 gain=64.0 white_balance=4600.0 exposure_source=manual_lock
+s09_no_fire_d300 2 auto_exposure=True exposure=166.0 gain=64.0 white_balance=4600.0 exposure_source=manual_lock
+s09_no_fire_d300 3 auto_exposure=True exposure=166.0 gain=64.0 white_balance=4600.0 exposure_source=manual_lock
+s09_no_fire_d300 4 auto_exposure=True exposure=166.0 gain=64.0 white_balance=4600.0 exposure_source=manual_lock
+[2026-10-08 22:14:56] s09_no_fire_d300: held (author option b) until the new exposure policy; failed capture left in place, not moved to _retakes/. AE gate triggered on real hardware (s09_no_fire_d300, AE on in 5/5 frames, settings read-back off); cause not investigated.
+[2026-10-08 22:14:56] FRAMING ONLY, NOT E5 DATA: D435i (node_b), candles UNLIT at 3 m [corrected by the author; originally logged as "candles lit at 3 m, AE on"], frame reports auto_exposure 0 (manual exposure left on the camera), no lock, to node_b ~/e5_framing/; excluded from every measurement and acceptance test.
+{"framing_only_not_e5_data": true, "serial": "405622076256", "resolution": [1920, 1080], "auto_exposure_flag": 0, "crop_rect_native_xyxy": [420, 0, 1499, 1079], "files": {"/home/jetson-b/e5_framing/framing_20261008_221458_d435i_full_1920x1080_crop224rect.png": "253534fe1690abc172db951bfe84d862", "/home/jetson-b/e5_framing/framing_20261008_221458_d435i_crop224_x3.png": "e259b6975242e168b7dba38d3d5ccf39"}}
+[2026-10-08 22:28:57] exposure/WB policy draft prepared (not committed): scratchpad expo_draft worktree; WB neutral rect node_b x[0.25,0.50) y[0.08,0.40) drawn on framing_20261008_214855 (framing only)
+[2026-10-08 22:31:14] CORRECTION (author): in framing frame framing_20261008_221458 the candles were NOT lit (candles unlit, at 3 m); the entry above is corrected accordingly.
+[2026-10-08 22:42:13] CALIBRATION node_b D435i START: python3 src/data/realsense_capture.py --calibrate_exposure --node node_b --root data/raw/camera_pilot --notes "source=none; distance_measured_m=3.00; flame_height_cm=0; e5 calibration; camera_order=sequential, D435i node_b first; capture_time=22:42:13; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+46a1320
+calibration WB 2800: R-B -87.43 (R,G,B [25.196, 80.333, 112.63])
+calibration WB 6500: R-B 42.73 (R,G,B [94.407, 73.671, 51.681])
+calibration WB 4650: R-B -4.60 (R,G,B [82.423, 74.486, 87.026])
+calibration WB 5570: R-B 15.51 (R,G,B [88.827, 73.961, 73.32])
+calibration WB 5110: R-B 3.31 (R,G,B [85.9, 74.09, 82.589])
+calibration WB 4880: R-B -1.27 (R,G,B [84.263, 74.245, 85.529])
+calibration WB 5000: R-B 0.57 (R,G,B [85.274, 74.094, 84.702])
+calibration WB 4940: R-B -0.35 (R,G,B [84.646, 74.208, 84.993])
+calibration WB 4970: R-B 0.03 (R,G,B [84.9, 74.162, 84.874])
+calibration WB 4960: R-B 0.03 (R,G,B [84.868, 74.164, 84.838])
+calibration WB 4950: R-B -0.11 (R,G,B [84.83, 74.175, 84.938])
+calibration exposure 166: 224 mean luma 64.61
+calibration exposure 235: 224 mean luma 82.58
+calibration exposure 280: 224 mean luma 92.44
+calibration exposure 305: 224 mean luma 97.43
+calibration exposure 319: 224 mean luma 100.11
+verification: exposure 319, gain 64, white balance 4960 -> 224 mean luma 100.11, rectangle R,G,B [130.059, 114.269, 129.679], R-B 0.38
+fixed exposure 319.0, gain 64.0, white balance 4960.0 (224 mean luma 100.105) -> data/raw/camera_pilot/node_b/_exposure/exposure.json
+rc=0
+[2026-10-08 22:42:38] CALIBRATION node_b D435i END
+[2026-10-08 22:42:59] node_b exposure.json committed eef07c7 (md5 183f2b0890b1491eacd88beefbd29475)
+[2026-10-08 22:51:01] SESSION CHECK s03 session, node_b D435i START (flame-free, candles unlit at 3 m, lamps_on=tavan lambasi)
+{"session_check": "PASS", "node": "node_b", "time": "2026-10-08 22:51:08", "setting": {"exposure": 319.0, "gain": 64.0, "white_balance": 4960.0}, "applied": {"exposure": 319.0, "gain": 64.0, "white_balance": 4960.0, "auto_exposure": 0.0, "auto_white_balance": 0.0}, "luma_224_median": 100.595, "calibration_luma_224": 100.105, "band": [90.095, 110.116], "region_rgb_mean": [129.906, 114.843, 129.649], "r_minus_b": 0.257}
+rc=0
+[2026-10-08 22:53:15] s03 no_fire d100 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s03 --label no_fire --distance_m 1 --frames 40 --notes "source=none; distance_measured_m=1.00; flame_height_cm=0; e5 acceptance; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=22:53:15; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 319.0, gain 64.0, white balance 4960.0
+{"capture_id": "s03_no_fire_d100", "node": "node_b", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791489199.3206441, "status": "complete"}
+rc=0
+160
+[2026-10-08 22:53:29] s03 no_fire d100 node_b END
+[2026-10-08 22:54:54] s03 fire d100 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s03 --label fire --distance_m 1 --frames 40 --notes "source=candles4; distance_measured_m=1.00; flame_height_cm=3.5; e5 acceptance; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=22:54:54; source chosen by author ruler comparison: torch flame smaller than the 4 candles; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 319.0, gain 64.0, white balance 4960.0
+{"capture_id": "s03_fire_d100", "node": "node_b", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791489297.6992297, "status": "complete"}
+rc=0
+160
+[2026-10-08 22:55:07] s03 fire d100 node_b END
+[2026-10-08 22:57:11] s03 fire d200 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s03 --label fire --distance_m 2 --frames 40 --notes "source=candles4; distance_measured_m=2.00; flame_height_cm=3.5; e5 acceptance; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=22:57:11; source chosen by author ruler comparison: torch flame smaller than the 4 candles; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 319.0, gain 64.0, white balance 4960.0
+{"capture_id": "s03_fire_d200", "node": "node_b", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791489434.8331192, "status": "complete"}
+rc=0
+160
+[2026-10-08 22:57:24] s03 fire d200 node_b END
+[2026-10-08 22:57:57] s03 no_fire d200 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s03 --label no_fire --distance_m 2 --frames 40 --notes "source=none; distance_measured_m=2.00; flame_height_cm=0; e5 acceptance; candles extinguished after the fire capture, smoke cleared; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=22:57:57; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 319.0, gain 64.0, white balance 4960.0
+{"capture_id": "s03_no_fire_d200", "node": "node_b", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791489480.539312, "status": "complete"}
+rc=0
+160
+[2026-10-08 22:58:10] s03 no_fire d200 node_b END
+[2026-10-08 23:02:20] s03 no_fire d300 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s03 --label no_fire --distance_m 3 --frames 40 --notes "source=none; distance_measured_m=3.00; flame_height_cm=0; e5 acceptance; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=23:02:20; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 319.0, gain 64.0, white balance 4960.0
+{"capture_id": "s03_no_fire_d300", "node": "node_b", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791489743.9726877, "status": "complete"}
+rc=0
+160
+[2026-10-08 23:02:33] s03 no_fire d300 node_b END
+[2026-10-08 23:03:23] s03 fire d300 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s03 --label fire --distance_m 3 --frames 40 --notes "source=candles4; distance_measured_m=3.00; flame_height_cm=3.5; e5 acceptance; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=23:03:23; source chosen by author ruler comparison: torch flame smaller than the 4 candles; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 319.0, gain 64.0, white balance 4960.0
+{"capture_id": "s03_fire_d300", "node": "node_b", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791489806.5794134, "status": "complete"}
+rc=0
+160
+[2026-10-08 23:03:36] s03 fire d300 node_b END
+### s03 node_b d=1
+node_b 1 m: PASS (median 35.0 px over 40 frames, criterion >= 5 px over 40)
+distance 1 m: NOT DECIDED -- only 1 of 3 cameras measured (node_b PASS)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,touches_crop_border,threshold,criterion_px,criterion
+node_b,s03,1.0,1.0,3.5,1360.349609375,282.15,9.88,35.0,35,35,12.4,3.54,40,40,False,40,5,PASS
+rc=0
+### s03 node_b d=2
+node_b 2 m: PASS (median 21.5 px over 40 frames, criterion >= 5 px over 40)
+distance 2 m: NOT DECIDED -- only 1 of 3 cameras measured (node_b PASS)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,touches_crop_border,threshold,criterion_px,criterion
+node_b,s03,2.0,2.0,3.5,1360.349609375,282.15,4.94,21.5,20,23,15.2,4.35,40,40,False,40,5,PASS
+rc=0
+### s03 node_b d=3
+node_b 3 m: PASS (median 45.0 px over 40 frames, criterion >= 5 px over 40)
+distance 3 m: NOT DECIDED -- only 1 of 3 cameras measured (node_b PASS)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,touches_crop_border,threshold,criterion_px,criterion
+node_b,s03,3.0,3.0,3.5,1360.349609375,282.15,3.29,45.0,43,47,47.8,13.67,40,40,False,40,5,PASS
+rc=0
+[2026-10-08 23:07:53] FLAME TOOL DIAGNOSIS (desktop, tool unchanged): s03 node_b no-fire frames presented as the fire capture against their own no-fire reference, root data/raw/camera_pilot/_diag_flame_tool_nofire
+### NO-FIRE as fire, node_b d=1
+node_b 1 m: FAIL (median 0.0 px over 40 frames, criterion >= 5 px over 40)
+distance 1 m: NOT DECIDED -- only 1 of 3 cameras measured (node_b FAIL)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,touches_crop_border,threshold,criterion_px,criterion
+node_b,s03,1.0,1.0,3.5,1360.349609375,282.15,9.88,0.0,0,0,0.0,0.0,40,0,False,40,5,FAIL
+rc=0
+### NO-FIRE as fire, node_b d=2
+node_b 2 m: FAIL (median 0.0 px over 40 frames, criterion >= 5 px over 40)
+distance 2 m: NOT DECIDED -- only 1 of 3 cameras measured (node_b FAIL)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,touches_crop_border,threshold,criterion_px,criterion
+node_b,s03,2.0,2.0,3.5,1360.349609375,282.15,4.94,0.0,0,0,0.0,0.0,40,0,False,40,5,FAIL
+rc=0
+### NO-FIRE as fire, node_b d=3
+node_b 3 m: FAIL (median 0.0 px over 40 frames, criterion >= 5 px over 40)
+distance 3 m: NOT DECIDED -- only 1 of 3 cameras measured (node_b FAIL)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,touches_crop_border,threshold,criterion_px,criterion
+node_b,s03,3.0,3.0,3.5,1360.349609375,282.15,3.29,0.0,0,101,0.0,0.0,40,17,True,40,5,FAIL
+rc=0
+[2026-10-08 23:10:19] FLAME TOOL FIX DRAFT (worktree scratchpad/flame_fix, uncommitted) on s03 node_b NO-FIRE frames only (as fire vs own reference); fire frames not run
+### FIXED tool, NO-FIRE as fire, node_b d=1
+node_b,s03,1.0,1.0,3.5,1360.349609375,282.15,9.88,0.0,0,0,0.0,0.0,40,0,False,40,5,FAIL
+### FIXED tool, NO-FIRE as fire, node_b d=2
+node_b,s03,2.0,2.0,3.5,1360.349609375,282.15,4.94,0.0,0,0,0.0,0.0,40,0,False,40,5,FAIL
+### FIXED tool, NO-FIRE as fire, node_b d=3
+node_b,s03,3.0,3.0,3.5,1360.349609375,282.15,3.29,0.0,0,0,0.0,0.0,40,0,False,40,5,FAIL
+### s03_no_fire_d300 node_b, per frame vs the 40-frame median reference (224), old rule diff>=40
+frame,timestamp_unix,t_rel_s,mean_luma_224,d_luma_prev,n_px_diff40,largest_px,bbox_top,bbox_left,bbox_bottom,bbox_right,bbox_h,bbox_w
+0,1791489743.973,0.000,101.266,,179,179,0,157,100,158,101,2
+1,1791489744.148,0.176,101.322,0.057,192,192,0,157,100,159,101,3
+2,1791489744.326,0.353,101.394,0.072,200,200,0,157,100,159,101,3
+3,1791489744.536,0.564,101.372,-0.023,196,196,0,157,100,159,101,3
+4,1791489744.744,0.772,101.316,-0.056,192,192,0,157,100,159,101,3
+5,1791489744.952,0.980,101.204,-0.112,177,177,0,157,100,158,101,2
+6,1791489745.119,1.147,101.086,-0.117,137,137,0,157,100,158,101,2
+7,1791489745.328,1.355,100.981,-0.105,58,58,42,157,99,157,58,1
+8,1791489745.537,1.564,100.927,-0.054,55,54,46,157,99,157,54,1
+9,1791489745.754,1.781,100.868,-0.059,38,38,62,157,99,157,38,1
+10,1791489745.923,1.950,100.885,0.017,39,39,61,157,99,157,39,1
+11,1791489746.136,2.163,100.895,0.009,41,40,60,157,99,157,40,1
+12,1791489746.347,2.375,100.908,0.013,50,50,50,157,99,157,50,1
+13,1791489746.551,2.578,100.939,0.031,58,57,43,157,99,157,57,1
+14,1791489746.718,2.745,100.909,-0.030,53,52,48,157,99,157,52,1
+15,1791489746.930,2.957,100.878,-0.031,47,42,58,157,99,157,42,1
+16,1791489747.145,3.172,100.831,-0.047,1,1,85,157,85,157,1,1
+17,1791489747.350,3.377,100.751,-0.079,0,0,,,,,,
+18,1791489747.519,3.546,100.706,-0.045,0,0,,,,,,
+19,1791489747.723,3.751,100.663,-0.043,0,0,,,,,,
+20,1791489747.924,3.951,100.613,-0.050,0,0,,,,,,
+21,1791489748.132,4.159,100.608,-0.005,0,0,,,,,,
+22,1791489748.340,4.368,100.611,0.003,0,0,,,,,,
+23,1791489748.558,4.586,100.608,-0.003,0,0,,,,,,
+24,1791489748.723,4.751,100.626,0.018,0,0,,,,,,
+25,1791489748.931,4.958,100.648,0.022,0,0,,,,,,
+26,1791489749.142,5.170,100.669,0.021,0,0,,,,,,
+27,1791489749.356,5.383,100.683,0.014,0,0,,,,,,
+28,1791489749.525,5.553,100.678,-0.006,0,0,,,,,,
+29,1791489749.735,5.763,100.667,-0.011,0,0,,,,,,
+30,1791489749.952,5.980,100.656,-0.010,0,0,,,,,,
+31,1791489750.128,6.156,100.653,-0.003,0,0,,,,,,
+32,1791489750.349,6.376,100.645,-0.008,0,0,,,,,,
+33,1791489750.528,6.555,100.638,-0.008,0,0,,,,,,
+34,1791489750.749,6.777,100.662,0.024,0,0,,,,,,
+35,1791489750.928,6.955,100.667,0.005,0,0,,,,,,
+36,1791489751.148,7.175,100.681,0.015,0,0,,,,,,
+37,1791489751.362,7.389,100.702,0.021,0,0,,,,,,
+38,1791489751.538,7.566,100.713,0.011,0,0,,,,,,
+39,1791489751.756,7.784,100.712,-0.001,0,0,,,,,,
+[2026-10-08 23:19:35] FLAME TOOL FIX (final: 245/200/0.25 + crop-edge exclusion + validation band) on NO-FIRE frames (as fire vs own reference)
+### FINAL FIX, NO-FIRE as fire, node_b d=1
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,touches_crop_border,threshold,validation_band,tool_validated,criterion_px,criterion
+node_b,s03,1.0,1.0,3.5,1360.349609375,282.15,9.88,0.0,0,0,0.0,0.0,40,0,False,40,0.5-4,False,5,NOT VALIDATED
+### FINAL FIX, NO-FIRE as fire, node_b d=2
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,touches_crop_border,threshold,validation_band,tool_validated,criterion_px,criterion
+node_b,s03,2.0,2.0,3.5,1360.349609375,282.15,4.94,0.0,0,0,0.0,0.0,40,0,False,40,0.5-2,False,5,NOT VALIDATED
+### FINAL FIX, NO-FIRE as fire, node_b d=3
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,touches_crop_border,threshold,validation_band,tool_validated,criterion_px,criterion
+node_b,s03,3.0,3.0,3.5,1360.349609375,282.15,3.29,0.0,0,0,0.0,0.0,40,0,False,40,0.5-2,False,5,NOT VALIDATED
+[2026-10-08 23:20:36] FIXED flame tool (76a7003) on s03 node_b FIRE captures
+### FIXED tool (76a7003), s03 node_b d=1
+node_b 1 m: PASS (median 30.0 px over 40 frames, criterion >= 5 px over 40)
+distance 1 m: NOT DECIDED -- only 1 of 3 cameras measured (node_b PASS)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,touches_crop_border,threshold,validation_band,tool_validated,criterion_px,criterion
+node_b,s03,1.0,1.0,3.5,1360.349609375,282.15,9.88,30.0,29,30,10.6,3.04,40,40,False,40,0.5-4,True,5,PASS
+rc=0
+### FIXED tool (76a7003), s03 node_b d=2
+node_b 2 m: NOT VALIDATED (median 13.0 px over 40 frames, criterion >= 5 px over 40)
+distance 2 m: NOT DECIDED -- only 1 of 3 cameras measured (node_b NOT VALIDATED)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,touches_crop_border,threshold,validation_band,tool_validated,criterion_px,criterion
+node_b,s03,2.0,2.0,3.5,1360.349609375,282.15,4.94,13.0,13,14,9.2,2.63,40,40,False,40,0.5-2,False,5,NOT VALIDATED
+rc=0
+### FIXED tool (76a7003), s03 node_b d=3
+node_b 3 m: NOT VALIDATED (median 15.0 px over 40 frames, criterion >= 5 px over 40)
+distance 3 m: NOT DECIDED -- only 1 of 3 cameras measured (node_b NOT VALIDATED)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,touches_crop_border,threshold,validation_band,tool_validated,criterion_px,criterion
+node_b,s03,3.0,3.0,3.5,1360.349609375,282.15,3.29,15.0,14,16,15.9,4.56,40,40,False,40,0.5-2,False,5,NOT VALIDATED
+rc=0
+[2026-10-08 23:23:26] prereg 13.2 settling + clean-geometry repeat committed cb1fe85; s03 node_b 2 m/3 m: NOT VALIDATED (reflective geometry)
+[2026-10-08 23:30:36] prereg 13.2 reference position + s10 committed e0a5593
+[2026-10-08 23:42:19] FRAMING ONLY, NOT E5 DATA: D435i (node_b) at the REFERENCE position, candles unlit on the matte base at 3 m; WB rectangle check
+{"framing_only_not_e5_data": true, "serial": "405622076256", "resolution": [1920, 1080], "auto_exposure_flag": 0, "crop_rect_native_xyxy": [420, 0, 1499, 1079], "files": {"/home/jetson-b/e5_framing/framing_20261008_234221_d435i_full_1920x1080_crop224rect.png": "3ade2cb52a4097bffa7e2f3baca9b836", "/home/jetson-b/e5_framing/framing_20261008_234221_d435i_crop224_x3.png": "b83c48607720719774804ef21b8e36f4"}}
+[2026-10-08 23:44:11] FRAMING ONLY, NOT E5 DATA: D435i (node_b) at the REFERENCE position, candles UNLIT on the matte base at 3 m; WB rectangle check (previous frame 234221 had a lit candle)
+{"framing_only_not_e5_data": true, "serial": "405622076256", "resolution": [1920, 1080], "auto_exposure_flag": 0, "crop_rect_native_xyxy": [420, 0, 1499, 1079], "files": {"/home/jetson-b/e5_framing/framing_20261008_234412_d435i_full_1920x1080_crop224rect.png": "902b47f8ca58f58d439d611c6004074c", "/home/jetson-b/e5_framing/framing_20261008_234412_d435i_crop224_x3.png": "0dc4fe5bffe95d02369151db13c7e210"}}
+[2026-10-08 23:46:48] RECALIBRATION node_b D435i (reference position) START: python3 src/data/realsense_capture.py --calibrate_exposure --recalibrate --node node_b --root data/raw/camera_pilot --notes "source=none; distance_measured_m=3.00; flame_height_cm=0; e5 calibration at the reference position; source on matte base; camera_order=sequential, D435i node_b first; capture_time=23:46:48; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+86001a6
+calibration WB 2800: R-B -98.37 (R,G,B [38.26, 99.48, 136.633])
+calibration WB 6500: R-B 48.91 (R,G,B [118.154, 92.022, 69.241])
+calibration WB 4650: R-B -3.65 (R,G,B [105.084, 92.94, 108.737])
+calibration WB 5570: R-B 18.38 (R,G,B [112.138, 92.323, 93.758])
+calibration WB 5110: R-B 5.22 (R,G,B [108.97, 92.49, 103.749])
+calibration WB 4880: R-B 0.20 (R,G,B [107.19, 92.667, 106.992])
+calibration WB 4770: R-B -1.59 (R,G,B [106.115, 92.843, 107.707])
+calibration WB 4830: R-B -0.68 (R,G,B [106.699, 92.737, 107.381])
+calibration WB 4850: R-B -0.22 (R,G,B [106.953, 92.701, 107.175])
+calibration WB 4870: R-B 0.05 (R,G,B [107.008, 92.69, 106.961])
+calibration WB 4860: R-B 0.01 (R,G,B [107.007, 92.688, 106.996])
+calibration exposure 166: 224 mean luma 47.62
+calibration exposure 235: 224 mean luma 61.12
+calibration exposure 280: 224 mean luma 68.57
+calibration exposure 305: 224 mean luma 72.40
+calibration exposure 319: 224 mean luma 74.44
+calibration exposure 326: 224 mean luma 75.42
+calibration exposure 329: 224 mean luma 75.84
+calibration exposure 331: 224 mean luma 76.13
+calibration exposure 332: 224 mean luma 76.24
+calibration exposure 333 (cap): 224 mean luma 76.48
+calibration gain 91 (exposure at cap 333): 224 mean luma 93.20
+calibration gain 108 (exposure at cap 333): 224 mean luma 102.24
+verification: exposure 333, gain 108, white balance 4860 -> 224 mean luma 102.25, rectangle R,G,B [200.21, 179.331, 199.127], R-B 1.08
+fixed exposure 333.0, gain 108.0, white balance 4860.0 (224 mean luma 102.252) -> data/raw/camera_pilot/node_b/_exposure/exposure.json
+rc=0
+20261008T234719_exposure.json
+5d4071694fcfdff1237015feffbe1b6b  data/raw/camera_pilot/node_b/_exposure/exposure.json
+[2026-10-08 23:47:21] RECALIBRATION node_b D435i END
+[2026-10-08 23:47:34] node_b exposure.json (reference position) committed a83a84d
+[2026-10-08 23:48:46] SESSION CHECK s10 session, node_b D435i, reference position START (flame-free, candles unlit on matte base at 3 m, lamps_on=tavan lambasi)
+{"session_check": "PASS", "node": "node_b", "time": "2026-10-08 23:48:52", "setting": {"exposure": 333.0, "gain": 108.0, "white_balance": 4860.0}, "applied": {"exposure": 333.0, "gain": 108.0, "white_balance": 4860.0, "auto_exposure": 0.0, "auto_white_balance": 0.0}, "luma_224_median": 102.155, "calibration_luma_224": 102.252, "band": [92.027, 112.477], "region_rgb_mean": [200.057, 179.274, 199.145], "r_minus_b": 0.912}
+rc=0
+[2026-10-08 23:50:17] s10 no_fire d100 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s10 --label no_fire --distance_m 1 --frames 40 --notes "source=none; distance_measured_m=1.00; flame_height_cm=0; e5 acceptance clean geometry; matte base; reference position; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=23:50:17; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 333.0, gain 108.0, white balance 4860.0
+{"capture_id": "s10_no_fire_d100", "node": "node_b", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791492620.6373668, "status": "complete"}
+rc=0
+160
+[2026-10-08 23:50:30] s10 no_fire d100 node_b END
+[2026-10-08 23:51:56] s10 fire d100 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s10 --label fire --distance_m 1 --frames 40 --notes "source=candles4; distance_measured_m=1.00; flame_height_cm=3.5; e5 acceptance clean geometry; matte base; reference position; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=23:51:56; source chosen by author ruler comparison: torch flame smaller than the 4 candles; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 333.0, gain 108.0, white balance 4860.0
+{"capture_id": "s10_fire_d100", "node": "node_b", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791492720.3725102, "status": "complete"}
+rc=0
+160
+[2026-10-08 23:52:10] s10 fire d100 node_b END
+[2026-10-08 23:53:00] s10 fire d200 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s10 --label fire --distance_m 2 --frames 40 --notes "source=candles4; distance_measured_m=2.00; flame_height_cm=3.5; e5 acceptance clean geometry; matte base; reference position; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=23:53:00; source chosen by author ruler comparison: torch flame smaller than the 4 candles; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 333.0, gain 108.0, white balance 4860.0
+{"capture_id": "s10_fire_d200", "node": "node_b", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791492784.0961285, "status": "complete"}
+rc=0
+160
+[2026-10-08 23:53:14] s10 fire d200 node_b END
+[2026-10-08 23:53:42] s10 no_fire d200 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s10 --label no_fire --distance_m 2 --frames 40 --notes "source=none; distance_measured_m=2.00; flame_height_cm=0; e5 acceptance clean geometry; matte base; reference position; candles extinguished after the fire capture, smoke cleared; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=23:53:42; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 333.0, gain 108.0, white balance 4860.0
+{"capture_id": "s10_no_fire_d200", "node": "node_b", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791492825.4937062, "status": "complete"}
+rc=0
+160
+[2026-10-08 23:53:55] s10 no_fire d200 node_b END
+[2026-10-08 23:55:46] s10 no_fire d300 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s10 --label no_fire --distance_m 3 --frames 40 --notes "source=none; distance_measured_m=3.00; flame_height_cm=0; e5 acceptance clean geometry; matte base; reference position; at least 1 m from every wall; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=23:55:46; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 333.0, gain 108.0, white balance 4860.0
+{"capture_id": "s10_no_fire_d300", "node": "node_b", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791492949.92259, "status": "complete"}
+rc=0
+160
+[2026-10-08 23:55:59] s10 no_fire d300 node_b END
+[2026-10-08 23:57:12] s10 fire d300 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s10 --label fire --distance_m 3 --frames 40 --notes "source=candles4; distance_measured_m=3.00; flame_height_cm=3.5; e5 acceptance clean geometry; matte base; reference position; at least 1 m from every wall; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=23:57:12; source chosen by author ruler comparison: torch flame smaller than the 4 candles; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 333.0, gain 108.0, white balance 4860.0
+{"capture_id": "s10_fire_d300", "node": "node_b", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791493035.7736928, "status": "complete"}
+rc=0
+160
+[2026-10-08 23:57:25] s10 fire d300 node_b END
+[2026-10-09 00:01:31] (a) s10 node_b NO-FIRE as fire, tool 76a7003
+### (a) s10 NO-FIRE as fire, node_b d=1
+node_b,s10,1.0,1.0,3.5,1360.349609375,282.15,9.88,0.0,0,0,0.0,0.0,40,0,False,40,0.5-4,False,5,NOT VALIDATED
+### (a) s10 NO-FIRE as fire, node_b d=2
+node_b,s10,2.0,2.0,3.5,1360.349609375,282.15,4.94,0.0,0,0,0.0,0.0,40,0,False,40,0.5-2,False,5,NOT VALIDATED
+### (a) s10 NO-FIRE as fire, node_b d=3
+node_b,s10,3.0,3.0,3.5,1360.349609375,282.15,3.29,0.0,0,0,0.0,0.0,40,0,False,40,0.5-2,False,5,NOT VALIDATED
+[2026-10-09 00:01:41] s10 node_b FIRE, tool 76a7003
+### s10 node_b d=1
+node_b 1 m: NOT VALIDATED (median 0.0 px over 40 frames, criterion >= 5 px over 40)
+distance 1 m: NOT DECIDED -- only 1 of 3 cameras measured (node_b NOT VALIDATED)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,touches_crop_border,threshold,validation_band,tool_validated,criterion_px,criterion
+node_b,s10,1.0,1.0,3.5,1360.349609375,282.15,9.88,0.0,0,0,0.0,0.0,40,0,False,40,0.5-4,False,5,NOT VALIDATED
+rc=0
+### s10 node_b d=2
+node_b 2 m: NOT VALIDATED (median 18.0 px over 40 frames, criterion >= 5 px over 40)
+distance 2 m: NOT DECIDED -- only 1 of 3 cameras measured (node_b NOT VALIDATED)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,touches_crop_border,threshold,validation_band,tool_validated,criterion_px,criterion
+node_b,s10,2.0,2.0,3.5,1360.349609375,282.15,4.94,18.0,17,18,12.8,3.65,40,40,False,40,0.5-2,False,5,NOT VALIDATED
+rc=0
+### s10 node_b d=3
+node_b 3 m: NOT VALIDATED (median 11.0 px over 40 frames, criterion >= 5 px over 40)
+distance 3 m: NOT DECIDED -- only 1 of 3 cameras measured (node_b NOT VALIDATED)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,touches_crop_border,threshold,validation_band,tool_validated,criterion_px,criterion
+node_b,s10,3.0,3.0,3.5,1360.349609375,282.15,3.29,11.0,11,12,11.7,3.34,40,40,False,40,0.5-2,False,5,NOT VALIDATED
+rc=0
+[2026-10-09 00:07:14] ARCHIVE e5 captures s03/s09/s10 (move, no delete) stamp 20261009_000714
+md5 OK: 1997 files moved to _archive_20261009_000714
+e5 files left outside the archive: 0
+s01 files in place: 644
+moved dir _diag_flame_tool_nofire
+moved dir _diag_flame_tool_nofire_s10
+md5 OK: 1997 files moved to _archive_20261009_000714
+e5 files left outside the archive: 0
+s01 files in place: 644
+[2026-10-09 00:16:37] prereg 13.2 s11 restart + decision rule committed 49d3537
+[2026-10-09 00:18:21] FRAMING ONLY, NOT E5 DATA: D435i (node_b), reference position, NEW tilt (unknown), candles unlit on matte base at 3 m; WB rectangle check before s11 recalibration
+{"framing_only_not_e5_data": true, "serial": "405622076256", "resolution": [1920, 1080], "auto_exposure_flag": 0, "crop_rect_native_xyxy": [420, 0, 1499, 1079], "files": {"/home/jetson-b/e5_framing/framing_20261009_001823_d435i_full_1920x1080_crop224rect.png": "fa8fce4efac613c8fd2fce8ae3e615f3", "/home/jetson-b/e5_framing/framing_20261009_001823_d435i_crop224_x3.png": "3483dcfcb8bbff3a953ce4113496d640"}}
+[2026-10-09 00:22:24] RECALIBRATION node_b D435i (s11, new tilt) START: python3 src/data/realsense_capture.py --calibrate_exposure --recalibrate --node node_b --root data/raw/camera_pilot --notes "source=none; distance_measured_m=3.00; flame_height_cm=0; e5 s11 calibration, reference position, new tilt; tilt_deg=unknown; source on matte base; camera_order=sequential, D435i node_b first; capture_time=00:22:24; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+2ebc36e
+calibration WB 2800: R-B -80.94 (R,G,B [33.688, 81.203, 114.634])
+calibration WB 6500: R-B 50.29 (R,G,B [103.132, 73.403, 52.843])
+calibration WB 4650: R-B 2.77 (R,G,B [91.349, 74.391, 88.584])
+calibration WB 3720: R-B -36.06 (R,G,B [65.875, 78.113, 101.933])
+calibration WB 4180: R-B -10.38 (R,G,B [87.438, 74.816, 97.821])
+calibration WB 4420: R-B -3.39 (R,G,B [89.474, 74.706, 92.867])
+calibration WB 4540: R-B 0.12 (R,G,B [90.513, 74.612, 90.389])
+calibration WB 4480: R-B -1.76 (R,G,B [89.825, 74.674, 91.587])
+calibration WB 4510: R-B -0.53 (R,G,B [90.401, 74.607, 90.933])
+calibration WB 4530: R-B -0.20 (R,G,B [90.464, 74.622, 90.66])
+calibration exposure 166: 224 mean luma 57.45
+calibration exposure 235: 224 mean luma 73.96
+calibration exposure 280: 224 mean luma 82.92
+calibration exposure 305: 224 mean luma 87.51
+calibration exposure 319: 224 mean luma 89.97
+calibration exposure 326: 224 mean luma 91.14
+calibration exposure 329: 224 mean luma 91.64
+calibration exposure 331: 224 mean luma 91.98
+calibration exposure 332: 224 mean luma 92.13
+calibration exposure 333 (cap): 224 mean luma 92.39
+calibration gain 91 (exposure at cap 333): 224 mean luma 112.54
+verification: exposure 333, gain 91, white balance 4540 -> 224 mean luma 112.54, rectangle R,G,B [167.75, 143.21, 166.621], R-B 1.13
+fixed exposure 333.0, gain 91.0, white balance 4540.0 (224 mean luma 112.542) -> data/raw/camera_pilot/node_b/_exposure/exposure.json
+rc=0
+20261008T234719_exposure.json
+20261009T002253_exposure.json
+2c8f7cd1af5e2c14da6006f415c3e254  exposure.json
+183f2b0890b1491eacd88beefbd29475  _superseded/20261008T234719_exposure.json
+5d4071694fcfdff1237015feffbe1b6b  _superseded/20261009T002253_exposure.json
+[2026-10-09 00:22:56] RECALIBRATION node_b D435i (s11) END
+[2026-10-09 00:23:06] node_b exposure.json (s11, new tilt) committed e727516
+[2026-10-09 00:23:12] SESSION CHECK s11 session, node_b D435i, reference position, new tilt START (flame-free, candles unlit on matte base at 3 m)
+{"session_check": "PASS", "node": "node_b", "time": "2026-10-09 00:23:18", "setting": {"exposure": 333.0, "gain": 91.0, "white_balance": 4540.0}, "applied": {"exposure": 333.0, "gain": 91.0, "white_balance": 4540.0, "auto_exposure": 0.0, "auto_white_balance": 0.0}, "luma_224_median": 112.451, "calibration_luma_224": 112.542, "band": [101.288, 123.796], "region_rgb_mean": [167.466, 143.183, 166.559], "r_minus_b": 0.907}
+rc=0
+[2026-10-09 00:27:08] TEST FRAME, NOT E5 DATA: D435i (node_b), s11 setup, candles LIT at 1 m on matte base, fixed setting 333/91/4540 (AE off); flame position check
+{"framing_only_not_e5_data": true, "serial": "405622076256", "resolution": [1920, 1080], "auto_exposure_flag": 0, "crop_rect_native_xyxy": [420, 0, 1499, 1079], "files": {"/home/jetson-b/e5_framing/framing_20261009_002709_d435i_full_1920x1080_crop224rect.png": "723e8a589403d8feb3d78901142c40e2", "/home/jetson-b/e5_framing/framing_20261009_002709_d435i_crop224_x3.png": "fb2dff8fcd345e3c67c3d20b923a9ca4"}}
+flame-core pixels (max channel >= 245, R>=G>=B) in the 224 crop: 389, components: 2
+component 1: 325 px, 224 bbox top=139 left=131 bottom=168 right=147 (h=30 w=17), touches crop edge=False, native bbox x=1052-1133 y=670-814
+component 2: 64 px, 224 bbox top=190 left=139 bottom=199 right=145 (h=10 w=7), touches crop edge=False, native bbox x=1090-1123 y=916-963
+logs/e5/framing/framing_20261009_002709_d435i_crop224_x3_flamecore.png
+[2026-10-09 00:28:52] s11 fire d300 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s11 --label fire --distance_m 3 --frames 40 --notes "source=candles4; distance_measured_m=3.00; flame_height_cm=3.5; e5 s11; matte base; reference position; tilt_deg=unknown; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=00:28:52; source chosen by author ruler comparison: torch flame smaller than the 4 candles; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 333.0, gain 91.0, white balance 4540.0
+{"capture_id": "s11_fire_d300", "node": "node_b", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791494935.8190153, "status": "complete"}
+rc=0
+160
+[2026-10-09 00:29:05] s11 fire d300 node_b END
+[2026-10-09 00:29:51] s11 fire d200 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s11 --label fire --distance_m 2 --frames 40 --notes "source=candles4; distance_measured_m=2.00; flame_height_cm=3.5; e5 s11; matte base; reference position; tilt_deg=unknown; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=00:29:51; source chosen by author ruler comparison: torch flame smaller than the 4 candles; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 333.0, gain 91.0, white balance 4540.0
+{"capture_id": "s11_fire_d200", "node": "node_b", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791494994.4984548, "status": "complete"}
+rc=0
+160
+[2026-10-09 00:30:04] s11 fire d200 node_b END
+[2026-10-09 00:30:34] s11 fire d100 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s11 --label fire --distance_m 1 --frames 40 --notes "source=candles4; distance_measured_m=1.00; flame_height_cm=3.5; e5 s11; matte base; reference position; tilt_deg=unknown; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=00:30:34; source chosen by author ruler comparison: torch flame smaller than the 4 candles; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 333.0, gain 91.0, white balance 4540.0
+{"capture_id": "s11_fire_d100", "node": "node_b", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791495037.7692738, "status": "complete"}
+rc=0
+160
+[2026-10-09 00:30:47] s11 fire d100 node_b END
+[2026-10-09 00:31:35] s11 no_fire d100 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s11 --label no_fire --distance_m 1 --frames 40 --notes "source=none; distance_measured_m=1.00; flame_height_cm=0; e5 s11; matte base; reference position; tilt_deg=unknown; candles out at least 2 min, no ember; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=00:31:35; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 333.0, gain 91.0, white balance 4540.0
+{"capture_id": "s11_no_fire_d100", "node": "node_b", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791495099.253443, "status": "complete"}
+rc=0
+160
+[2026-10-09 00:31:49] s11 no_fire d100 node_b END
+[2026-10-09 00:32:15] s11 no_fire d200 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s11 --label no_fire --distance_m 2 --frames 40 --notes "source=none; distance_measured_m=2.00; flame_height_cm=0; e5 s11; matte base; reference position; tilt_deg=unknown; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=00:32:15; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 333.0, gain 91.0, white balance 4540.0
+{"capture_id": "s11_no_fire_d200", "node": "node_b", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791495138.819412, "status": "complete"}
+rc=0
+160
+[2026-10-09 00:32:28] s11 no_fire d200 node_b END
+[2026-10-09 00:32:59] s11 no_fire d300 node_b START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_b --scene s11 --label no_fire --distance_m 3 --frames 40 --notes "source=none; distance_measured_m=3.00; flame_height_cm=0; e5 s11; matte base; reference position; tilt_deg=unknown; at least 1 m from every wall; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first; capture_time=00:32:59; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 333.0, gain 91.0, white balance 4540.0
+{"capture_id": "s11_no_fire_d300", "node": "node_b", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791495182.790553, "status": "complete"}
+rc=0
+160
+[2026-10-09 00:33:13] s11 no_fire d300 node_b END
+[2026-10-09 00:35:23] s11 node_b, flame tool 49d3537 (rule a/b/c)
+### s11 node_b d=1
+node_b 1 m: PASS (median 33.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+distance 1 m: NOT DECIDED -- only 1 of 3 cameras measured (node_b PASS)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,detected_fraction,n_nofire_frames,n_nofire_detected,touches_crop_border,threshold,criterion_px,criterion_failed,criterion
+node_b,s11,1.0,1.0,3.5,1360.349609375,282.15,9.88,33.0,32,34,11.7,3.34,40,40,1.0,40,0,False,40,5,,PASS
+rc=0
+### s11 node_b d=2
+node_b 2 m: PASS (median 15.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+distance 2 m: NOT DECIDED -- only 1 of 3 cameras measured (node_b PASS)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,detected_fraction,n_nofire_frames,n_nofire_detected,touches_crop_border,threshold,criterion_px,criterion_failed,criterion
+node_b,s11,2.0,2.0,3.5,1360.349609375,282.15,4.94,15.0,15,15,10.6,3.04,40,40,1.0,40,0,False,40,5,,PASS
+rc=0
+### s11 node_b d=3
+node_b 3 m: PASS (median 9.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+distance 3 m: NOT DECIDED -- only 1 of 3 cameras measured (node_b PASS)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,detected_fraction,n_nofire_frames,n_nofire_detected,touches_crop_border,threshold,criterion_px,criterion_failed,criterion
+node_b,s11,3.0,3.0,3.5,1360.349609375,282.15,3.29,9.0,9,10,9.6,2.73,40,40,1.0,40,0,False,40,5,,PASS
+rc=0
+[2026-10-09 00:42:46] D435if (node_a) mounted at the reference position; USB/serial check + FRAMING ONLY (not e5 data), candles unlit at 3 m on matte base
+2ebc36e
+{"import": true, "cameras": [{"name": "Intel RealSense D435I", "serial": "239722070442", "usb_type": "3.2"}]}
+{"framing_only_not_e5_data": true, "serial": "239722070442", "resolution": [1920, 1080], "auto_exposure_flag": 1, "crop_rect_native_xyxy": [420, 0, 1499, 1079], "files": {"/home/jetson-a/e5_framing/framing_20261009_004251_d435if_full_1920x1080_crop224rect.png": "063b396b797397f5692fe35bca018e1c", "/home/jetson-a/e5_framing/framing_20261009_004251_d435if_crop224_x3.png": "c27f18e911ff4767e1cca34732c0823b"}}
+[2026-10-09 00:45:37] CALIBRATION node_a D435if (s11) START: python3 src/data/realsense_capture.py --calibrate_exposure --node node_a --root data/raw/camera_pilot --notes "source=none; distance_measured_m=3.00; flame_height_cm=0; e5 s11 calibration, reference position, same tilt as D435i; tilt_deg=unknown; source on matte base; camera_order=sequential, D435i node_b first, D435if node_a second; capture_time=00:45:37; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+529fdf5
+calibration WB 2800: R-B -79.30 (R,G,B [34.251, 79.249, 113.551])
+calibration WB 6500: R-B 50.29 (R,G,B [102.824, 71.523, 52.534])
+calibration WB 4650: R-B 3.31 (R,G,B [91.159, 72.496, 87.852])
+calibration WB 3720: R-B -34.99 (R,G,B [65.862, 76.134, 100.856])
+calibration WB 4180: R-B -9.71 (R,G,B [87.209, 72.815, 96.914])
+calibration WB 4420: R-B -2.79 (R,G,B [89.231, 72.683, 92.024])
+calibration WB 4540: R-B 0.96 (R,G,B [90.349, 72.614, 89.39])
+calibration WB 4480: R-B -1.07 (R,G,B [89.712, 72.672, 90.786])
+calibration WB 4510: R-B 0.05 (R,G,B [90.17, 72.585, 90.12])
+calibration WB 4500: R-B -0.21 (R,G,B [90.143, 72.607, 90.355])
+calibration exposure 166: 224 mean luma 53.95
+calibration exposure 235: 224 mean luma 69.41
+calibration exposure 280: 224 mean luma 77.86
+calibration exposure 305: 224 mean luma 82.20
+calibration exposure 319: 224 mean luma 84.53
+calibration exposure 326: 224 mean luma 85.64
+calibration exposure 329: 224 mean luma 86.12
+calibration exposure 331: 224 mean luma 86.46
+calibration exposure 332: 224 mean luma 86.45
+calibration exposure 333 (cap): 224 mean luma 86.86
+calibration gain 91 (exposure at cap 333): 224 mean luma 105.47
+verification: exposure 333, gain 91, white balance 4510 -> 224 mean luma 105.47, rectangle R,G,B [162.03, 140.763, 164.423], R-B -2.39
+fixed exposure 333.0, gain 91.0, white balance 4510.0 (224 mean luma 105.467) -> data/raw/camera_pilot/node_a/_exposure/exposure.json
+rc=0
+3d701d1f307f69a6ebadc5abdefca110  data/raw/camera_pilot/node_a/_exposure/exposure.json
+[2026-10-09 00:46:08] CALIBRATION node_a D435if (s11) END
+[2026-10-09 00:46:22] node_a exposure.json committed 1f6c174
+[2026-10-09 00:46:22] SESSION CHECK s11 session, node_a D435if START (flame-free, candles unlit on matte base at 3 m)
+{"session_check": "PASS", "node": "node_a", "time": "2026-10-09 00:46:27", "setting": {"exposure": 333.0, "gain": 91.0, "white_balance": 4510.0}, "applied": {"exposure": 333.0, "gain": 91.0, "white_balance": 4510.0, "auto_exposure": 0.0, "auto_white_balance": 0.0}, "luma_224_median": 105.647, "calibration_luma_224": 105.467, "band": [94.92, 116.014], "region_rgb_mean": [162.048, 141.045, 164.456], "r_minus_b": -2.408}
+rc=0
+[2026-10-09 00:48:47] TEST FRAME, NOT E5 DATA: D435if (node_a), s11 setup, candles LIT at 1 m on matte base, fixed setting 333/91/4510 (AE off); flame position check
+{"framing_only_not_e5_data": true, "serial": "239722070442", "resolution": [1920, 1080], "auto_exposure_flag": 0, "crop_rect_native_xyxy": [420, 0, 1499, 1079], "files": {"/home/jetson-a/e5_framing/framing_20261009_004848_d435if_full_1920x1080_crop224rect.png": "eb8f3847d9d0ffba79e21cd88444661d", "/home/jetson-a/e5_framing/framing_20261009_004848_d435if_crop224_x3.png": "18996c8318dc7461e4586a94eb62ff8a"}}
+flame-core pixels (max channel >= 245, R>=G>=B) in the 224 crop: 209, components: 1
+component 1: 209 px, 224 bbox top=144 left=124 bottom=168 right=138 (h=25 w=15), touches crop edge=False, native bbox x=1018-1089 y=694-814
+logs/e5/framing/framing_20261009_004848_d435if_crop224_x3_flamecore.png
+[2026-10-09 00:49:47] s11 fire d300 node_a START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_a --scene s11 --label fire --distance_m 3 --frames 40 --notes "source=candles4; distance_measured_m=3.00; flame_height_cm=3.5; e5 s11; matte base; reference position; tilt_deg=unknown; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first, D435if node_a second; capture_time=00:49:47; source chosen by author ruler comparison: torch flame smaller than the 4 candles; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 333.0, gain 91.0, white balance 4510.0
+{"capture_id": "s11_fire_d300", "node": "node_a", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791496190.6346157, "status": "complete"}
+rc=0
+160
+[2026-10-09 00:50:00] s11 fire d300 node_a END
+[2026-10-09 00:50:34] s11 fire d200 node_a START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_a --scene s11 --label fire --distance_m 2 --frames 40 --notes "source=candles4; distance_measured_m=2.00; flame_height_cm=3.5; e5 s11; matte base; reference position; tilt_deg=unknown; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first, D435if node_a second; capture_time=00:50:34; source chosen by author ruler comparison: torch flame smaller than the 4 candles; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 333.0, gain 91.0, white balance 4510.0
+{"capture_id": "s11_fire_d200", "node": "node_a", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791496237.4680674, "status": "complete"}
+rc=0
+160
+[2026-10-09 00:50:47] s11 fire d200 node_a END
+[2026-10-09 00:51:16] s11 fire d100 node_a START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_a --scene s11 --label fire --distance_m 1 --frames 40 --notes "source=candles4; distance_measured_m=1.00; flame_height_cm=3.5; e5 s11; matte base; reference position; tilt_deg=unknown; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first, D435if node_a second; capture_time=00:51:16; source chosen by author ruler comparison: torch flame smaller than the 4 candles; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 333.0, gain 91.0, white balance 4510.0
+{"capture_id": "s11_fire_d100", "node": "node_a", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791496279.6166103, "status": "complete"}
+rc=0
+160
+[2026-10-09 00:51:29] s11 fire d100 node_a END
+[2026-10-09 00:52:22] s11 no_fire d100 node_a START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_a --scene s11 --label no_fire --distance_m 1 --frames 40 --notes "source=none; distance_measured_m=1.00; flame_height_cm=0; e5 s11; matte base; reference position; tilt_deg=unknown; candles out at least 2 min, no ember; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first, D435if node_a second; capture_time=00:52:22; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 333.0, gain 91.0, white balance 4510.0
+{"capture_id": "s11_no_fire_d100", "node": "node_a", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791496345.4934788, "status": "complete"}
+rc=0
+160
+[2026-10-09 00:52:35] s11 no_fire d100 node_a END
+[2026-10-09 00:53:03] s11 no_fire d200 node_a START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_a --scene s11 --label no_fire --distance_m 2 --frames 40 --notes "source=none; distance_measured_m=2.00; flame_height_cm=0; e5 s11; matte base; reference position; tilt_deg=unknown; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first, D435if node_a second; capture_time=00:53:03; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 333.0, gain 91.0, white balance 4510.0
+{"capture_id": "s11_no_fire_d200", "node": "node_a", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791496386.0380068, "status": "complete"}
+rc=0
+160
+[2026-10-09 00:53:18] s11 no_fire d200 node_a END
+[2026-10-09 00:53:50] s11 no_fire d300 node_a START: python3 src/data/realsense_capture.py --root data/raw/camera_pilot --node node_a --scene s11 --label no_fire --distance_m 3 --frames 40 --notes "source=none; distance_measured_m=3.00; flame_height_cm=0; e5 s11; matte base; reference position; tilt_deg=unknown; at least 1 m from every wall; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first, D435if node_a second; capture_time=00:53:50; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 333.0, gain 91.0, white balance 4510.0
+{"capture_id": "s11_no_fire_d300", "node": "node_a", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791496433.1611283, "status": "complete"}
+rc=0
+160
+[2026-10-09 00:54:03] s11 no_fire d300 node_a END
+[2026-10-09 00:56:21] s11 node_a, flame tool 49d3537 (rule a/b/c)
+### s11 node_a d=1
+node_a 1 m: PASS (median 29.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+distance 1 m: NOT DECIDED -- only 1 of 3 cameras measured (node_a PASS)
+node_a,s11,1.0,1.0,3.5,1366.72216796875,283.47,9.92,29.0,28,29,10.2,2.92,40,40,1.0,40,0,False,40,5,,PASS
+### s11 node_a d=2
+node_a 2 m: PASS (median 12.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+distance 2 m: NOT DECIDED -- only 1 of 3 cameras measured (node_a PASS)
+node_a,s11,2.0,2.0,3.5,1366.72216796875,283.47,4.96,12.0,11,12,8.5,2.42,40,40,1.0,40,0,False,40,5,,PASS
+### s11 node_a d=3
+node_a 3 m: PASS (median 7.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+distance 3 m: NOT DECIDED -- only 1 of 3 cameras measured (node_a PASS)
+node_a,s11,3.0,3.0,3.5,1366.72216796875,283.47,3.31,7.0,7,7,7.4,2.12,40,40,1.0,40,0,False,40,5,,PASS
+[2026-10-09 00:58:07] prereg 13.3 depth-hole + firmware rule committed bbe9c2c, before computing
+[2026-10-09 00:58:16] DEPTH HOLES s11 no-fire, rule bbe9c2c
+### node_a, own WB rectangle
+region (normalized) x [0.03, 0.28) y [0.12, 0.3) from ..\..\AppData\Local\Temp\claude\C--Users-CORSAIR-projects-FedRGBD\a052747f-55f5-48a5-bafa-5228ad437564\scratchpad\holes_region_node_a.json
+{"capture": "s11_no_fire_d100", "image_wh": [1920, 1080], "invalid_max": 0.06106, "invalid_mean": 0.03534, "invalid_median": 0.03297, "invalid_min": 0.02369, "n_frames": 40, "node": "node_a", "region_px": [58, 130, 538, 324]}
+{"capture": "s11_no_fire_d200", "image_wh": [1920, 1080], "invalid_max": 0.0485, "invalid_mean": 0.03347, "invalid_median": 0.03248, "invalid_min": 0.02487, "n_frames": 40, "node": "node_a", "region_px": [58, 130, 538, 324]}
+{"capture": "s11_no_fire_d300", "image_wh": [1920, 1080], "invalid_max": 0.04845, "invalid_mean": 0.03317, "invalid_median": 0.03334, "invalid_min": 0.0177, "n_frames": 40, "node": "node_a", "region_px": [58, 130, 538, 324]}
+### node_b, own WB rectangle
+region (normalized) x [0.03, 0.3) y [0.1, 0.3) from ..\..\AppData\Local\Temp\claude\C--Users-CORSAIR-projects-FedRGBD\a052747f-55f5-48a5-bafa-5228ad437564\scratchpad\holes_region_node_b.json
+{"capture": "s11_no_fire_d100", "image_wh": [1920, 1080], "invalid_max": 0.01049, "invalid_mean": 0.00353, "invalid_median": 0.00328, "invalid_min": 0.00023, "n_frames": 40, "node": "node_b", "region_px": [58, 108, 576, 324]}
+{"capture": "s11_no_fire_d200", "image_wh": [1920, 1080], "invalid_max": 0.01264, "invalid_mean": 0.00404, "invalid_median": 0.00347, "invalid_min": 0.00046, "n_frames": 40, "node": "node_b", "region_px": [58, 108, 576, 324]}
+{"capture": "s11_no_fire_d300", "image_wh": [1920, 1080], "invalid_max": 0.00958, "invalid_mean": 0.00429, "invalid_median": 0.00418, "invalid_min": 0.00018, "n_frames": 40, "node": "node_b", "region_px": [58, 108, 576, 324]}
+### node_a, baccca6 rectangle (NOT plain wall in the s11 view; not used for the decision)
+region (normalized) x [0.66, 0.95) y [0.18, 0.6) from configs\e5_depth_hole_region.json
+{"capture": "s11_no_fire_d100", "image_wh": [1920, 1080], "invalid_max": 0.02585, "invalid_mean": 0.01676, "invalid_median": 0.01613, "invalid_min": 0.01104, "n_frames": 40, "node": "node_a", "region_px": [1267, 194, 1824, 648]}
+{"capture": "s11_no_fire_d200", "image_wh": [1920, 1080], "invalid_max": 0.02474, "invalid_mean": 0.01696, "invalid_median": 0.01651, "invalid_min": 0.01205, "n_frames": 40, "node": "node_a", "region_px": [1267, 194, 1824, 648]}
+{"capture": "s11_no_fire_d300", "image_wh": [1920, 1080], "invalid_max": 0.02426, "invalid_mean": 0.01695, "invalid_median": 0.0165, "invalid_min": 0.01089, "n_frames": 40, "node": "node_a", "region_px": [1267, 194, 1824, 648]}
+[2026-10-09 01:01:39] ZED 2i (node_c) mounted at the reference position, plate tilt kept; optical centre height: RealSense 56.5 cm, ZED 58 cm (ZED +1.5 cm), as measured by the author
+[2026-10-09 01:01:39] node_c USB/serial check + FRAMING ONLY (not e5 data), candles unlit at 3 m on matte base
+529fdf5
+{"import": true, "sdk_version": "5.2.3", "cameras": [{"model": "ZED 2i", "serial": 35201583, "usb_speed_mbps": 5000.0}]}
+[2026-10-09 01:01:46 UTC][ZED][INFO] [Init]  Serial Number: S/N 35201583
+[2026-10-09 01:01:46 UTC][ZED][INFO] [Init]  Depth mode selected: NEURAL. Ensure this mode matches your application's performance and accuracy requirements. See https://www.stereolabs.com/docs/depth-sensing/depth-modes for help.
+{"framing_only_not_e5_data": true, "serial": 35201583, "resolution": [1920, 1080], "auto_exposure_flag": true, "exposure": 65, "gain": 21, "white_balance": 4700, "crop_rect_native_xyxy": [420, 0, 1499, 1079], "files": {"/home/yunus/e5_framing/framing_20261009_010144_zed2i_full_1920x1080_crop224rect.png": "36354e8e9676babcc08c09709f7d0957", "/home/yunus/e5_framing/framing_20261009_010144_zed2i_crop224_x3.png": "e885c4653180c79d71f980f8d11e0871"}}
+[2026-10-09 01:03:13] D435if firmware update: BEFORE records docs/firmware/d435if_node_a_before_20261009_010308_enumerate{,_c}.txt
+[2026-10-09 01:03:23] D435if BEFORE record FAILED: rs-enumerate-devices on node_a: 'failed to open usb interface ... RS2_USB_STATUS_IO / failed to set power state / No device detected'; files renamed *_FAILED_no_device.txt
+[2026-10-09 01:11:24] CALIBRATION node_c ZED 2i (s11) START: python3 src/data/zed_capture.py --calibrate_exposure --node node_c --root data/raw/camera_pilot --notes "source=none; distance_measured_m=3.00; flame_height_cm=0; e5 s11 calibration, reference position, plate tilt kept; tilt_deg=unknown; zed_optical_centre_above_realsense_cm=1.5; source on matte base; camera_order=sequential, D435i node_b first, D435if node_a second, ZED 2i node_c third; capture_time=01:11:24; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+eba04ae
+calibration WB 2800: R-B 47.08 (R,G,B [49.529, 21.156, 2.445])
+calibration WB 6500: R-B -38.22 (R,G,B [9.682, 25.411, 47.897])
+calibration exposure 10: 224 mean luma 16.01
+calibration exposure 32: 224 mean luma 39.98
+calibration exposure 57: 224 mean luma 61.88
+calibration exposure 75: 224 mean luma 74.28
+calibration exposure 87: 224 mean luma 74.28
+calibration exposure 93: 224 mean luma 74.29
+calibration exposure 96: 224 mean luma 74.30
+calibration exposure 98: 224 mean luma 74.30
+calibration exposure 99: 224 mean luma 74.30
+calibration exposure 100 (cap): 224 mean luma 74.30
+calibration gain 10 (exposure at cap 100): 224 mean luma 94.77
+calibration gain 32 (exposure at cap 100): 224 mean luma 135.51
+calibration gain 18 (exposure at cap 100): 224 mean luma 107.78
+verification: exposure 100, gain 18, white balance 6500 -> 224 mean luma 107.76, rectangle R,G,B [69.535, 172.703, 234.968], R-B -165.43
+fixed exposure 100.0, gain 18.0, white balance 6500.0 (224 mean luma 107.763) -> data/raw/camera_pilot/node_c/_exposure/exposure.json
+rc=0
+b00e36a1f19054f2c8ef0654476a07d8  data/raw/camera_pilot/node_c/_exposure/exposure.json
+[2026-10-09 01:12:08] CALIBRATION node_c ZED 2i (s11) END
+[2026-10-09 01:14:24] D435if visible on node_a (8086:0b3a); BEFORE records docs/firmware/d435if_node_a_before_20261009_011419_enumerate{,_c}.txt
+[2026-10-09 01:21:13] WB direction fix + prereg committed f9bd254 (before ZED recalibration)
+[2026-10-09 01:24:58] firmware file: zip SHA256 75231556926306e514292ef7490f002d34adc812271d24f73e102446a1ee0458; bin SHA256 a7e10cf7b011929df2bfc6347d87471372621cc937c96cb529c3846f26b60f1c (no published checksum; URL inferred); bin copied to node_a ~/fw/, SHA256 match
+[2026-10-09 01:25:50] FIRMWARE UPDATE START node_a D435if: rs-fw-update -s 239722070442 -f /home/jetson-a/fw/Signed_Image_UVC_5_17_0_10.bin
+Search for device with serial number: 239722070442
+Updating device FW: 
+[USB] Intel RealSense D435I s/n 239722070442, update serial number: 244523060991, firmware version: 5.13.0.55
+ 09/10 01:25:52,481 WARNING [281473676265536] (messenger-libusb.cpp:42) control_transfer returned error, index: 768, error: Success, number: 0
+ 09/10 01:25:52,492 WARNING [281473676265536] (messenger-libusb.cpp:42) control_transfer returned error, index: 768, error: No such device, number: 19
+ 09/10 01:25:52,506 WARNING [281473853581376] (ds-device-common.cpp:101) usb device disconnected
+Firmware update started. Please don't disconnect device!
+Firmware update done
+Waiting for device to reconnect...
+Device 239722070442 successfully updated to FW: 5.17.0.10
+rc=0
+[2026-10-09 01:26:23] FIRMWARE UPDATE END
+[2026-10-09 01:26:51] D435if firmware 5.17.0.10 confirmed; after records committed 5f0c132; calibration tables identical
+[2026-10-09 01:27:45] RECALIBRATION node_c ZED 2i (s11, WB fix f9bd254) START: python3 src/data/zed_capture.py --calibrate_exposure --recalibrate --node node_c --root data/raw/camera_pilot --notes "source=none; distance_measured_m=3.00; flame_height_cm=0; e5 s11 recalibration after WB direction fix, reference position, plate tilt kept; tilt_deg=unknown; zed_optical_centre_above_realsense_cm=1.5; source on matte base; camera_order=sequential, D435i node_b first, D435if node_a second, ZED 2i node_c third; capture_time=01:27:45; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+f9bd254
+calibration WB 2800: R-B 47.06 (R,G,B [49.487, 21.158, 2.43])
+calibration WB 6500: R-B -38.16 (R,G,B [9.689, 25.38, 47.849])
+calibration WB 4600: R-B 4.74 (R,G,B [30.831, 22.859, 26.088])
+calibration WB 5600: R-B -12.46 (R,G,B [23.822, 22.554, 36.277])
+calibration WB 5100: R-B -4.08 (R,G,B [25.415, 23.449, 29.492])
+calibration WB 4800: R-B 4.71 (R,G,B [30.809, 22.896, 26.094])
+calibration WB 5000: R-B -4.07 (R,G,B [25.424, 23.464, 29.496])
+calibration WB 4900: R-B 4.79 (R,G,B [30.812, 22.912, 26.022])
+calibration exposure 10: 224 mean luma 16.45
+calibration exposure 32: 224 mean luma 43.24
+calibration exposure 57: 224 mean luma 66.50
+calibration exposure 75: 224 mean luma 80.50
+calibration exposure 87: 224 mean luma 80.51
+calibration exposure 93: 224 mean luma 80.53
+calibration exposure 96: 224 mean luma 80.53
+calibration exposure 98: 224 mean luma 80.53
+calibration exposure 99: 224 mean luma 80.52
+calibration exposure 100 (cap): 224 mean luma 80.53
+calibration gain 10 (exposure at cap 100): 224 mean luma 104.93
+verification: exposure 100, gain 10, white balance 5000 -> 224 mean luma 104.94, rectangle R,G,B [147.77, 144.685, 159.114], R-B -11.34
+fixed exposure 100.0, gain 10.0, white balance 5000.0 (224 mean luma 104.94) -> data/raw/camera_pilot/node_c/_exposure/exposure.json
+rc=0
+20261009T012839_exposure.json
+4e5d6f4678afaef85eed173aa7f04dbe  exposure.json
+b00e36a1f19054f2c8ef0654476a07d8  _superseded/20261009T012839_exposure.json
+[2026-10-09 01:28:40] RECALIBRATION node_c ZED 2i END
+[2026-10-09 01:28:56] node_c exposure.json committed 57f5f3c
+[2026-10-09 01:28:56] SESSION CHECK node_c ZED START: python3 src/data/zed_capture.py --session_check --node node_c --root data/raw/camera_pilot --notes "source=none; distance_measured_m=3.00; flame_height_cm=0; e5 s11 session check ZED; lamps_on=tavan lambasi"
+{"session_check": "PASS", "node": "node_c", "time": "2026-10-09 01:29:02", "setting": {"exposure": 100.0, "gain": 10.0, "white_balance": 5000.0}, "applied": {"exposure": 100, "gain": 10, "white_balance": 5000, "auto_exposure": 0, "auto_white_balance": 0}, "luma_224_median": 104.899, "calibration_luma_224": 104.94, "band": [94.446, 115.434], "region_rgb_mean": [147.72, 144.659, 159.135], "r_minus_b": -11.415}
+rc=0
+[2026-10-09 01:30:59] TEST FRAME, NOT E5 DATA: ZED 2i (node_c), s11 setup, candles LIT at 1 m on matte base, fixed setting 100/10/5000 applied; flame position check
+{"framing_only_not_e5_data": true, "fixed_setting_applied": {"exposure": 100, "gain": 10, "white_balance": 5000, "auto_exposure": 0, "auto_white_balance": 0}, "serial": 35201583, "resolution": [1920, 1080], "auto_exposure_flag": false, "exposure": 100, "gain": 10, "white_balance": 5000, "crop_rect_native_xyxy": [420, 0, 1499, 1079], "files": {"/home/yunus/e5_framing/framing_20261009_013100_zed2i_full_1920x1080_crop224rect.png": "c1080cac3cb4abb879d54876fb02aaee", "/home/yunus/e5_framing/framing_20261009_013100_zed2i_crop224_x3.png": "67bc4345d356bf87300630c47b97b9d3"}}
+flame-core pixels (max channel >= 245, R>=G>=B) in the 224 crop: 132, components: 1
+component 1: 132 px, 224 bbox top=129 left=127 bottom=147 right=139 (h=19 w=13), touches crop edge=False, native bbox x=1032-1094 y=622-713
+logs/e5/framing/framing_20261009_013100_zed2i_crop224_x3_flamecore.png
+[2026-10-09 01:32:33] s11 fire d300 node_c START: python3 src/data/zed_capture.py --root data/raw/camera_pilot --node node_c --scene s11 --label fire --distance_m 3 --frames 40 --notes "source=candles4; distance_measured_m=3.00; flame_height_cm=3.5; e5 s11; matte base; reference position; tilt_deg=unknown; zed_optical_centre_above_realsense_cm=1.5; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first, D435if node_a second, ZED 2i node_c third; capture_time=01:32:33; source chosen by author ruler comparison: torch flame smaller than the 4 candles; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 100.0, gain 10.0, white balance 5000.0
+{"capture_id": "s11_fire_d300", "node": "node_c", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791498759.2615023, "status": "complete"}
+rc=0
+120
+[2026-10-09 01:32:48] s11 fire d300 node_c END
+[2026-10-09 01:33:44] s11 fire d200 node_c START: python3 src/data/zed_capture.py --root data/raw/camera_pilot --node node_c --scene s11 --label fire --distance_m 2 --frames 40 --notes "source=candles4; distance_measured_m=2.00; flame_height_cm=3.5; e5 s11; matte base; reference position; tilt_deg=unknown; zed_optical_centre_above_realsense_cm=1.5; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first, D435if node_a second, ZED 2i node_c third; capture_time=01:33:44; source chosen by author ruler comparison: torch flame smaller than the 4 candles; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 100.0, gain 10.0, white balance 5000.0
+{"capture_id": "s11_fire_d200", "node": "node_c", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791498829.8417122, "status": "complete"}
+rc=0
+120
+[2026-10-09 01:33:59] s11 fire d200 node_c END
+[2026-10-09 01:34:50] s11 fire d100 node_c START: python3 src/data/zed_capture.py --root data/raw/camera_pilot --node node_c --scene s11 --label fire --distance_m 1 --frames 40 --notes "source=candles4; distance_measured_m=1.00; flame_height_cm=3.5; e5 s11; matte base; reference position; tilt_deg=unknown; zed_optical_centre_above_realsense_cm=1.5; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first, D435if node_a second, ZED 2i node_c third; capture_time=01:34:50; source chosen by author ruler comparison: torch flame smaller than the 4 candles; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 100.0, gain 10.0, white balance 5000.0
+{"capture_id": "s11_fire_d100", "node": "node_c", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791498895.4228764, "status": "complete"}
+rc=0
+120
+[2026-10-09 01:35:04] s11 fire d100 node_c END
+[2026-10-09 01:35:55] s11 no_fire d100 node_c START: python3 src/data/zed_capture.py --root data/raw/camera_pilot --node node_c --scene s11 --label no_fire --distance_m 1 --frames 40 --notes "source=none; distance_measured_m=1.00; flame_height_cm=0; e5 s11; matte base; reference position; tilt_deg=unknown; zed_optical_centre_above_realsense_cm=1.5; candles out at least 2 min, no ember; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first, D435if node_a second, ZED 2i node_c third; capture_time=01:35:55; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 100.0, gain 10.0, white balance 5000.0
+{"capture_id": "s11_no_fire_d100", "node": "node_c", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791498960.2800703, "status": "complete"}
+rc=0
+120
+[2026-10-09 01:36:09] s11 no_fire d100 node_c END
+[2026-10-09 01:36:39] s11 no_fire d200 node_c START: python3 src/data/zed_capture.py --root data/raw/camera_pilot --node node_c --scene s11 --label no_fire --distance_m 2 --frames 40 --notes "source=none; distance_measured_m=2.00; flame_height_cm=0; e5 s11; matte base; reference position; tilt_deg=unknown; zed_optical_centre_above_realsense_cm=1.5; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first, D435if node_a second, ZED 2i node_c third; capture_time=01:36:39; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 100.0, gain 10.0, white balance 5000.0
+{"capture_id": "s11_no_fire_d200", "node": "node_c", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791499004.821048, "status": "complete"}
+rc=0
+120
+[2026-10-09 01:36:53] s11 no_fire d200 node_c END
+[2026-10-09 01:37:28] s11 no_fire d300 node_c START: python3 src/data/zed_capture.py --root data/raw/camera_pilot --node node_c --scene s11 --label no_fire --distance_m 3 --frames 40 --notes "source=none; distance_measured_m=3.00; flame_height_cm=0; e5 s11; matte base; reference position; tilt_deg=unknown; zed_optical_centre_above_realsense_cm=1.5; at least 1 m from every wall; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435i node_b first, D435if node_a second, ZED 2i node_c third; capture_time=01:37:28; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+exposure lock (fixed_camera): exposure 100.0, gain 10.0, white balance 5000.0
+{"capture_id": "s11_no_fire_d300", "node": "node_c", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791499053.5118375, "status": "complete"}
+rc=0
+120
+[2026-10-09 01:37:42] s11 no_fire d300 node_c END
+[2026-10-09 01:40:04] s11 ALL THREE CAMERAS, flame tool 49d3537 (rule a/b/c); node_a = D435if BEFORE its firmware update (repeat scheduled)
+### s11 d=1, all nodes
+node_a 1 m: PASS (median 29.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+node_b 1 m: PASS (median 33.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+node_c 1 m: PASS (median 21.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+distance 1 m: PASS on all three cameras (node_a PASS, node_b PASS, node_c PASS)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,detected_fraction,n_nofire_frames,n_nofire_detected,touches_crop_border,threshold,criterion_px,criterion_failed,criterion
+node_a,s11,1.0,1.0,3.5,1366.72216796875,283.47,9.92,29.0,28,29,10.2,2.92,40,40,1.0,40,0,False,40,5,,PASS
+node_b,s11,1.0,1.0,3.5,1360.349609375,282.15,9.88,33.0,32,34,11.7,3.34,40,40,1.0,40,0,False,40,5,,PASS
+node_c,s11,1.0,1.0,3.5,1051.128173828125,218.01,7.63,21.0,21,22,9.6,2.75,40,40,1.0,40,0,False,40,5,,PASS
+rc=0
+### s11 d=2, all nodes
+node_a 2 m: PASS (median 12.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+node_b 2 m: PASS (median 15.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+node_c 2 m: PASS (median 10.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+distance 2 m: PASS on all three cameras (node_a PASS, node_b PASS, node_c PASS)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,detected_fraction,n_nofire_frames,n_nofire_detected,touches_crop_border,threshold,criterion_px,criterion_failed,criterion
+node_a,s11,2.0,2.0,3.5,1366.72216796875,283.47,4.96,12.0,11,12,8.5,2.42,40,40,1.0,40,0,False,40,5,,PASS
+node_b,s11,2.0,2.0,3.5,1360.349609375,282.15,4.94,15.0,15,15,10.6,3.04,40,40,1.0,40,0,False,40,5,,PASS
+node_c,s11,2.0,2.0,3.5,1050.9969482421875,217.98,3.81,10.0,10,10,9.2,2.62,40,40,1.0,40,0,False,40,5,,PASS
+rc=0
+### s11 d=3, all nodes
+node_a 3 m: PASS (median 7.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+node_b 3 m: PASS (median 9.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+node_c 3 m: PASS (median 6.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+distance 3 m: PASS on all three cameras (node_a PASS, node_b PASS, node_c PASS)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,detected_fraction,n_nofire_frames,n_nofire_detected,touches_crop_border,threshold,criterion_px,criterion_failed,criterion
+node_a,s11,3.0,3.0,3.5,1366.72216796875,283.47,3.31,7.0,7,7,7.4,2.12,40,40,1.0,40,0,False,40,5,,PASS
+node_b,s11,3.0,3.0,3.5,1360.349609375,282.15,3.29,9.0,9,10,9.6,2.73,40,40,1.0,40,0,False,40,5,,PASS
+node_c,s11,3.0,3.0,3.5,1051.0540771484375,218.0,2.54,6.0,6,6,8.3,2.36,40,40,1.0,40,0,False,40,5,,PASS
+rc=0

@@ -131,7 +131,10 @@ cfbd211 FetchResults: time limits and pop-ups
 4. Depth holes of the D435if again (13.3, descriptive):
    `python scripts/camera_depth_holes.py --root data/raw/camera_pilot --region <json of node_a's WB rectangle> --node node_a --captures s11_no_fire_d100 s11_no_fire_d200 s11_no_fire_d300`.
 5. Flame tool on all three cameras' s11 -> **distance decision**, then fill section 13's
-   `[e5]` values and commit Amendment 4 complete.
+   `[e5]` values, record the s11 2-minute-rule deviation (section 6), and commit
+   Amendment 4 complete.
+5a. Implement the 120 s no-fire guard in the capture script (code + test + section 13),
+   before any study capture.
 6. Review `docs/STUDY_CAPTURE_PLAN_DRAFT.md` with the author; decide; record the
    decisions in section 13 before the first study capture (study root `data/raw/camera`,
    scene ids from s12).
@@ -147,10 +150,15 @@ cfbd211 FetchResults: time limits and pop-ups
   vs 5000-5100 identical); luma flat above exposure 75 (possible cause 15 fps frame
   period, not verified).
 - D435if hole result after the firmware update (descriptive).
-- The 2-minute wait in s11: the logged gap between the end of the 1 m fire capture and
-  the start of the 1 m no-fire capture was 48-53 s on all three cameras (see the e5 log
-  timestamps); whether the candles were already out before the fire capture ended is not
-  recorded. To clarify and record.
+- **Protocol deviation in s11 (to be written into section 13 tomorrow):** the 2-minute
+  rule after putting the candles out was not followed; the logged gap between the end of
+  the 1 m fire capture and the start of the 1 m no-fire capture was about 48-53 s on all
+  three cameras (e5 log timestamps). Check (a) of the decision rule (no-fire frames give
+  0 px) passed on all three cameras (`n_nofire_detected` in
+  `docs/e5/records/flame/s11_all_d{100,200,300}.csv`).
+- **For the study capture (code + test + section 13, before the first capture):** a
+  no-fire capture is refused by the capture script if fewer than 120 s have passed since
+  the end of the last fire capture of the same scene and distance.
 - **Paused since 2026-10-08 (the author's earlier request, before e5):** A5 analysis
   tables (testbed 4 runs + "desktop simulation sensitivity analysis" 18 cells, fill the
   A5 `\todo`), commit HARDWARE_SETUP.md + POST_5B_CHECKLIST.md e1-e4 notes, fix the
@@ -175,6 +183,11 @@ cfbd211 FetchResults: time limits and pop-ups
 - Before each physical step, tell the author what to do and wait for "ready".
 
 ## 8. Files moved out of the session scratchpad
+
+- `docs/e5/records/` -- text copies of the e5 record (gitignored originals stay in
+  `logs/e5/`): `e5_capture_20261008_09_log.txt` (the full e5 log up to the s11 flame
+  tool run), `flame/*.csv` (all flame-tool CSVs: s03 old/fixed tool, s10, s11 per camera
+  and all three), `flame_diag/*.csv` (no-fire-as-fire diagnostics). No PNGs, no frames.
 
 - `docs/e5/E5_COMMAND_SHEET_20261008.md` -- the e5 command sheet (its step list is
   superseded by section 13: sequential capture, s11, cancelled s04-s08/s09 3 m).
