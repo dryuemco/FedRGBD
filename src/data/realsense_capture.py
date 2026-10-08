@@ -44,8 +44,10 @@ if _REPO not in sys.path:
 
 from src.data.camera_capture_common import (  # noqa: E402
     DEFAULT_FPS, DEFAULT_FRAMES, DEFAULT_ROOT, LABELS, NOTES_FORMAT, CameraBackend,
-    CaptureError, Frame, depth_to_mm_uint16, run_capture, smoke_test,
+    CaptureError, Frame, depth_to_mm_uint16, run_capture, run_exposure_calibration,
+    smoke_test,
 )
+from src.data.camera_exposure import ExposureError  # noqa: E402
 
 #: pyrealsense2, imported lazily (only node_a / node_b have it; tests run without it)
 rs = None
@@ -578,38 +580,23 @@ class RealSenseBackend(CameraBackend):
         except Exception:  # noqa: BLE001
             return float(round(float(value)))
 
-    def settle_auto(self, n_frames):
-        """Auto exposure / white balance run for ``n_frames``; -> the values to lock.
-
-        Where the colour frame carries ``actual_exposure`` / ``gain_level`` /
-        ``white_balance`` metadata, the lock is what auto exposure applied to the last
-        frame.  Under the RSUSB backend of the nodes it does not (prereg sec. 13 draft);
-        auto exposure is then switched off and the sensor options are read -- whether
-        they hold the last auto value is what e5 tests."""
-        self._set("enable_auto_exposure", 1)
-        self._set("enable_auto_white_balance", 1)
-        last = None
-        for _ in range(max(1, int(n_frames))):
-            last = self.grab()
-        m = last.meta if last is not None else {}
-        if m.get("exposure_source") == "frame_metadata":
-            lock = {"exposure": m.get("exposure"), "gain": m.get("gain"),
-                    "white_balance": m.get("white_balance"),
-                    "source": "colour frame metadata after %d auto frames" % n_frames}
-            self._set("enable_auto_exposure", 0)
-            self._set("enable_auto_white_balance", 0)
-        else:
-            self._set("enable_auto_exposure", 0)
-            self._set("enable_auto_white_balance", 0)
-            lock = {"exposure": _option(self.color_sensor, "exposure"),
-                    "gain": _option(self.color_sensor, "gain"),
-                    "white_balance": _option(self.color_sensor, "white_balance"),
-                    "source": "sensor options read after auto exposure was switched off "
-                              "(%d auto frames; no colour exposure metadata)" % n_frames}
-        for k in ("exposure", "gain", "white_balance"):
-            if lock[k] is not None:
-                lock[k] = self._snap(k, lock[k])
-        return lock
+    def exposure_defaults(self):
+        """Default gain (option range), the white balance range, and the exposure range
+        in the sensor's unit (UVC, 100 us), capped at one frame period of the stream so
+        the frame rate does not drop."""
+        r = {k: self.color_sensor.get_option_range(getattr(rs.option, k))
+             for k in ("exposure", "gain", "white_balance")}
+        cap = float(int(1e4 / float(self.stream_fps)))
+        wb, gn = r["white_balance"], r["gain"]
+        return {"gain": float(gn.default),
+                "gain_range": {"min": float(gn.min), "max": float(gn.max),
+                               "step": float(gn.step), "default": float(gn.default)},
+                "white_balance_range": {"min": float(wb.min), "max": float(wb.max),
+                                        "step": float(wb.step), "default": float(wb.default)},
+                "exposure_range": {"min": float(r["exposure"].min),
+                                   "max": min(float(r["exposure"].max), cap),
+                                   "step": float(r["exposure"].step),
+                                   "default": float(r["exposure"].default)}}
 
     def apply_lock(self, lock):
         self._set("enable_auto_exposure", 0)
@@ -661,8 +648,11 @@ def build_parser():
     parser.add_argument("--notes", default="", help="required, parsed: " + NOTES_FORMAT)
     parser.add_argument("--no_lock", action="store_true",
                         help="TEST ONLY (e5): no exposure lock; never a study capture")
-    parser.add_argument("--lock_settle_frames", type=int, default=45,
-                        help="frames auto exposure runs before the no-fire lock is read")
+    parser.add_argument("--calibrate_exposure", action="store_true",
+                        help="set this camera's one fixed exposure on a flame-free scene "
+                             "(prereg 13.1 draft); no capture")
+    parser.add_argument("--recalibrate", action="store_true",
+                        help="with --calibrate_exposure: replace an existing exposure file")
     parser.add_argument("--stream_fps", type=int, default=EXP_STREAM_FPS,
                         help="[camera experiment] stream rate, sampled down to --fps")
     return parser
@@ -670,7 +660,8 @@ def build_parser():
 
 def main(argv=None, backend_factory=None):
     args = build_parser().parse_args(argv)
-    experiment = args.scene is not None or (args.test and args.node is not None)
+    experiment = (args.scene is not None or args.calibrate_exposure
+                  or (args.test and args.node is not None))
     if not experiment:  # the original CLI, unchanged
         if args.list:
             list_cameras()
@@ -692,6 +683,17 @@ def main(argv=None, backend_factory=None):
                                                            stream_fps=args.stream_fps))
     if args.test:
         return 0 if smoke_test(factory(), args.node) else 1
+    if args.calibrate_exposure:
+        if args.node is None:
+            print("--calibrate_exposure needs --node (node_a or node_b)", file=sys.stderr)
+            return 2
+        try:
+            run_exposure_calibration(factory(), args.root, args.node, args.notes,
+                                     recalibrate=args.recalibrate)
+        except (CaptureError, ValueError, ExposureError) as e:
+            print("ERROR: %s" % e, file=sys.stderr)
+            return 1
+        return 0
     if args.node is None or args.label is None or args.distance_m is None:
         print("--scene needs --label, --distance_m and --node (node_a or node_b)",
               file=sys.stderr)
@@ -700,8 +702,7 @@ def main(argv=None, backend_factory=None):
         rec = run_capture(factory(), args.scene, args.label, args.distance_m, args.node,
                           root=args.root, frames=frames, fps=fps, start_at=args.start_at,
                           retake=args.retake, notes=args.notes, study_gates=True,
-                          exposure_lock=not args.no_lock,
-                          lock_settle_frames=args.lock_settle_frames)
+                          exposure_lock=not args.no_lock)
     except (CaptureError, ValueError) as e:
         print("ERROR: %s" % e, file=sys.stderr)
         return 1

@@ -33,8 +33,9 @@ if _REPO not in sys.path:
 
 from src.data.camera_capture_common import (  # noqa: E402
     CameraBackend, CaptureError, Frame, add_capture_args, depth_to_mm_uint16,
-    run_capture, smoke_test, zed_usb_devices, zed_usb_speed_mbps,
+    run_capture, run_exposure_calibration, smoke_test, zed_usb_devices, zed_usb_speed_mbps,
 )
+from src.data.camera_exposure import ExposureError  # noqa: E402
 
 DEFAULT_DEPTH_MODE = "NEURAL"
 DEFAULT_RESOLUTION = "HD1080"
@@ -234,21 +235,15 @@ class ZedBackend(CameraBackend):
         if err is not None and err != sl.ERROR_CODE.SUCCESS:
             raise CaptureError("ZED set_camera_settings(%s, %s) failed: %s" % (name, value, err))
 
-    def settle_auto(self, n_frames) -> Dict[str, Any]:
-        """AEC/AGC and auto white balance run for ``n_frames``; -> the values they applied
-        (the ZED reports applied values while auto is on).  White balance on the SDK's
-        100 K grid."""
-        sl = self.sl
-        self._set("AEC_AGC", 1)
-        self._set("WHITEBALANCE_AUTO", 1)
-        for _ in range(max(1, int(n_frames))):
-            self._grab_ok()
-        wb = _setting(self.zed, sl, "WHITEBALANCE_TEMPERATURE")
-        return {"exposure": _setting(self.zed, sl, "EXPOSURE"),
-                "gain": _setting(self.zed, sl, "GAIN"),
-                "white_balance": None if wb is None else int(round(wb / 100.0) * 100),
-                "source": "get_camera_settings with AEC_AGC and auto white balance on, "
-                          "after %d frames" % n_frames}
+    def exposure_defaults(self) -> Dict[str, Any]:
+        """ZED (sl.VIDEO_SETTINGS): EXPOSURE in percent of the frame period (1-100),
+        searched from the geometric middle; WHITEBALANCE_TEMPERATURE 2800-6500 K on the
+        SDK's 100 K grid; GAIN 0-100, starting at 0 (the SDK reports no default)."""
+        return {"gain": 0.0,
+                "gain_range": {"min": 0.0, "max": 100.0, "step": 1.0, "default": 0.0},
+                "white_balance_range": {"min": 2800.0, "max": 6500.0, "step": 100.0,
+                                        "default": None},
+                "exposure_range": {"min": 1.0, "max": 100.0, "step": 1.0, "default": None}}
 
     def apply_lock(self, lock) -> Dict[str, Any]:
         sl = self.sl
@@ -306,6 +301,14 @@ def main(argv=None, backend_factory=None) -> int:
         return 0
     if args.test:
         return 0 if smoke_test(factory(), args.node) else 1
+    if args.calibrate_exposure:
+        try:
+            run_exposure_calibration(factory(), args.root, args.node, args.notes,
+                                     recalibrate=args.recalibrate)
+        except (CaptureError, ValueError, ExposureError) as e:
+            print("ERROR: %s" % e, file=sys.stderr)
+            return 1
+        return 0
     if not (args.scene and args.label and args.distance_m is not None):
         print("--scene, --label and --distance_m are required for a capture", file=sys.stderr)
         return 2
@@ -313,8 +316,7 @@ def main(argv=None, backend_factory=None) -> int:
         rec = run_capture(factory(), args.scene, args.label, args.distance_m, args.node,
                           root=args.root, frames=args.frames, fps=args.fps,
                           start_at=args.start_at, retake=args.retake, notes=args.notes,
-                          study_gates=True, exposure_lock=not args.no_lock,
-                          lock_settle_frames=args.lock_settle_frames)
+                          study_gates=True, exposure_lock=not args.no_lock)
     except (CaptureError, ValueError) as e:
         print("ERROR: %s" % e, file=sys.stderr)
         return 1

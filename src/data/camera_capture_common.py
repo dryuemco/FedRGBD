@@ -246,9 +246,10 @@ class CameraBackend:
     def info(self) -> Dict[str, Any]:  # pragma: no cover - interface
         raise NotImplementedError
 
-    def settle_auto(self, n_frames: int) -> Dict[str, Any]:  # pragma: no cover - interface
-        """Auto exposure and auto white balance on, ``n_frames`` grabbed and discarded,
-        then -> {exposure, gain, white_balance, source}: the values to lock."""
+    def exposure_defaults(self) -> Dict[str, Any]:  # pragma: no cover - interface
+        """{gain, gain_range, exposure_range, white_balance_range} for the one-setting
+        calibration (``camera_exposure.calibrate_camera``); ranges are
+        {min, max, step, default}; ``gain`` is the starting (default) gain."""
         raise NotImplementedError
 
     def apply_lock(self, lock: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cover
@@ -476,7 +477,6 @@ MEASURED_DISTANCE_RANGE_M = (0.3, 10.0)
 #: a ZED on a USB 3.x link runs at >= 5000 Mb/s (sysfs ``speed``)
 USB3_MIN_SPEED_MBPS = 5000
 ZED_USB_VENDOR = "2b03"
-LOCKS_DIR = "_locks"
 
 
 def parse_notes(notes: Optional[str]) -> Dict[str, str]:
@@ -589,53 +589,6 @@ def zed_usb_speed_mbps(devices: List[Dict[str, Any]]) -> Optional[float]:
 LOCK_KEYS = ("exposure", "gain", "white_balance")
 
 
-def lock_path(root: str, node: str, scene: str, distance_m) -> str:
-    """``<root>/<node>/_locks/<scene>_d<cm>.json``: one exposure lock per scene x distance."""
-    d = validate_distance(distance_m)
-    return os.path.join(root, node, LOCKS_DIR, "%s_d%d.json" % (validate_scene(scene),
-                                                               int(round(d * 100))))
-
-
-def resolve_lock(backend: "CameraBackend", root: str, node: str, scene: str, label: str,
-                 distance_m, settle_frames: int,
-                 clock: Callable[[], float] = time.time) -> Dict[str, Any]:
-    """The exposure lock of this capture.
-
-    No-fire: auto exposure and auto white balance settle on the no-fire setup
-    (``backend.settle_auto``), their values become the lock and are written to
-    :func:`lock_path`.  If the fire capture of the same scene x distance already exists,
-    the stored lock is reused instead, so the pair keeps identical values.  Fire: the
-    stored lock is required and reused unchanged.  Returns
-    {exposure, gain, white_balance, source, how, lock_file}.
-    """
-    path = lock_path(root, node, scene, distance_m)
-    fire_rec = capture_paths(root, node, make_capture_id(scene, "fire", distance_m))["record"]
-    if label == "fire" or os.path.isfile(fire_rec):
-        if not os.path.isfile(path):
-            raise CaptureError("no exposure lock %s: capture the no-fire setup of this scene "
-                               "and distance first (its lock is reused for fire)" % path)
-        with open(path, encoding="utf-8") as f:
-            lock = json.load(f)
-        lock["how"] = "reused"
-    else:
-        lock = dict(backend.settle_auto(int(settle_frames)))
-        missing = [k for k in LOCK_KEYS if lock.get(k) is None]
-        if missing:
-            raise CaptureError("auto exposure did not report %s; no lock" % ", ".join(missing))
-        lock.update(scene=scene, distance_m=validate_distance(distance_m), node=node,
-                    determined_unix=clock())
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        if os.path.isfile(path):  # a no-fire retake before any fire capture: keep the old one
-            stamp = time.strftime("%Y%m%dT%H%M%S", time.localtime(clock()))
-            old = os.path.join(os.path.dirname(path), "_superseded")
-            os.makedirs(old, exist_ok=True)
-            shutil.move(path, os.path.join(old, "%s_%s" % (stamp, os.path.basename(path))))
-        write_json(path, lock, exclusive=True)
-        lock["how"] = "determined"
-    lock["lock_file"] = path
-    return lock
-
-
 def lock_mismatch(lock: Dict[str, Any], applied: Dict[str, Any],
                   rel_tol: float = 0.02) -> List[str]:
     """Locked values the camera did not take (read back after applying)."""
@@ -655,8 +608,7 @@ def run_capture(backend: CameraBackend, scene: str, label: str, distance_m, node
                 clock: Callable[[], float] = time.time,
                 sleep: Callable[[float], None] = time.sleep,
                 log: Callable[[str], None] = print,
-                study_gates: bool = False, exposure_lock: bool = False,
-                lock_settle_frames: int = 45) -> Dict[str, Any]:
+                study_gates: bool = False, exposure_lock: bool = False) -> Dict[str, Any]:
     """Open the camera, wait for ``start_at``, keep ``frames`` frames at ``fps``.
 
     Writes every frame and, once the camera has opened, the capture record -- also on
@@ -666,8 +618,8 @@ def run_capture(backend: CameraBackend, scene: str, label: str, distance_m, node
 
     ``study_gates`` (every study capture; prereg sec. 13 draft): the --notes must parse
     (:func:`notes_problems`, checked before the camera opens) and the camera must be on a
-    USB 3.x link (:func:`usb_problems`).  ``exposure_lock``: exposure, gain and white
-    balance fixed per scene x distance (:func:`resolve_lock`), and the capture FAILs if
+    USB 3.x link (:func:`usb_problems`).  ``exposure_lock``: the camera's one fixed
+    exposure, gain and white balance (``camera_exposure.fixed_exposure``), and the capture FAILs if
     any colour frame reports auto exposure on (or does not report it).
     """
     node = validate_node(node)
@@ -706,8 +658,13 @@ def run_capture(backend: CameraBackend, scene: str, label: str, distance_m, node
             if bad:
                 raise CaptureError("USB 3.x gate, capture refused: %s" % "; ".join(bad))
         if exposure_lock:
-            lock = resolve_lock(backend, root, node, scene, label, distance_m,
-                                lock_settle_frames, clock=clock)
+            # one fixed manual exposure per camera, the same for fire and no-fire, every
+            # scene and distance (prereg 13.1 draft; src/data/camera_exposure.py)
+            from src.data.camera_exposure import ExposureError, fixed_exposure
+            try:
+                lock = fixed_exposure(root, node, info, notes=notes)
+            except ExposureError as e:
+                raise CaptureError(str(e))
             applied = dict(backend.apply_lock({k: lock[k] for k in LOCK_KEYS}))
             lock["applied"] = applied
             bad = lock_mismatch(lock, applied)
@@ -910,8 +867,11 @@ def add_capture_args(parser, default_node: str, frames_default=DEFAULT_FRAMES,
     parser.add_argument("--notes", default="", help="required, parsed: " + NOTES_FORMAT)
     parser.add_argument("--no_lock", action="store_true",
                         help="TEST ONLY (e5): no exposure lock; never a study capture")
-    parser.add_argument("--lock_settle_frames", type=int, default=45,
-                        help="frames auto exposure runs before the no-fire lock is read")
+    parser.add_argument("--calibrate_exposure", action="store_true",
+                        help="set this camera's one fixed exposure on a flame-free scene "
+                             "(prereg 13.1 draft); no capture")
+    parser.add_argument("--recalibrate", action="store_true",
+                        help="with --calibrate_exposure: replace an existing exposure file")
 
 
 def probe_sdks() -> Dict[str, Any]:
@@ -945,6 +905,29 @@ def probe_sdks() -> Dict[str, Any]:
         out["pyzed"] = {"import": False, "error": "%s: %s" % (type(e).__name__, e)}
     out["time_unix"] = time.time()
     return out
+
+
+def run_exposure_calibration(backend: "CameraBackend", root: str, node: str, notes: str,
+                             gain=None, recalibrate: bool = False,
+                             log: Callable[[str], None] = print) -> Dict[str, Any]:
+    """``--calibrate_exposure``: open the camera; gain (default unless given), white
+    balance, exposure and a verification on the flame-free scene; close the camera."""
+    from src.data.camera_exposure import calibrate_camera, exposure_path
+    node = validate_node(node)
+    backend.open()
+    try:
+        info = dict(backend.info())
+        bad = usb_problems(info)
+        if bad:
+            raise CaptureError("USB 3.x gate, calibration refused: %s" % "; ".join(bad))
+        rec = calibrate_camera(backend, root, node, dict(backend.exposure_defaults()),
+                               notes=notes, gain=gain, recalibrate=recalibrate, log=log)
+    finally:
+        backend.close()
+    log("fixed exposure %s, gain %s, white balance %s (224 mean luma %s) -> %s"
+        % (rec["exposure"], rec["gain"], rec["white_balance"], rec["luma_224_median"],
+           exposure_path(root, node)))
+    return rec
 
 
 if __name__ == "__main__":  # pragma: no cover - run on the nodes by the orchestrator

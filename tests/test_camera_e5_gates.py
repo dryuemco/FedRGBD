@@ -1,7 +1,7 @@
 """Study-capture gates of the camera prereg's section 13 draft (e5 code), fake cameras only.
 
-Mandatory parsed --notes, the USB 3.x gate, the exposure lock (fixed on the no-fire
-capture, reused unchanged for fire) with its auto-exposure gate, their checks in the
+Mandatory parsed --notes, the USB 3.x gate, the exposure lock (one fixed exposure per
+camera, the same for fire and no-fire) with its auto-exposure gate, their checks in the
 orchestrator, and the flame-height tool.  No camera SDK is needed.
 """
 
@@ -15,16 +15,23 @@ from PIL import Image
 
 from src.data import camera_capture_common as ccc
 from tests.test_camera_capture import (
-    FAKE_NODES, FIRE_NOTES, NOFIRE_NOTES, FakeCamera, FakeClock, _capture, _rec, _session,
+    FAKE_NODES, FIRE_NOTES, NOFIRE_NOTES, FakeCamera, FakeClock, _calibrate, _capture, _rec,
+    _session,
 )
 
 
 def _study(tmp_path, label, camera=None, clock=None, **kw):
     clock = clock or FakeClock()
     notes = FIRE_NOTES if label == "fire" else NOFIRE_NOTES
-    args = dict(label=label, notes=notes, study_gates=True, exposure_lock=True,
-                lock_settle_frames=3, clock=clock)
+    calibrated = kw.pop("calibrated", True)
+    args = dict(label=label, notes=notes, study_gates=True, exposure_lock=True, clock=clock)
     args.update(kw)
+    node = args.get("node", "node_a")
+    if args["exposure_lock"] and calibrated:
+        from src.data.camera_exposure import exposure_path
+        if not os.path.isfile(exposure_path(str(tmp_path), node)):
+            cam = args.get("camera") or camera
+            _calibrate(tmp_path, node, serial=cam.info().get("serial") if cam else "123")
     return _capture(tmp_path, camera=camera or FakeCamera(clock=clock), **args)
 
 
@@ -63,7 +70,7 @@ def test_complete_notes_pass():
 def test_study_capture_without_notes_is_refused_before_anything_is_written(tmp_path):
     cam = FakeCamera()
     with pytest.raises(ccc.CaptureError, match="refused before it started"):
-        _study(tmp_path, "fire", camera=cam, notes="source=torch1")
+        _study(tmp_path, "fire", camera=cam, notes="source=torch1", calibrated=False)
     assert not cam.opened
     assert not (tmp_path / "node_a").exists()
 
@@ -110,49 +117,33 @@ def test_zed_usb_devices_from_sysfs(tmp_path):
 # --------------------------------------------------------------------------- #
 # exposure lock
 # --------------------------------------------------------------------------- #
-def test_no_fire_fixes_the_lock_and_fire_reuses_it_unchanged(tmp_path):
+def test_fire_and_no_fire_use_the_one_fixed_exposure_of_the_camera(tmp_path):
+    _calibrate(tmp_path, "node_a", exposure=210, gain=64, white_balance=4600)
     rec_n, cam_n = _study(tmp_path, "no_fire")
-    assert rec_n["status"] == "complete" and cam_n.settled == 3
-    lock_file = tmp_path / "node_a" / "_locks" / "s03_d200.json"
-    stored = json.loads(lock_file.read_text())
-    assert (stored["exposure"], stored["gain"], stored["white_balance"]) == (166, 64, 4600)
-    assert rec_n["exposure_lock"]["how"] == "determined" and rec_n["ae_on_frames"] == 0
-
-    # the fire capture's camera would settle elsewhere: the lock must not change
-    clock = FakeClock()
-    cam_f = FakeCamera(clock=clock, auto_values=(20, 16, 3000))
-    rec_f, _ = _study(tmp_path, "fire", camera=cam_f, clock=clock)
-    assert rec_f["status"] == "complete" and cam_f.settled is None
-    assert rec_f["exposure_lock"]["how"] == "reused"
-    assert cam_f.applied == {"exposure": 166, "gain": 64, "white_balance": 4600}
+    rec_f, cam_f = _study(tmp_path, "fire")
+    for rec, cam in ((rec_n, cam_n), (rec_f, cam_f)):
+        assert rec["status"] == "complete" and rec["ae_on_frames"] == 0
+        assert rec["exposure_lock"]["how"] == "fixed_camera"
+        assert cam.applied == {"exposure": 210, "gain": 64, "white_balance": 4600}
     meta = json.loads((tmp_path / "node_a" / "s03_fire_d200_0000_meta.json").read_text())
     assert meta["exposure_source"] == "manual_lock" and meta["auto_exposure"] is False
-    assert meta["exposure_lock"] == {"exposure": 166, "gain": 64, "white_balance": 4600}
+    assert meta["exposure_lock"] == {"exposure": 210, "gain": 64, "white_balance": 4600}
+    # another distance and another scene: the same values, nothing determined per capture
+    rec_o, cam_o = _study(tmp_path, "no_fire", scene="s07", distance_m=3.0)
+    assert cam_o.applied == {"exposure": 210, "gain": 64, "white_balance": 4600}
+    assert not (tmp_path / "node_a" / "_locks").exists()
 
 
-def test_fire_without_a_no_fire_lock_is_refused(tmp_path):
-    with pytest.raises(ccc.CaptureError, match="no exposure lock"):
-        _study(tmp_path, "fire")
+@pytest.mark.parametrize("label", ["no_fire", "fire"])
+def test_a_capture_without_a_calibrated_exposure_is_refused(tmp_path, label):
+    with pytest.raises(ccc.CaptureError, match="no fixed exposure"):
+        _study(tmp_path, label, calibrated=False)
 
 
-def test_no_fire_retake_after_fire_keeps_the_pair_on_one_lock(tmp_path):
-    _study(tmp_path, "no_fire")
-    _study(tmp_path, "fire")
-    clock = FakeClock()
-    cam = FakeCamera(clock=clock, auto_values=(20, 16, 3000))
-    rec, _ = _study(tmp_path, "no_fire", camera=cam, clock=clock, retake=True)
-    assert rec["exposure_lock"]["how"] == "reused" and cam.settled is None
-    assert cam.applied["exposure"] == 166
-
-
-def test_no_fire_retake_before_fire_relocks_and_keeps_the_old_lock(tmp_path):
-    _study(tmp_path, "no_fire")
-    clock = FakeClock()
-    cam = FakeCamera(clock=clock, auto_values=(20, 16, 3000))
-    rec, _ = _study(tmp_path, "no_fire", camera=cam, clock=clock, retake=True)
-    assert rec["exposure_lock"]["how"] == "determined" and rec["exposure_lock"]["exposure"] == 20
-    old = list((tmp_path / "node_a" / "_locks" / "_superseded").iterdir())
-    assert len(old) == 1 and json.loads(old[0].read_text())["exposure"] == 166
+def test_an_exposure_file_of_another_camera_is_refused(tmp_path):
+    _calibrate(tmp_path, "node_a", serial="999")
+    with pytest.raises(ccc.CaptureError, match="calibrated on camera 999"):
+        _study(tmp_path, "no_fire")
 
 
 def test_auto_exposure_on_in_a_locked_capture_fails_it(tmp_path):
@@ -189,7 +180,7 @@ def test_unlocked_capture_records_no_lock(tmp_path):
 # --------------------------------------------------------------------------- #
 # back-ends (fake SDK objects)
 # --------------------------------------------------------------------------- #
-def test_realsense_lock_reads_options_after_auto_off_without_colour_metadata(monkeypatch):
+def test_realsense_exposure_defaults_and_lock(monkeypatch):
     from src.data import realsense_capture as rsc
 
     opts = NS(enable_auto_exposure="ae", enable_auto_white_balance="awb", exposure="exp",
@@ -212,36 +203,30 @@ def test_realsense_lock_reads_options_after_auto_off_without_colour_metadata(mon
             self.v[a] = value
 
         def get_option_range(self, a):
-            return {"wb": NS(min=2800.0, max=6500.0, step=10.0)}.get(
-                a, NS(min=1.0, max=10000.0, step=1.0))
+            return {"wb": NS(min=2800.0, max=6500.0, step=10.0, default=4600.0),
+                    "gain": NS(min=0.0, max=128.0, step=1.0, default=64.0)}.get(
+                a, NS(min=1.0, max=10000.0, step=1.0, default=166.0))
 
     b = rsc.RealSenseBackend()
     b.color_sensor = Sensor()
-    grabbed = []
-    b.grab = lambda: grabbed.append(1) or NS(meta={"exposure_source": "sensor_option"})
-    lock = b.settle_auto(5)
-    assert len(grabbed) == 5
-    assert b.color_sensor.log[:2] == [("ae", 1.0), ("awb", 1.0)]
-    assert ("ae", 0.0) in b.color_sensor.log and ("awb", 0.0) in b.color_sensor.log
-    assert (lock["exposure"], lock["gain"], lock["white_balance"]) == (156.0, 64.0, 4600.0)
-    assert "switched off" in lock["source"]
-    applied = b.apply_lock({"exposure": 156.0, "gain": 64.0, "white_balance": 4600.0})
-    assert applied["exposure"] == 156.0 and applied["auto_exposure"] == 0.0
+    d = b.exposure_defaults()
+    assert d["gain"] == 64.0 and d["gain_range"]["max"] == 128.0
+    assert d["white_balance_range"] == {"min": 2800.0, "max": 6500.0, "step": 10.0,
+                                        "default": 4600.0}
+    # 30 fps stream: exposure (100 us units) capped at one frame period
+    assert d["exposure_range"] == {"min": 1.0, "max": 333.0, "step": 1.0, "default": 166.0}
+    applied = b.apply_lock({"exposure": 210.0, "gain": 64.0, "white_balance": 4600.0})
+    assert applied["exposure"] == 210.0 and applied["auto_exposure"] == 0.0
     assert applied["white_balance"] == 4600.0 and applied["auto_white_balance"] == 0.0
 
 
-def test_zed_lock_settles_reads_and_applies(monkeypatch):
+def test_zed_exposure_defaults_and_lock(monkeypatch):
     from src.data import zed_capture as zc
 
     class Zed:
         def __init__(self):
             self.v = {"AEC_AGC": 1, "WHITEBALANCE_AUTO": 1, "EXPOSURE": 37, "GAIN": 52,
                       "WHITEBALANCE_TEMPERATURE": 4620}
-            self.grabs = 0
-
-        def grab(self, rt):
-            self.grabs += 1
-            return "SUCCESS"
 
         def get_camera_settings(self, key):
             return ("SUCCESS", self.v[key])
@@ -255,11 +240,13 @@ def test_zed_lock_settles_reads_and_applies(monkeypatch):
             ERROR_CODE=NS(SUCCESS="SUCCESS"))
     b = zc.ZedBackend()
     b.sl, b.zed, b.runtime = sl, Zed(), None
-    lock = b.settle_auto(4)
-    assert b.zed.grabs == 4
-    assert (lock["exposure"], lock["gain"], lock["white_balance"]) == (37, 52, 4600)
+    d = b.exposure_defaults()
+    assert d["gain"] == 0.0 and d["gain_range"]["max"] == 100.0   # starts at 0
+    assert d["white_balance_range"]["step"] == 100.0
+    assert d["exposure_range"]["min"] == 1.0 and d["exposure_range"]["max"] == 100.0
+    lock = {"exposure": 30, "gain": 40, "white_balance": 4600}
     applied = b.apply_lock(lock)
-    assert applied == {"exposure": 37, "gain": 52, "white_balance": 4600, "auto_exposure": 0,
+    assert applied == {"exposure": 30, "gain": 40, "white_balance": 4600, "auto_exposure": 0,
                        "auto_white_balance": 0}
     b.zed.set_camera_settings = lambda k, v: "FAILURE"
     with pytest.raises(ccc.CaptureError, match="set_camera_settings"):

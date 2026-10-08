@@ -1717,3 +1717,25 @@ amendment.
   jetson-a@127.0.0.1 (true): session stalled after connecting (Connection to 127.0.0.1
   port 2222 timed out). Last successful pass: none recorded" (202 characters with the
   prefix, under msg.exe's 250).
+
+## Camera exposure: one fixed setting per camera (2026-10-08, during e5, before s03)
+
+* `src/data/camera_exposure.py` (new), `configs/camera_wb_region.json` (new):
+  `--calibrate_exposure` in `realsense_capture.py` and `zed_capture.py` sets each camera's
+  single (exposure, gain, white balance) on a flame-free calibration scene. Gain starts at
+  the default (ZED: 0). White balance minimises |R - B| in a neutral wall rectangle.
+  Exposure is bisected until the 224 mean luma lies in [100, 130]; if the exposure cap is
+  reached while the luma is still too dark, the gain is raised by the same bisection. A
+  verification measurement follows. Only measured values are written, to
+  `<root>/<node>/_exposure/exposure.json`.
+* `camera_capture_common.run_capture`: the per scene x distance lock determined on the
+  no-fire capture (`resolve_lock`, `_locks/`) is removed. Every locked capture applies its
+  camera's fixed setting, and it is refused if the setting is missing, belongs to another
+  serial, or was calibrated under other lamps (`lamps_on`). `settle_auto` becomes
+  `exposure_defaults`.
+* Tests: `tests/test_camera_exposure.py` (new); the lock tests of
+  `tests/test_camera_e5_gates.py` and `tests/test_camera_capture.py` are adapted.
+* Why: e5 showed that under the RSUSB backend the "lock" read after auto exposure was the
+  sensor defaults (166/64/4600), not values auto exposure had applied, and the AE gate
+  triggered on real hardware (`s09_no_fire_d300`). Prereg 13.1 and 13.2 (committed with
+  this change) give the policy, sequential capture and the cancelled e5 steps.

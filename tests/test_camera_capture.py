@@ -71,13 +71,13 @@ class FakeCamera(CameraBackend):
                 "stereo_baseline_mm": 50.0, "depth_scale_mm": 1.0, "depth_range_mm": None,
                 "usb_type": self.usb_type}
 
-    def settle_auto(self, n_frames):
-        self.ae = True
-        for _ in range(n_frames):
-            self.grab()
-        self.settled = n_frames
+    def exposure_defaults(self):
         e, g, w = self.auto_values
-        return {"exposure": e, "gain": g, "white_balance": w, "source": "fake auto"}
+        return {"gain": float(g),
+                "gain_range": {"min": 0.0, "max": 128.0, "step": 1.0, "default": float(g)},
+                "white_balance_range": {"min": 2800.0, "max": 6500.0, "step": 10.0,
+                                        "default": float(w)},
+                "exposure_range": {"min": 1.0, "max": 333.0, "step": 1.0, "default": float(e)}}
 
     def apply_lock(self, lock):
         self.ae = self.ae_stuck
@@ -106,6 +106,18 @@ class FakeCamera(CameraBackend):
 
     def close(self):
         self.closed = True
+
+
+def _calibrate(root, node, serial="123", exposure=166, gain=64, white_balance=4600):
+    """The camera's fixed exposure file, as --calibrate_exposure writes it."""
+    from src.data.camera_exposure import exposure_path
+    path = exposure_path(str(root), node)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"node": node, "serial": serial, "exposure": exposure, "gain": gain,
+                   "white_balance": white_balance, "luma_224_median": 115.0,
+                   "determined_unix": 1_790_000_000.0}, f)
+    return path
 
 
 def _capture(tmp_path, node="node_a", clock=None, **kw):
@@ -351,6 +363,7 @@ def test_realsense_module_imports_without_the_sdk_and_captures_via_cli(tmp_path)
     assert rsc.build_parser().parse_args([]).frames is None  # legacy default resolved later
     base = ["--scene", "s02", "--distance_m", "3", "--node", "node_b", "--frames", "3",
             "--root", str(tmp_path)]
+    _calibrate(tmp_path, "node_b")
     assert rsc.main(base + ["--label", "no_fire", "--notes", NOFIRE_NOTES],
                     backend_factory=lambda: FakeCamera()) == 0
     rc = rsc.main(base + ["--label", "fire", "--notes", FIRE_NOTES],
@@ -358,7 +371,7 @@ def test_realsense_module_imports_without_the_sdk_and_captures_via_cli(tmp_path)
     assert rc == 0
     rec = json.loads((tmp_path / "node_b" / "_captures" / "s02_fire_d300.json").read_text())
     assert rec["n_frames_written"] == 3 and rec["fps"] == 5.0
-    assert rec["exposure_lock"]["how"] == "reused" and rec["ae_on_frames"] == 0
+    assert rec["exposure_lock"]["how"] == "fixed_camera" and rec["ae_on_frames"] == 0
     assert rec["notes_parsed"]["source"] == "torch1"
     assert rsc.main(base + ["--label", "fire", "--notes", FIRE_NOTES],
                     backend_factory=lambda: FakeCamera()) == 1  # refuses to overwrite
@@ -386,6 +399,7 @@ def test_zed_cli_defaults_and_capture(tmp_path):
     args = zc.build_parser().parse_args([])
     assert (args.depth_mode, args.resolution, args.node) == ("NEURAL", "HD1080", "node_c")
     assert (args.frames, args.fps, args.root) == (40, 5.0, ccc.DEFAULT_ROOT)
+    _calibrate(tmp_path, "node_c")
     rc = zc.main(["--scene", "s05", "--label", "no_fire", "--distance_m", "1", "--frames",
                   "2", "--root", str(tmp_path), "--notes", NOFIRE_NOTES],
                  backend_factory=lambda: FakeCamera(ir=False, depth_mode="NEURAL"))

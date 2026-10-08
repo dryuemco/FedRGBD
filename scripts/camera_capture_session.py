@@ -13,7 +13,7 @@ scheduled.
     python scripts/camera_capture_session.py --check
 
     # one capture: (scene, label, distance) on node_a/node_b (RealSense) and node_c (ZED);
-    # no-fire first (it fixes the exposure lock of this scene x distance), then fire
+    # each camera uses its one fixed exposure (--calibrate_exposure on every node first)
     python scripts/camera_capture_session.py --scene s01 --label no_fire --distance_m 2 \\
         --notes "source=none; distance_measured_m=2.01; flame_height_cm=0"
     python scripts/camera_capture_session.py --scene s01 --label fire --distance_m 2 \\
@@ -69,8 +69,8 @@ EXPECTED_SERIAL = {"node_a": "239722070442", "node_b": "405622076256", "node_c":
 PROBE_CMD = "python src/data/camera_capture_common.py --probe"
 CLOCK_CMD = 'python3 -c "import time; print(repr(time.time()))"'
 CONTROL_PATH = "~/.ssh/cm-fedrgbd-%r@%h:%p"
-#: 25 s: the nodes open the camera and, for a no-fire capture, let auto exposure settle
-#: before the exposure lock is read (prereg sec. 13 draft); 15 s left no margin for that
+#: 25 s: the nodes open the camera and apply the fixed exposure before the start
+#: (prereg sec. 13 draft); kept from the per-capture lock, which needed the margin
 DEFAULT_LEAD_S = 25.0
 SESSION_LOG = "session_log.jsonl"
 
