@@ -94,8 +94,14 @@ def test_calibration_scene_is_flame_free_and_names_its_lamps(tmp_path, notes, ma
 
 
 def test_a_camera_without_a_neutral_rectangle_is_not_calibrated(tmp_path):
+    # a region file in which this camera has no rectangle yet (independent of the
+    # committed configs/camera_wb_region.json, which fills them in camera by camera)
+    cfg = tmp_path / "wb.json"
+    cfg.write_text(json.dumps({"regions": {"node_b": None}}))
     with pytest.raises(cex.ExposureError, match="no neutral white-balance rectangle"):
-        _cal(tmp_path, SceneCamera(clock=FakeClock()), node="node_a")
+        cex.load_wb_region("node_b", str(cfg))
+    with pytest.raises(cex.ExposureError, match="no neutral white-balance rectangle"):
+        cex.load_wb_region("node_x", str(cfg))
 
 
 def test_one_setting_per_camera_unless_recalibrated(tmp_path):
