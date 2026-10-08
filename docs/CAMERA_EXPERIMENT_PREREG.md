@@ -363,14 +363,16 @@ family, verdict phrase or interpretation rule, and not the preprocessing of sect
   lens options of the ZED 2i, but the lens is not recorded. Commit `2dab803` called the
   old number a transcription error; that was wrong and is corrected here.*
 
-## 13. Amendment 4 (in preparation; the flame-source criterion committed 2026-10-08, before e5)
+## 13. Amendment 4 (in preparation; the flame-source criterion and source committed 2026-10-08, before e5)
 
 > Amendment 4 is written after the pilot of section 10 (scene `s01`, four captures on
 > 2026-10-07, all PASS) and before any study footage. The pilot frames were looked at
 > for technical image properties only: exposure, framing, depth validity, flame size in
 > pixels. No accuracy, loss or prediction quality was computed or inspected.
-> Only the flame-source acceptance criterion is committed now, before any e5 capture, so
-> that the e5 acceptance test is judged by a rule fixed beforehand. The other items of
+> Only the flame-source acceptance criterion (committed 2026-10-08, `ce85a0d`), the choice
+> of source and "One lit source per capture" (committed 2026-10-08, before any e5
+> capture) are committed so far, so that the e5 acceptance test is judged by rules fixed
+> beforehand. The other items of
 > this amendment, including 13.1, are committed before the first study capture. Values
 > marked `[e5]` are filled from the e5 acceptance test (`docs/POST_5B_CHECKLIST.md`).
 
@@ -409,18 +411,23 @@ sections 1 and 4-6.
     the 224 crop covers 1.38 cm at 3 m on the ZED 2i (fy_224 = 218.0 px) and 1.06 cm on
     the RealSense cameras (282-284 px). Below some size, the flame is a few saturated
     pixels rather than a region, unlike the flames in FLAME.
-  - *Source: not yet fixed.* Candidates, in this order:
-    1. a torch, re-tested with its wick adjusted;
-    2. as the alternative, four candles side by side, as one fixed unit.
-
-    The source is the first candidate that passes the criterion at the distances
-    needed.
-  - *To be filled from e5:* the chosen source, the median flame height per camera x
-    distance in 224-pixels, the height in cm against the ruler, and the resulting
-    distance set. [e5]
+  - *Source: four candles side by side, as one source* (source id `candles4`; see "One
+    lit source per capture" below).
+    - Decided by the author on 2026-10-08, before any e5 capture, by a physical
+      comparison with a ruler. No capture was taken and no frame was looked at for it.
+    - The torch, with its wick adjusted, gave a smaller flame than the four candles.
+    - The torch is therefore not tested in e5 (its planned scene `s02` is cancelled).
+      The acceptance test is scene `s03`, with the four candles and 40 frames per capture.
+    - The reason is also written into every e5 fire capture's `--notes`.
+  - *To be filled from e5:* the median flame height per camera x distance in 224-pixels,
+    the height in cm against the ruler, and the resulting distance set. [e5]
   - The two pillar candles of the pilot are not used further.
   - Section 2 already allows the source type to be chosen per scene. What is new is the
     size criterion.
+* **One lit source per capture.** Exactly one flame source is lit in a fire capture, and
+  the same one in every fire capture of a scene. It is recorded through the notes of
+  13.1. The four candles side by side count as one source with one source id
+  (`candles4`): always the same four candles, in the same arrangement, all lit together.
 
 ## 14. Erratum (2026-10-07)
 
