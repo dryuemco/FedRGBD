@@ -379,6 +379,64 @@ def _criterion_row(tmp_path, node, flame_rows, n=40):
     return cfh.measure_node(root, node, "s02", 3.0)[0]
 
 
+def test_flame_region_ignores_glow_and_reflection_and_takes_the_flame():
+    from scripts import camera_flame_height as cfh
+
+    ref = np.full((224, 224, 3), 150, np.uint8)            # white wall / floor at 150
+    fire = ref.copy()
+    fire[60:140, 40:200] = (215, 190, 200)                 # wide diffuse pink glow
+    fire[90:110, 100:108] = (255, 230, 150)                # the flame: 20 rows
+    fire[150:156, 98:110] = (250, 220, 140)                # floor reflection below
+    top, left, bottom, right = cfh.flame_region(fire, ref, 40)
+    assert (top, bottom) == (90, 109) and (left, right) == (100, 107)
+    # the old rule (largest brighter region) would have taken the glow: 80 rows
+    old = (fire.astype(np.int16) - ref.astype(np.int16)).max(axis=2) >= 40
+    assert old[60:140].any(axis=1).sum() == 80
+
+
+def test_flame_components_touching_the_crop_edge_are_dropped():
+    from scripts import camera_flame_height as cfh
+
+    ref = np.full((224, 224, 3), 120, np.uint8)
+    fire = ref.copy()
+    fire[0:40, 150:170] = (255, 255, 255)                  # brightest, but on the top edge
+    assert cfh.flame_region(fire, ref, 40) is None
+    fire[100:108, 60:64] = (250, 230, 150)                 # a flame inside the crop
+    assert cfh.flame_region(fire, ref, 40) == (100, 60, 107, 63)
+
+
+def test_tool_validation_band_per_distance():
+    from scripts import camera_flame_height as cfh
+
+    assert cfh.VALIDATION_BAND == {1.0: (0.5, 4.0), 2.0: (0.5, 2.0), 3.0: (0.5, 2.0)}
+    rows = [{"node": n, "distance_m": 2.0, "criterion": c} for n, c in
+            (("node_a", "PASS"), ("node_b", "NOT VALIDATED"), ("node_c", "FAIL"))]
+    assert "NOT DECIDED -- the flame tool is not validated" in cfh.distance_decision(rows)
+
+
+def test_flame_region_is_none_on_a_flame_free_frame():
+    from scripts import camera_flame_height as cfh
+
+    ref = np.full((224, 224, 3), 120, np.uint8)
+    frame = ref.copy()
+    frame[:, :112] = (170, 168, 172)    # a +50 brightness change, grey (e.g. someone's shadow
+                                         # leaving, a lamp flicker): not flame-like
+    assert cfh.flame_region(frame, ref, 40) is None
+    assert cfh.flame_region(ref, ref, 40) is None
+
+
+def test_lit_candle_body_below_the_flame_is_part_of_the_component():
+    from scripts import camera_flame_height as cfh
+
+    ref = np.full((224, 224, 3), 120, np.uint8)
+    fire = ref.copy()
+    fire[100:110, 110:114] = (255, 235, 170)               # flame, 10 rows
+    fire[110:130, 108:116] = (235, 170, 110)               # lit wax, warm and bright
+    top, _, bottom, _ = cfh.flame_region(fire, ref, 40)
+    # documented limitation: a lit, warm candle body joins the flame (1 m in s03)
+    assert (top, bottom) == (100, 129)
+
+
 def test_flame_criterion_is_the_median_over_40_frames_at_5_px(tmp_path):
     from scripts import camera_flame_height as cfh
 
@@ -388,12 +446,16 @@ def test_flame_criterion_is_the_median_over_40_frames_at_5_px(tmp_path):
     ok = _criterion_row(tmp_path, "node_a", 30)
     assert ok["n_fire_frames"] == 40 and ok["measured_px_median"] >= 5
     assert ok["criterion"] == "PASS"
+    assert ok["tool_validated"] and ok["validation_band"] == "0.5-2"
     small = _criterion_row(tmp_path, "node_b", 19)
-    assert small["measured_px_median"] < 5 and small["criterion"] == "FAIL"
+    # 3.9 px against 8.6 expected: ratio 0.45, outside the 3 m band -> no criterion
+    # decision (prereg 13.2 (b)); criterion() itself would say FAIL
+    assert small["measured_px_median"] < 5 and not small["tool_validated"]
+    assert small["criterion"] == "NOT VALIDATED"
     # 21 of 40 frames without a visible flame count as 0 px: the median is 0 -> FAIL
     flicker = _criterion_row(tmp_path, "node_c", [108] * 19 + [0] * 21)
     assert flicker["n_frames_detected"] == 19 and flicker["measured_px_min"] == 0
-    assert flicker["measured_px_median"] == 0 and flicker["criterion"] == "FAIL"
+    assert flicker["measured_px_median"] == 0 and flicker["criterion"] == "NOT VALIDATED"
     assert cfh.criterion(5.0, 40) == "PASS" and cfh.criterion(4.5, 40) == "FAIL"
     assert cfh.criterion(9.0, 39) == "INCOMPLETE"
 

@@ -568,6 +568,47 @@ sections 1 and 4-6.
     - The torch is therefore not tested in e5 (its planned scene `s02` is cancelled).
       The acceptance test is scene `s03`, with the four candles and 40 frames per capture.
     - The reason is also written into every e5 fire capture's `--notes`.
+  - *Flame-tool error fix made after the e5 data was seen* (2026-10-08, decided by the
+    author; committed and pushed before the fixed tool was run on any fire frame).
+    - *The error.* The first version of `scripts/camera_flame_height.py` (`3681d83`)
+      took the **largest** region of pixels at least 40 (8-bit) brighter than the
+      no-fire median reference. On the D435i's s03 captures it measured 35, 21.5 and
+      45 px at 1, 2 and 3 m, against 9.9, 4.9 and 3.3 px expected from the ruler.
+      - The author looked at the overlays (the median fire frame with the measured box).
+        At 3 m the box (about 34 x 44 px at 224) covered not the flame core but the
+        flame's glow on the two walls of the corner and on the floor. At 2 m it took in
+        the floor glow, and at 1 m the lit candle body.
+      - Run on the no-fire frames, presented as fire against their own reference, the
+        first version found 0 px at 1 and 2 m. At 3 m it found a region in 17 of 40
+        frames (up to 101 px, touching the crop edge), with median 0.
+    - *The fix.* A pixel is a flame pixel only if it is at least 40 brighter than the
+      reference **and** looks like flame itself:
+      - either a near-saturated core (max channel >= 245, any hue);
+      - or bright and warm (max channel >= 200, R >= G >= B, saturation >= 0.25).
+
+      Components (8-connected) that touch the edge of the 224 crop are dropped. The
+      flame is the remaining component that contains the brightest flame pixel (ties:
+      the larger brightness increase, then the topmost). Its height is its row span, as
+      before.
+      - The constants 245 / 200 / 0.25 are the same for all three cameras. They were
+        written down after the D435i's three median fire overlays had been seen and
+        before the fixed tool was run on any fire frame. They are never tuned to a
+        distance result.
+    - *Validation, fixed before applying the tool to fire frames.*
+      - (a) On the no-fire frames, presented as fire, the fixed tool must find 0 px. It
+        does at 1, 2 and 3 m on the D435i.
+      - (b) On the fire frames, `ratio_measured_expected` (measured px over the ruler's
+        expected px) must lie in [0.5, 2.0] at 2 m and 3 m, and in [0.5, 4.0] at 1 m.
+        The 1 m band is wider because the four candles stand one behind the other and
+        the lit candle body can join the flame.
+      - If (b) holds at a distance, the tool counts as validated there, and the 5 px
+        criterion is applied with it.
+      - If (b) fails at a distance, the tool is not validated for that distance. No
+        criterion decision is taken there (the tool prints `NOT VALIDATED`, and the
+        distance is `NOT DECIDED`), the result is reported, and the tool is not
+        readjusted.
+    - The tool is checked per camera x distance. The distance decision itself is taken
+      only after all three cameras' s03 exist.
   - *To be filled from e5:* the median flame height per camera x distance in 224-pixels,
     the height in cm against the ruler, and the resulting distance set. [e5]
   - The two pillar candles of the pilot are not used further.

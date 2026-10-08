@@ -13,11 +13,26 @@ the ruler predicts from the recorded intrinsics:
     expected_px = flame_height_cm / 100 * fy_224 / distance_m
     fy_224      = fy * (height after the shorter side is resized to 224) / height
 
-Measurement, per node, for one scene x distance: the no-fire capture (same exposure
-lock) gives a per-pixel median reference at 224; in every fire frame the flame is the
-largest 8-connected region where some channel is at least ``--threshold`` brighter than
-the reference; its height is its row span, and a frame with no such region counts as
-0 px (no visible flame).  The median over all fire frames is the criterion's statistic,
+Measurement, per node, for one scene x distance: the no-fire capture (same fixed
+exposure) gives a per-pixel median reference at 224.  In every fire frame a pixel is a
+*flame pixel* if some channel is at least ``--threshold`` brighter than the reference
+AND the pixel itself looks like flame: either a near-saturated core (max channel >=
+:data:`FLAME_CORE_V`, any hue) or bright and warm (max channel >= :data:`FLAME_V_MIN`,
+R >= G >= B, saturation >= :data:`FLAME_WARM_S_MIN`).  Diffuse, low-saturation glow on
+walls and floor fails both.  8-connected components of flame pixels that touch the edge
+of the 224 crop are dropped; the flame is the remaining component that contains the
+brightest flame pixel (ties: larger brightness increase, then the topmost, i.e. the
+flame above its floor reflection).  Its height is its row span,
+and a frame without flame pixels counts as 0 px (no visible flame).
+
+Tool fix (2026-10-08, after e5 data had been seen; prereg 13.2): the first version took
+the *largest* region of any brightness increase, which in s03 included the flame's
+glow on the walls and the floor.  The pixel rule and the component choice above replace
+it.  Its constants were fixed before the fixed tool was run on any fire frame, are
+the same for all three cameras, and are never tuned to a distance result.  The tool is
+validated per distance by (b) of prereg 13.2: ratio_measured_expected within
+:data:`VALIDATION_BAND` (1 m wider: the candles stand one behind the other and the lit
+candle body can join the flame).  The median over all fire frames is the criterion's statistic,
 reported with min and max (flicker).  A capture with fewer or more than 40 fire frames is
 INCOMPLETE, never PASS.  The flame height (cm) and measured distance come from the
 fire capture's parsed ``--notes`` unless given on the command line.
@@ -62,7 +77,7 @@ COLUMNS = ("node", "scene", "distance_m", "distance_measured_m", "flame_height_c
            "fy_native", "fy_224", "expected_px", "measured_px_median",
            "measured_px_min", "measured_px_max", "measured_cm_median", "ratio_measured_expected",
            "n_fire_frames", "n_frames_detected", "touches_crop_border", "threshold",
-           "criterion_px", "criterion")
+           "validation_band", "tool_validated", "criterion_px", "criterion")
 
 
 def _is_study_root(root: str) -> bool:
@@ -107,18 +122,48 @@ def _label(mask: np.ndarray) -> Tuple[np.ndarray, int]:
         return lab, n
 
 
+#: flame-pixel rule (tool fix 2026-10-08, see the module docstring)
+FLAME_CORE_V = 245        # near-saturated flame core: any hue
+FLAME_V_MIN = 200         # otherwise bright ...
+FLAME_WARM_S_MIN = 0.25   # ... and warm (R >= G >= B) with at least this saturation
+#: (b) of prereg 13.2: the tool counts as validated at a distance if the measured/expected
+#: ratio lies in this band; outside it, no criterion decision for that distance
+VALIDATION_BAND = {1.0: (0.5, 4.0), 2.0: (0.5, 2.0), 3.0: (0.5, 2.0)}
+
+
+def flame_mask(fire: np.ndarray, reference: np.ndarray, threshold: int
+               ) -> Tuple[np.ndarray, np.ndarray]:
+    """(flame-pixel mask, brightness increase) of one 224 frame against the reference."""
+    f = fire.astype(np.int16)
+    diff = (f - reference.astype(np.int16)).max(axis=2)
+    r, g, b = f[..., 0], f[..., 1], f[..., 2]
+    v = f.max(axis=2)
+    s = (v - f.min(axis=2)) / np.maximum(v, 1).astype(np.float64)
+    core = v >= FLAME_CORE_V
+    warm = (v >= FLAME_V_MIN) & (r >= g) & (g >= b) & (s >= FLAME_WARM_S_MIN)
+    return (diff >= int(threshold)) & (core | warm), diff
+
+
 def flame_region(fire: np.ndarray, reference: np.ndarray, threshold: int
                  ) -> Optional[Tuple[int, int, int, int]]:
-    """(top, left, bottom, right), inclusive, of the largest brighter-than-reference
-    region of one 224 frame, or None if no pixel passes the threshold."""
-    diff = (fire.astype(np.int16) - reference.astype(np.int16)).max(axis=2)
-    mask = diff >= int(threshold)
+    """(top, left, bottom, right), inclusive, of the flame in one 224 frame: the
+    component of flame pixels, not touching the crop edge, holding the brightest one;
+    None if there is none."""
+    mask, diff = flame_mask(fire, reference, threshold)
     if not mask.any():
         return None
-    lab, n = _label(mask)
-    sizes = np.bincount(lab.ravel())
-    sizes[0] = 0
-    ys, xs = np.nonzero(lab == int(sizes.argmax()))
+    lab, _ = _label(mask)
+    # components touching the edge of the crop are not the flame
+    edge = np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))
+    mask = mask & ~np.isin(lab, edge[edge > 0])
+    if not mask.any():
+        return None
+    v = fire.max(axis=2).astype(np.int32)
+    ys, xs = np.nonzero(mask)
+    # brightest flame pixel; ties -> larger increase, then topmost, then leftmost
+    order = np.lexsort((xs, ys, -diff[ys, xs], -v[ys, xs]))
+    seed = lab[ys[order[0]], xs[order[0]]]
+    ys, xs = np.nonzero(lab == seed)
     return int(ys.min()), int(xs.min()), int(ys.max()), int(xs.max())
 
 
@@ -188,6 +233,13 @@ def measure_node(root: str, node: str, scene: str, distance_m: float,
         "touches_crop_border": border, "threshold": threshold,
         "criterion_px": CRITERION_PX, "criterion": criterion(med, len(fire)),
     }
+    band = VALIDATION_BAND.get(round(float(distance_m), 1))
+    ratio = row["ratio_measured_expected"]
+    row["validation_band"] = None if band is None else "%g-%g" % band
+    row["tool_validated"] = bool(band and ratio is not None and band[0] <= ratio <= band[1])
+    if not row["tool_validated"] and row["criterion"] != "INCOMPLETE":
+        # (b): no criterion decision where the tool is not validated
+        row["criterion"] = "NOT VALIDATED"
     return row, med_frame, med_region
 
 
@@ -211,6 +263,9 @@ def distance_decision(rows: Sequence[Dict]) -> str:
     if any(v == "INCOMPLETE" for v in verdicts.values()):
         return "distance %g m: NOT DECIDED -- a capture does not have %d frames (%s)" % (
             d, CRITERION_FRAMES, detail)
+    if any(v == "NOT VALIDATED" for v in verdicts.values()):
+        return ("distance %g m: NOT DECIDED -- the flame tool is not validated at this "
+                "distance on every camera (prereg 13.2 (b)) (%s)" % (d, detail))
     return "distance %g m: FAIL -- removed from the study's distance set (%s)" % (d, detail)
 
 

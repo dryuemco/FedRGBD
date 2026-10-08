@@ -1739,3 +1739,15 @@ amendment.
   sensor defaults (166/64/4600), not values auto exposure had applied, and the AE gate
   triggered on real hardware (`s09_no_fire_d300`). Prereg 13.1 and 13.2 (committed with
   this change) give the policy, sequential capture and the cancelled e5 steps.
+
+## Flame tool: flame-pixel rule, crop-edge exclusion, validation band (2026-10-08, after e5 data was seen)
+
+* `scripts/camera_flame_height.py`: the flame is no longer the largest region of any
+  brightness increase, which on the D435i's s03 captures took the glow on the walls and
+  the floor. A flame pixel must also be either near-saturated (>= 245) or bright and warm
+  (>= 200, R >= G >= B, saturation >= 0.25). Components touching the crop edge are dropped,
+  and the component holding the brightest flame pixel is taken. A per-distance validation
+  band on `ratio_measured_expected` (1 m: 0.5-4.0; 2 m and 3 m: 0.5-2.0) gives
+  `NOT VALIDATED` (no criterion decision) outside it. Prereg 13.2 records the fix and its
+  validation; both were committed before the fixed tool was run on any fire frame.
+* Tests: `tests/test_camera_e5_gates.py`.
