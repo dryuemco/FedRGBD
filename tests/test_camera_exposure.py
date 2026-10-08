@@ -20,9 +20,9 @@ class SceneCamera(FakeCamera):
     """Uniform frames: level = k * exposure; the white balance tilts R against B,
     neutral (R == B) at ``neutral_wb``."""
 
-    def __init__(self, k=0.4, neutral_wb=4800.0, **kw):
+    def __init__(self, k=0.4, neutral_wb=4800.0, wb_dir=1.0, **kw):
         super().__init__(**kw)
-        self.k, self.neutral_wb = k, neutral_wb
+        self.k, self.neutral_wb, self.wb_dir = k, neutral_wb, wb_dir
         self.setting = {"exposure": 0.0, "white_balance": neutral_wb}
         self.log = []
 
@@ -35,7 +35,7 @@ class SceneCamera(FakeCamera):
         fr = super().grab()
         level = min(250.0, self.k * float(self.setting["exposure"])
                     * (1.0 + float(self.setting["gain"]) / 64.0) / 2.0)
-        tilt = 0.5 * (float(self.setting["white_balance"]) - self.neutral_wb) / 1000.0
+        tilt = self.wb_dir * 0.5 * (float(self.setting["white_balance"]) - self.neutral_wb) / 1000.0
         fr.rgb[..., 0] = np.uint8(np.clip(level * (1 + tilt), 0, 255))
         fr.rgb[..., 1] = np.uint8(np.clip(level, 0, 255))
         fr.rgb[..., 2] = np.uint8(np.clip(level * (1 - tilt), 0, 255))
@@ -212,3 +212,25 @@ def test_session_check_same_measurement_for_zed_and_realsense(tmp_path):
     _cal(tmp_path, ZedLike(k=8.0, clock=FakeClock()), node="node_c")
     chk = _check(tmp_path, ZedLike(k=8.0, clock=FakeClock()), node="node_c")
     assert chk["session_check"] == "PASS" and chk["node"] == "node_c"
+
+
+@pytest.mark.parametrize("wb_dir,neutral", [(1.0, 4800.0), (-1.0, 4800.0), (-1.0, 3500.0),
+                                            (1.0, 6000.0)])
+def test_white_balance_search_works_in_both_directions(tmp_path, wb_dir, neutral):
+    # wb_dir -1: R - B falls with the setting, as on the ZED 2i (+47 at 2800, -38 at 6500)
+    cam = SceneCamera(k=0.8, neutral_wb=neutral, wb_dir=wb_dir, clock=FakeClock())
+    wb, trace = cex.search_white_balance(cam, 64.0, 166.0,
+                                         {"min": 2800.0, "max": 6500.0, "step": 10.0},
+                                         {"x0": 0.1, "x1": 0.4, "y0": 0.1, "y1": 0.3},
+                                         log=lambda m: None)
+    assert abs(wb - neutral) <= 20.0
+    assert abs(trace[0]["r_minus_b"]) > 5 and abs(trace[1]["r_minus_b"]) > 5   # both ends
+
+
+def test_white_balance_without_a_sign_change_takes_the_better_end(tmp_path):
+    cam = SceneCamera(k=0.8, neutral_wb=2000.0, wb_dir=-1.0, clock=FakeClock())  # below range
+    wb, _ = cex.search_white_balance(cam, 64.0, 166.0,
+                                     {"min": 2800.0, "max": 6500.0, "step": 100.0},
+                                     {"x0": 0.1, "x1": 0.4, "y0": 0.1, "y1": 0.3},
+                                     log=lambda m: None)
+    assert wb == 2800.0

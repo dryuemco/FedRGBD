@@ -12,8 +12,11 @@ white balance off.  The values are set once per camera by :func:`calibrate_camer
 2. **white balance**: with gain at its default and exposure at the camera's default, the
    value on the white balance grid that minimises |mean R - mean B| inside the camera's
    neutral wall rectangle (``configs/camera_wb_region.json``, normalized coordinates).
-   Bisection on the sign of R - B (a higher white balance setting makes the image
-   warmer), then the better of the two bracketing grid values;
+   Bisection on the sign of R - B; the direction (does R - B rise or fall with the
+   setting?) is taken from the signs at the two ends of the range -- the RealSense image
+   gets warmer with a higher setting, the ZED's colder (technical fix 2026-10-09, after
+   the first ZED calibration had been seen).  Then the better of the two bracketing grid
+   values; with no sign change over the range, the better end;
 3. **exposure**: gain and white balance fixed, the first exposure met by a bisection on
    a log scale (start: the camera's default) whose 224 input image (section 3 geometry)
    has a mean 8-bit luma in :data:`LUMA_TARGET`.  If the exposure cap is reached and the
@@ -123,7 +126,8 @@ def measure(backend, setting: Dict[str, float], region: Dict[str, float],
 
 def search_white_balance(backend, gain, exposure, wb_range, region, max_steps=MAX_STEPS,
                          log=print) -> Tuple[float, List[Dict[str, Any]]]:
-    """The grid value minimising |R - B| in ``region`` (bisection on the sign of R - B)."""
+    """The grid value minimising |R - B| in ``region``: bisection on the sign of R - B,
+    in whichever direction R - B changes between the two ends of the range."""
     lo, hi = float(wb_range["min"]), float(wb_range["max"])
     step = float(wb_range.get("step") or 1.0)
     trace: List[Dict[str, Any]] = []
@@ -139,15 +143,16 @@ def search_white_balance(backend, gain, exposure, wb_range, region, max_steps=MA
         return seen[wb]["r_minus_b"]
 
     d_lo, d_hi = at(lo), at(hi)
-    if d_lo >= 0 or d_hi <= 0:          # no sign change: the better end
+    if d_lo == 0 or d_hi == 0 or (d_lo > 0) == (d_hi > 0):   # no sign change: better end
         return (lo if abs(d_lo) <= abs(d_hi) else hi), trace
+    low_side_negative = d_lo < 0      # RealSense: R - B rises with the setting; ZED: falls
     for _ in range(int(max_steps)):
         if hi - lo <= step:
             break
         mid = _snap((lo + hi) / 2.0, lo, hi, step)
         if mid in (lo, hi):
             break
-        if at(mid) < 0:
+        if (at(mid) < 0) == low_side_negative:
             lo = mid
         else:
             hi = mid

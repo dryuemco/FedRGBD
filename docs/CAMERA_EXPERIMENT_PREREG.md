@@ -444,10 +444,22 @@ a change to section 2 that has to be disclosed in the paper and the response let
       neutral rectangle on the white wall. The rectangle is defined per camera in
       normalized coordinates (`configs/camera_wb_region.json`). It excludes the curtain,
       the floor, the skirting board, the objects and the flame position. The search
-      bisects on the sign of R - B, assuming that a higher white balance setting makes
-      the image warmer, and then takes the better of the two neighbouring grid values;
-      a tie goes to the lower value. If R - B does not change sign over the range, the
-      better end of the range is taken.
+      bisects on the sign of R - B and then takes the better of the two neighbouring
+      grid values; a tie goes to the lower value. If R - B does not change sign over
+      the range, the better end of the range is taken.
+      - *Technical fix after the ZED calibration data was seen (2026-10-09, decided by
+        the author; committed before the ZED recalibration).* The search first assumed
+        that a higher white balance setting makes the image warmer. That holds on both
+        RealSense cameras. On the ZED 2i it is the other way round: R - B was +47 at
+        2800 K and -38 at 6500 K. The first version treated this as "no sign change"
+        and took 6500 K, which gave R - B = -165 in the verification; that calibration
+        is invalid and is moved to `_superseded/` by `--recalibrate`. The direction is
+        now taken from the signs of R - B at the two ends of the range, and the
+        bisection follows it. No flame frame is involved.
+      - *Observation, not verified.* In the same ZED calibration the 224 luma stayed at
+        74.28-74.30 for every exposure from 75 to 100 % of the frame period. A possible
+        cause is the frame period at 15 fps; it was not verified. The gain step of
+        step 3 applies as written.
     - *Step 3, exposure.* Gain and white balance are fixed. The exposure is the first
       value reached by a bisection on a log scale, starting at the camera's default,
       whose section-3 224 input image has a mean 8-bit luma in [100, 130]. A frame that
