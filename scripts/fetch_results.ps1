@@ -45,8 +45,22 @@
 
     Windows OpenSSH is used explicitly (C:\Windows\System32\OpenSSH\ssh.exe), because
     the key lives in the Windows ssh-agent, which Git Bash's own ssh cannot see.
-    Every remote call uses BatchMode=yes and a connect timeout, so the job fails fast
-    and never hangs a scheduled task.
+    Every remote call uses BatchMode=yes, a connect timeout and ServerAlive probes.
+
+    Time limits (added 2026-10-08). A connect timeout alone did not stop a pass from
+    hanging: on the night of 2026-10-07 the passes from 19:34 to 01:34 connected and
+    then sat until the task's 30-minute ExecutionTimeLimit killed them, leaving no
+    line after "fetch start". Now every external program (ssh, scp, python) runs
+    under its own limit (call_timeout_s, scp_timeout_s) inside a limit for the whole
+    pass (pass_timeout_s, below the task's 30 minutes); a call that overruns is
+    killed, the pass ends as "timeout" and a pop-up says so.
+
+    Pass bookkeeping (logs/fetch_pass.state.json). Each pass records its start before
+    any remote call and its end on every exit path. The next pass checks it first:
+    a pass that started and never recorded an end (killed by the task limit, a
+    reboot, a power cut) raises a pop-up; so does a last successful pass older than
+    stale_after_minutes, repeated at most every stale_alert_repeat_minutes. Both
+    checks need nothing remote, so they work when the node or the network is down.
 
 .PARAMETER ConfigPath
     JSON config; see scripts/fetch_results.config.example.json. Defaults to
@@ -55,19 +69,25 @@
 .PARAMETER DryRun
     Do everything except the scp: useful for the by-hand test before scheduling.
 
+.PARAMETER LogDir
+    Where fetch.log and the state files live (default <repo>\logs). Tests point it
+    elsewhere. Environment variable FEDRGBD_FETCH_NO_POPUP=1 logs each pop-up as a
+    [POPUP] line instead of showing it (tests only).
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File scripts\fetch_results.ps1 -DryRun
 #>
 [CmdletBinding()]
 param(
     [string]$ConfigPath,
-    [switch]$DryRun
+    [switch]$DryRun,
+    [string]$LogDir
 )
 
 $ErrorActionPreference = 'Stop'
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$LogDir = Join-Path $RepoRoot 'logs'
+if (-not $LogDir) { $LogDir = Join-Path $RepoRoot 'logs' }
 $LogFile = Join-Path $LogDir 'fetch.log'
 
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir | Out-Null }
@@ -104,12 +124,73 @@ $Remote = '{0}@{1}' -f $cfg.user, $cfg.host
 $RemoteRepo = $cfg.remote_repo.TrimEnd('/')
 $LocalResults = Join-Path $RepoRoot 'results'
 $ConnectTimeout = if ($cfg.connect_timeout_s) { [int]$cfg.connect_timeout_s } else { 15 }
+$CallTimeout = if ($cfg.call_timeout_s) { [int]$cfg.call_timeout_s } else { 120 }
+$ScpTimeout = if ($cfg.scp_timeout_s) { [int]$cfg.scp_timeout_s } else { 600 }
+$PassTimeout = if ($cfg.pass_timeout_s) { [int]$cfg.pass_timeout_s } else { 1200 }
+$StaleAfterMinutes = if ($cfg.stale_after_minutes) { [int]$cfg.stale_after_minutes } else { 150 }
+$StaleRepeatMinutes = if ($cfg.stale_alert_repeat_minutes) { [int]$cfg.stale_alert_repeat_minutes } else { 180 }
 $SshOpts = @(
     '-o', 'BatchMode=yes',                    # never prompt; fail instead
     '-o', ("ConnectTimeout={0}" -f $ConnectTimeout),
+    '-o', 'ServerAliveInterval=15',           # a silent session after login ends in ~60 s
+    '-o', 'ServerAliveCountMax=4',
     '-o', 'StrictHostKeyChecking=accept-new'
 )
 if ($cfg.identity_file) { $SshOpts += @('-i', $cfg.identity_file) }
+$SshPortOpts = @(); $ScpPortOpts = @()
+if ($cfg.port) { $SshPortOpts = @('-p', [string]$cfg.port); $ScpPortOpts = @('-P', [string]$cfg.port) }
+
+$PassStart = Get-Date
+$PassDeadline = $PassStart.AddSeconds($PassTimeout)
+
+# --------------------------------------------------------------------------- #
+# external programs under a time limit
+# --------------------------------------------------------------------------- #
+class PassTimeoutException : System.Exception {
+    PassTimeoutException([string]$m) : base($m) {}
+}
+
+function ConvertTo-WinArg {
+    <#  Quote one argument for the MSVCRT command-line parser that ssh.exe, scp.exe
+        and python.exe use. #>
+    param([string]$Arg)
+    if ($Arg -ne '' -and $Arg -notmatch '[\s"]') { return $Arg }
+    $a = $Arg -replace '(\\*)"', '$1$1\"'
+    $a = $a -replace '(\\+)$', '$1$1'
+    return '"' + $a + '"'
+}
+
+function Invoke-Native {
+    <#  Run a program, capture stdout and stderr, and kill it if it outlives
+        min(TimeoutS, what is left of the pass). A kill throws PassTimeoutException,
+        which ends the pass. stderr is data, never a reason to throw. #>
+    param([string]$Exe, [string[]]$Arguments, [int]$TimeoutS, [string]$What)
+    $left = [int][Math]::Floor(($PassDeadline - (Get-Date)).TotalSeconds)
+    if ($left -le 0) {
+        throw [PassTimeoutException]::new(("the pass exceeded its {0} s limit before: {1}" -f $PassTimeout, $What))
+    }
+    $limit = [Math]::Min($TimeoutS, $left)
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $Exe
+    $psi.Arguments = ($Arguments | ForEach-Object { ConvertTo-WinArg $_ }) -join ' '
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.CreateNoWindow = $true
+    $psi.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+    $psi.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+    $p = [System.Diagnostics.Process]::Start($psi)
+    $outTask = $p.StandardOutput.ReadToEndAsync()
+    $errTask = $p.StandardError.ReadToEndAsync()
+    if (-not $p.WaitForExit($limit * 1000)) {
+        try { $p.Kill() } catch { }
+        $why = "no answer within {0} s" -f $TimeoutS
+        if ($limit -lt $TimeoutS) { $why = "the pass reached its {0} s limit" -f $PassTimeout }
+        throw [PassTimeoutException]::new(("{0}: {1}" -f $What, $why))
+    }
+    $p.WaitForExit()                          # drain the async readers
+    return [pscustomobject]@{ Out = $outTask.Result; Err = $errTask.Result; Exit = $p.ExitCode }
+}
 
 # --------------------------------------------------------------------------- #
 # remote helpers -- the complete set of remote operations this script performs
@@ -118,22 +199,19 @@ function Invoke-Remote {
     <#  Run one read-only command on the node. Returns stdout; $script:LastExit holds
         the exit code. stderr is captured into the log rather than the return value. #>
     param([string]$Command)
-    $errFile = [System.IO.Path]::GetTempFileName()
-    # Windows PowerShell 5.1 turns ANY stderr output of a native command into a
-    # terminating error under $ErrorActionPreference = 'Stop', even when redirected.
-    # ssh's stderr is data here (logged below), never a reason to abort the pass.
-    $prevEap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        $out = & $SshExe @SshOpts $Remote $Command 2>$errFile
-        $script:LastExit = $LASTEXITCODE
-        $err = (Get-Content $errFile -Raw -ErrorAction SilentlyContinue)
-        if ($script:LastExit -ne 0 -and $err) { Write-Log 'WARN' ("ssh stderr: {0}" -f $err.Trim()) }
-        return $out
-    } finally {
-        $ErrorActionPreference = $prevEap
-        Remove-Item $errFile -ErrorAction SilentlyContinue
+    $what = "ssh to {0} ({1})" -f $Remote, ($Command -split ' ')[0]
+    $r = Invoke-Native $SshExe ($SshOpts + $SshPortOpts + @($Remote, $Command)) $CallTimeout $what
+    $script:LastExit = $r.Exit
+    if ($r.Exit -ne 0 -and $r.Err) { Write-Log 'WARN' ("ssh stderr: {0}" -f $r.Err.Trim()) }
+    # ssh connected, then the session stalled: ended by ServerAlive (15 s x 4), by its
+    # own timeout during the key exchange, or by the node's sshd giving up on a login
+    # that did not complete (the 2026-10-08 02:00-04:54 passes). Not "node down" --
+    # that is "connect to host ...: Connection timed out/refused" -- so it ends the pass
+    # as a hung one, with a pop-up.
+    if ($r.Exit -eq 255 -and $r.Err -cmatch '(?m)^(Connection to \S+ port \d+ timed out|Timeout, server \S+ not responding|Connection closed by \S+ port \d+)') {
+        throw [PassTimeoutException]::new(("{0}: session stalled after connecting ({1})" -f $what, $Matches[1]))
     }
+    return $r.Out
 }
 
 function Test-Reachable {
@@ -186,6 +264,7 @@ function Show-Alert {
         so msg.exe (which returns immediately) is tried first and the MessageBox
         fallback is launched as a detached process. #>
     param([string]$Body)
+    if ($env:FEDRGBD_FETCH_NO_POPUP -eq '1') { Write-Log 'POPUP' $Body; return }
     $msgExe = Join-Path $env:SystemRoot 'System32\msg.exe'
     if (Test-Path $msgExe) {
         # msg.exe rejects a message longer than ~255 characters ("Invalid parameter(s)"),
@@ -295,15 +374,118 @@ function Invoke-AlertScan {
 }
 
 # --------------------------------------------------------------------------- #
-# main
+# pass bookkeeping: an unfinished previous pass, and how old the last good one is
 # --------------------------------------------------------------------------- #
+$PassStateFile = Join-Path $LogDir 'fetch_pass.state.json'
+
+function Read-PassState {
+    $h = @{}
+    if (Test-Path $PassStateFile) {
+        try {
+            $o = Get-Content $PassStateFile -Raw | ConvertFrom-Json
+            foreach ($p in $o.PSObject.Properties) { $h[$p.Name] = $p.Value }
+        } catch { Write-Log 'WARN' 'pass state file unreadable; starting a new one' }
+    }
+    return $h
+}
+
+function Write-PassState {
+    param([hashtable]$State)
+    try { [pscustomobject]$State | ConvertTo-Json -Depth 3 | Set-Content -Path $PassStateFile -Encoding utf8 }
+    catch { Write-Log 'WARN' 'could not write the pass state file' }
+}
+
+function ConvertFrom-StateTime {
+    param($Value)
+    if (-not $Value) { return $null }
+    return [datetime]::Parse([string]$Value, [System.Globalization.CultureInfo]::InvariantCulture,
+                             [System.Globalization.DateTimeStyles]::RoundtripKind)
+}
+
+function Format-Age {
+    param([timespan]$Age)
+    if ($Age.TotalHours -ge 1) { return ("{0} h {1} min" -f [int][Math]::Floor($Age.TotalHours), $Age.Minutes) }
+    return ("{0} min" -f [int][Math]::Floor($Age.TotalMinutes))
+}
+
+function Format-LastSuccess {
+    param([hashtable]$State)
+    $t = ConvertFrom-StateTime $State['last_success']
+    if (-not $t) { return 'none recorded' }
+    return ("{0} ({1} ago)" -f $t.ToString('yyyy-MM-dd HH:mm'), (Format-Age ((Get-Date) - $t)))
+}
+
+function Start-Pass {
+    <#  Runs before anything remote, so it alerts even when the node or the network
+        is down. Then records this pass's start. #>
+    $st = Read-PassState
+    $now = Get-Date
+    if (-not $st['tracking_since']) { $st['tracking_since'] = $now.ToString('o') }
+
+    $prevStart = ConvertFrom-StateTime $st['last_start']
+    $prevEnd = ConvertFrom-StateTime $st['last_end']
+    if ($prevStart -and (-not $prevEnd -or $prevEnd -lt $prevStart)) {
+        $alive = $null
+        if ($st['last_start_pid']) {
+            $alive = Get-Process -Id ([int]$st['last_start_pid']) -ErrorAction SilentlyContinue
+            # a reused PID belongs to a process started after the pass did
+            if ($alive -and $alive.StartTime -gt $prevStart.AddMinutes(1)) { $alive = $null }
+        }
+        if ($alive) {
+            $msg = ("FetchResults pass started {0} is still running after {1} (PID {2}): it is hung. Last successful pass: {3}" -f
+                    $prevStart.ToString('HH:mm'), (Format-Age ($now - $prevStart)), $alive.Id, (Format-LastSuccess $st))
+        } else {
+            $msg = ("FetchResults pass started {0} never finished (killed by the task's 30-min limit, a reboot or a power cut). Last successful pass: {1}" -f
+                    $prevStart.ToString('yyyy-MM-dd HH:mm'), (Format-LastSuccess $st))
+        }
+        Write-Log 'ALERT' $msg
+        Show-Alert $msg
+    }
+
+    $ref = ConvertFrom-StateTime $st['last_success']
+    if (-not $ref) { $ref = ConvertFrom-StateTime $st['tracking_since'] }
+    if ($ref -and ($now - $ref).TotalMinutes -gt $StaleAfterMinutes) {
+        $lastAlert = ConvertFrom-StateTime $st['last_stale_alert']
+        if (-not $lastAlert -or ($now - $lastAlert).TotalMinutes -ge $StaleRepeatMinutes) {
+            $msg = ("FetchResults: no successful fetch for {0} (limit {1} min). Last successful pass: {2}; last pass ended: {3}" -f
+                    (Format-Age ($now - $ref)), $StaleAfterMinutes, (Format-LastSuccess $st),
+                    $(if ($st['last_end_status']) { $st['last_end_status'] } else { 'unknown' }))
+            Write-Log 'ALERT' $msg
+            Show-Alert $msg
+            $st['last_stale_alert'] = $now.ToString('o')
+        }
+    }
+
+    $st['last_start'] = $now.ToString('o')
+    $st['last_start_pid'] = $PID
+    Write-PassState $st
+}
+
+function Complete-Pass {
+    param([string]$Status)
+    $st = Read-PassState
+    $now = (Get-Date).ToString('o')
+    $st['last_end'] = $now
+    $st['last_end_status'] = $Status
+    if ($Status -eq 'ok') {
+        $st['last_success'] = $now
+        $st.Remove('last_stale_alert')          # the next stale period alerts afresh
+    }
+    Write-PassState $st
+}
+
+# --------------------------------------------------------------------------- #
+# main: fetch finished runs
+# --------------------------------------------------------------------------- #
+function Invoke-FetchRuns {
+<#  Returns 'ok', 'no_runs' or 'unreachable'. #>
 Write-Log 'INFO' ("fetch start -> {0}:{1}" -f $Remote, $RemoteRepo)
 
 if (-not (Test-Reachable)) {
     # auth failure, node down, network gone: log and leave. Never retry in a loop,
     # never hang -- the task simply runs again in an hour.
     Write-Log 'ERROR' ("cannot reach {0} (ssh exit {1}); giving up this pass" -f $Remote, $script:LastExit)
-    exit 1
+    return 'unreachable'
 }
 
 # One call for every candidate's checksum, restricted to results.json files that have
@@ -312,7 +494,7 @@ if (-not (Test-Reachable)) {
 $remoteList = Invoke-Remote ("cd '{0}' && find results -maxdepth 4 -name results.json -mmin +{1} -regextype posix-extended -regex 'results/((pc_[A-Za-z0-9_-]+/)?rev_[^/]+|camera/[A-Za-z0-9_-]+/(rev|diag)_camera_[^/]+)/results[.]json' -exec md5sum {{}} + 2>/dev/null" -f $RemoteRepo, $MinAgeMinutes)
 if ($script:LastExit -ne 0 -and -not $remoteList) {
     Write-Log 'INFO' 'no rev_* runs on the node yet'
-    exit 0
+    return 'no_runs'
 }
 
 # Runs already committed to git (the desktop-GPU baselines) legitimately differ from
@@ -388,10 +570,16 @@ foreach ($line in ($remoteList -split "`n")) {
     # half-written directory that a later pass would mistake for a finished run.
     $staging = Join-Path $LocalResults ('.incoming_' + ($run -replace '/', '__'))
     if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
-    & $ScpExe @SshOpts '-r' ("{0}:{1}/results/{2}" -f $Remote, $RemoteRepo, $run) $staging 2>&1 |
-        ForEach-Object { if ($_) { Write-Log 'DEBUG' $_ } }
-    if ($LASTEXITCODE -ne 0) {
-        Write-Log 'ERROR' ("{0}: scp failed (exit {1})" -f $run, $LASTEXITCODE)
+    try {
+        $r = Invoke-Native $ScpExe ($SshOpts + $ScpPortOpts + @('-r', ("{0}:{1}/results/{2}" -f $Remote, $RemoteRepo, $run), $staging)) `
+            $ScpTimeout ("scp of {0}" -f $run)
+    } catch {
+        if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
+        throw
+    }
+    foreach ($l in (($r.Out + $r.Err) -split "`n")) { if ($l.Trim()) { Write-Log 'DEBUG' $l.Trim() } }
+    if ($r.Exit -ne 0) {
+        Write-Log 'ERROR' ("{0}: scp failed (exit {1})" -f $run, $r.Exit)
         if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
         continue
     }
@@ -416,6 +604,8 @@ foreach ($line in ($remoteList -split "`n")) {
 }
 
 Write-Log 'INFO' ("fetch done: {0} fetched, {1} already present, {2} in progress, {3} committed-and-differing (ignored), {4} warnings" -f $fetched, $skipped, $pending, $committed, $warned)
+return 'ok'
+}
 
 # --------------------------------------------------------------------------- #
 # block completion -> mechanical pipeline into a scratch directory
@@ -479,6 +669,7 @@ function Invoke-BlockNotifications {
             }
             $notified[$key] = $true; $changed = $true
         } catch {
+            if ($_.Exception -is [PassTimeoutException]) { throw }
             Write-Log 'WARN' ("notification for {0} failed ({1}); will retry next pass" -f $key, $_.Exception.Message)
         }
     }
@@ -489,6 +680,7 @@ function Invoke-BlockNotifications {
     }
 }
 
+function Invoke-BlockReports {
 # Every pass, not only passes that fetched something: block_report is idempotent, and
 # a notification that failed on the pass that completed a block must be retried even
 # though the node then sits idle (after 5a it waits for a human to switch modes).
@@ -497,21 +689,23 @@ if (-not $DryRun) {
     $reporter = Join-Path $PSScriptRoot 'block_report.py'
     if ($python -and (Test-Path $python) -and (Test-Path $reporter)) {
         Write-Log 'INFO' 'checking for complete blocks'
-        $prevEap = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'      # stderr of a native command must not throw
-        try {
-            $reportLines = @(& $python $reporter --repo $RepoRoot 2>&1 | ForEach-Object { "$_" })
-            $reportExit = $LASTEXITCODE
-        } finally { $ErrorActionPreference = $prevEap }
+        $r = Invoke-Native $python @($reporter, '--repo', $RepoRoot) $CallTimeout 'block_report.py'
+        $reportLines = @(($r.Out + $r.Err) -split "`r?`n" | Where-Object { $_ })
+        $reportExit = $r.Exit
         foreach ($l in $reportLines) { if ($l) { Write-Log 'INFO' ("block_report: {0}" -f $l) } }
         if ($reportExit -ne 0) { Write-Log 'WARN' ("block_report exited {0}" -f $reportExit) }
         try { Invoke-BlockNotifications $reportLines }
-        catch { Write-Log 'WARN' ("block notification failed: {0}" -f $_.Exception.Message) }
+        catch {
+            if ($_.Exception -is [PassTimeoutException]) { throw }
+            Write-Log 'WARN' ("block notification failed: {0}" -f $_.Exception.Message)
+        }
     } else {
         Write-Log 'WARN' 'python or block_report.py not configured; skipping block reports'
     }
 }
+}
 
+function Invoke-NodeLogs {
 # A short tail of the node's own log, so one file here shows what the testbed is doing.
 $tail = Invoke-Remote ("tail -n {0} '{1}/logs/run_matrix.log' 2>/dev/null" -f ([int]($cfg.log_tail_lines | ForEach-Object { if ($_) { $_ } else { 5 } })), $RemoteRepo)
 if ($script:LastExit -eq 0 -and $tail) {
@@ -523,7 +717,40 @@ try {
     $alerts = Invoke-AlertScan
     if ($alerts -gt 0) { Write-Log 'INFO' ("{0} new alert line(s) this pass" -f $alerts) }
 } catch {
+    if ($_.Exception -is [PassTimeoutException]) { throw }
     # An alerting fault must never fail the fetch: the runs are the point.
     Write-Log 'WARN' ("alert scan failed: {0}" -f $_.Exception.Message)
 }
-exit 0
+}
+
+# --------------------------------------------------------------------------- #
+# the pass: every exit path records its end
+# --------------------------------------------------------------------------- #
+Start-Pass
+$status = 'error'
+$code = 4
+try {
+    $status = @(Invoke-FetchRuns)[-1]
+    if ($status -eq 'ok') {
+        Invoke-BlockReports
+        Invoke-NodeLogs
+    }
+    $code = if ($status -eq 'unreachable') { 1 } else { 0 }
+} catch [PassTimeoutException] {
+    $status = 'timeout'
+    $code = 3
+    $msg = ("FetchResults pass of {0} aborted: {1}. Last successful pass: {2}" -f
+            $PassStart.ToString('HH:mm'), $_.Exception.Message, (Format-LastSuccess (Read-PassState)))
+    Write-Log 'ERROR' $msg
+    Show-Alert $msg
+} catch {
+    $status = 'error'
+    $code = 4
+    $msg = ("FetchResults pass of {0} failed: {1}. Last successful pass: {2}" -f
+            $PassStart.ToString('HH:mm'), $_.Exception.Message, (Format-LastSuccess (Read-PassState)))
+    Write-Log 'ERROR' $msg
+    Show-Alert $msg
+} finally {
+    Complete-Pass $status
+}
+exit $code

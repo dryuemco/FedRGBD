@@ -1662,3 +1662,58 @@ amendment.
   lanes) is paused with its stop file (`logs/desktop_sim/STOP`) when the camera data arrive;
   LOSO has priority. The A5 path gets no decode cache (decided 2026-10-07: decoding is a
   small part of its per-image cost and a cache would need tens of GB for 4 lanes).
+
+## FetchResults: time limits and pass bookkeeping (2026-10-08)
+
+* **What happened (night of 2026-10-07).** The last complete pass ran at 18:34. Every pass
+  from 19:34 to 00:34 (task trigger at :34:46) wrote "fetch start" 12-18 minutes after
+  its trigger. It then logged nothing more until the task's 30-minute ExecutionTimeLimit
+  killed it.
+  - node_a's sshd accepted the login of such a pass about 4 minutes after "fetch start"
+    (19:52:56 for the pass that logged 19:48:53), and no command result followed.
+  - From 01:34 to 04:34 the node closed the connection before any login was accepted,
+    6-7 minutes after "fetch start". ssh reported exit 255, "Connection closed by
+    192.168.1.10 port 22".
+  - The 05:34 and 06:34 passes again logged only "fetch start" (the desktop lost
+    power at 06:52).
+  - The node ran an FL run until 04:13 and was idle after that, yet the passes kept
+    failing. The 18:34 pass was the last one before the A5 desktop simulation started (18:40, 4
+    lanes), and every later pass failed. So the cause is a starved desktop, not node_a.
+    Which resource ran short is not established: performance counters were unavailable,
+    and the event log has no resource-exhaustion entry.
+  - Not reproduced on 2026-10-08 under the same 4-cell load: 3-4 s per pass, ssh
+    0.3 s. The commit charge was then 66.2 of 67.5 GB.
+  - Two results stayed on the node only, ps123 and ps456 FedProx of A5, until a manual
+    pass at 09:50.
+* **Fix (`scripts/fetch_results.ps1`).**
+  - Every external program runs under its own limit and is killed when it overruns:
+    ssh and python `call_timeout_s` (120 s), scp `scp_timeout_s` (600 s). The whole pass
+    has `pass_timeout_s` (1200 s), below the task's 30 minutes.
+  - ssh gets `ServerAliveInterval=15`, `ServerAliveCountMax=4`. An ssh session that
+    stalls after connecting is treated like a killed call: "Connection to H port P
+    timed out", "Timeout, server H not responding" or "Connection closed by H port P",
+    exit 255. "Node down" is a different message (`connect to host ...`), and it stays
+    `unreachable`.
+  - Such a pass ends as `timeout` (exit 3) with an ERROR line and a pop-up. An
+    unexpected error ends as `error` (exit 4) with a pop-up.
+  - `logs/fetch_pass.state.json` records each pass's start and its end on every exit
+    path. Before anything remote, the next pass raises a pop-up in two cases:
+    - the previous pass never recorded an end (still running, or killed by the task
+      limit, a reboot or a power cut);
+    - the last successful pass is older than `stale_after_minutes` (150), repeated at
+      most every `stale_alert_repeat_minutes` (180).
+  - New optional keys in `fetch_results.config.example.json`: the five above and
+    `port`. New parameter `-LogDir`.
+* **Tests (`tests/test_fetch_results_timeouts.py`, Windows only).** They drive the real
+  script against a fake SSH server that sends an OpenSSH banner and then never answers,
+  and against a closed port:
+  - a hung call is killed and reported;
+  - the pass limit caps a call;
+  - a pass that never finished is reported by the next one;
+  - a stale last success raises one pop-up per repeat interval.
+* **Realistic run** with the production limits and a real pop-up, against the same fake
+  server: ssh's own ServerAlive ended the stall after 60 s. The pass ended as `timeout`
+  (exit 3), and msg.exe showed "FetchResults pass of 10:50 aborted: ssh to
+  jetson-a@127.0.0.1 (true): session stalled after connecting (Connection to 127.0.0.1
+  port 2222 timed out). Last successful pass: none recorded" (202 characters with the
+  prefix, under msg.exe's 250).

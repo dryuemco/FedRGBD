@@ -9,6 +9,17 @@
   "identity_file": null,
 
   "connect_timeout_s": 15,
+
+  "_time_limits": "Every ssh/python call is killed after call_timeout_s, an scp after scp_timeout_s, and the whole pass ends after pass_timeout_s (keep it below the task's 30-minute ExecutionTimeLimit). A killed call or an ssh session that stalls after connecting ends the pass as \"timeout\" with a pop-up. Defaults: 120, 600, 1200.",
+  "call_timeout_s": 120,
+  "scp_timeout_s": 600,
+  "pass_timeout_s": 1200,
+
+  "_stale": "Checked at the start of every pass, before anything remote: a pop-up when the last successful pass is older than stale_after_minutes, repeated at most every stale_alert_repeat_minutes; and one when the previous pass never recorded its end. State: logs/fetch_pass.state.json. Defaults: 150, 180.",
+  "stale_after_minutes": 150,
+  "stale_alert_repeat_minutes": 180,
+
+  "_port": "Optional ssh port (tests only); omit for 22.",
   "log_tail_lines": 5,
 
   "_alerts": "Lines matching these patterns in ~/chain.log or <repo>/logs/run_matrix.log raise an [ALERT] in logs/fetch.log and a desktop pop-up. Each distinct line alerts once, never again. Omit the block to use these defaults. ignore_case=false keeps the all-caps markers from matching ordinary prose.",
