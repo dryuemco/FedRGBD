@@ -609,6 +609,29 @@ sections 1 and 4-6.
         readjusted.
     - The tool is checked per camera x distance. The distance decision itself is taken
       only after all three cameras' s03 exist.
+  - *Scene settling and a clean acceptance geometry* (decided by the author on
+    2026-10-08, after the e5 D435i data was seen; committed and pushed before any
+    further acceptance capture).
+    - *What the data showed.* In the D435i's `s03_no_fire_d300` capture, frames 0-16
+      (the first about 3.2 s) differ from the capture's median along a thin vertical
+      strip at x of about 157 px (224 input), rows 0 to about 100. The author
+      identified it as the curtain edge still moving after the scene was set up. From
+      about 3 s on, the frames are stable. With the fixed tool the strip gives 0 px.
+    - *Rule for every capture.* The curtain's bottom edge is fixed in place. After any
+      movement in the scene (setting up, moving or lighting the source), wait at least
+      10 s before a capture starts.
+    - *Repeat of the 2 m and 3 m acceptance test in a clean geometry.* With the fixed
+      tool (`76a7003`), the D435i's s03 at 2 m and 3 m was `NOT VALIDATED`
+      (`ratio_measured_expected` 2.63 and 4.56, outside [0.5, 2.0]). In s03 the source
+      stood near the corner, on the glossy floor, close to the walls.
+      - The 2 m and 3 m acceptance test is repeated with the source on a matte,
+        non-reflective base, at least 1 m from the nearest wall. The geometry is the
+        same for every camera.
+      - Same tool (`76a7003`), same validation band (b), same 5 px criterion.
+      - If the tool is validated at a distance, the 5 px criterion is applied there. If
+        it is not validated, that distance is removed from the study's distance set.
+      - The existing s03 2 m and 3 m captures stay as they are. They are reported as
+        "NOT VALIDATED (reflective geometry)". s03 1 m (validated) stands.
   - *To be filled from e5:* the median flame height per camera x distance in 224-pixels,
     the height in cm against the ruler, and the resulting distance set. [e5]
   - The two pillar candles of the pilot are not used further.
