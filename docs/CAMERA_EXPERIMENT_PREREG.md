@@ -632,6 +632,22 @@ sections 1 and 4-6.
         it is not validated, that distance is removed from the study's distance set.
       - The existing s03 2 m and 3 m captures stay as they are. They are reported as
         "NOT VALIDATED (reflective geometry)". s03 1 m (validated) stands.
+  - *Reference tripod position and clean geometry s10* (decided by the author on
+    2026-10-08; committed and pushed before any capture at the new position).
+    - The tripod was moved 1 m back from its e5 position, which had not been marked on
+      the floor. The new position is the **reference position** and is now taped on the
+      floor. All calibrations and session checks are done there.
+    - *D435i recalibrated there* (reason: the tripod moved and the old position was not
+      marked; no study data exists yet). The earlier D435i calibration (`eef07c7`) and
+      the D435i's s03 and s09 captures stay on record unchanged. The old calibration file
+      moves to `_exposure/_superseded/`.
+    - *D435if and ZED* are calibrated at the reference position too.
+    - *s10, the clean acceptance geometry.* The source stands on a matte, non-reflective
+      base. The 1, 2 and 3 m marks are measured from the reference position, and at 3 m
+      the source is at least 1 m from every wall. The source is now 1 m in front of the
+      corner and 3 m from the camera. s10 repeats the acceptance test at 1, 2 and 3 m
+      with the tool, validation band and 5 px criterion of the items above, the same for
+      every camera.
   - *To be filled from e5:* the median flame height per camera x distance in 224-pixels,
     the height in cm against the ruler, and the resulting distance set. [e5]
   - The two pillar candles of the pilot are not used further.
