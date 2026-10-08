@@ -29,12 +29,19 @@ Tool fix (2026-10-08, after e5 data had been seen; prereg 13.2): the first versi
 the *largest* region of any brightness increase, which in s03 included the flame's
 glow on the walls and the floor.  The pixel rule and the component choice above replace
 it.  Its constants were fixed before the fixed tool was run on any fire frame, are
-the same for all three cameras, and are never tuned to a distance result.  The tool is
-validated per distance by (b) of prereg 13.2: ratio_measured_expected within
-:data:`VALIDATION_BAND` (1 m wider: the candles stand one behind the other and the lit
-candle body can join the flame).  The median over all fire frames is the criterion's statistic,
-reported with min and max (flicker).  A capture with fewer or more than 40 fire frames is
-INCOMPLETE, never PASS.  The flame height (cm) and measured distance come from the
+the same for all three cameras, and are never tuned to a distance result.
+
+Decision rule per camera x distance (prereg 13.2, s11 and later, 2026-10-09; written
+after the s03 / s10 results had been seen and before any s11 data; it replaces the
+ratio band (b), which failed systematically because of the flame's glow halo and the
+candles standing one behind the other):
+  (a) no-fire check: every no-fire frame, measured against the no-fire median reference
+      exactly like a fire frame, gives 0 px (``n_nofire_detected`` == 0);
+  (b) the flame is detected in at least :data:`MIN_DETECTED_FRACTION` of the fire frames;
+  (c) the median flame height over the 40 fire frames is at least N = 5 px.
+PASS only if (a), (b) and (c) all hold, otherwise FAIL (the ``criterion_failed`` column
+names the failing conditions).  ``ratio_measured_expected`` is descriptive only.  A
+capture with fewer or more than 40 fire frames is INCOMPLETE, never PASS or FAIL.  The flame height (cm) and measured distance come from the
 fire capture's parsed ``--notes`` unless given on the command line.
 
     python scripts/camera_flame_height.py --root data/raw/camera_pilot --scene s01 \\
@@ -76,8 +83,9 @@ CRITERION_FRAMES = DEFAULT_FRAMES
 COLUMNS = ("node", "scene", "distance_m", "distance_measured_m", "flame_height_cm",
            "fy_native", "fy_224", "expected_px", "measured_px_median",
            "measured_px_min", "measured_px_max", "measured_cm_median", "ratio_measured_expected",
-           "n_fire_frames", "n_frames_detected", "touches_crop_border", "threshold",
-           "validation_band", "tool_validated", "criterion_px", "criterion")
+           "n_fire_frames", "n_frames_detected", "detected_fraction", "n_nofire_frames",
+           "n_nofire_detected", "touches_crop_border", "threshold", "criterion_px",
+           "criterion_failed", "criterion")
 
 
 def _is_study_root(root: str) -> bool:
@@ -126,9 +134,8 @@ def _label(mask: np.ndarray) -> Tuple[np.ndarray, int]:
 FLAME_CORE_V = 245        # near-saturated flame core: any hue
 FLAME_V_MIN = 200         # otherwise bright ...
 FLAME_WARM_S_MIN = 0.25   # ... and warm (R >= G >= B) with at least this saturation
-#: (b) of prereg 13.2: the tool counts as validated at a distance if the measured/expected
-#: ratio lies in this band; outside it, no criterion decision for that distance
-VALIDATION_BAND = {1.0: (0.5, 4.0), 2.0: (0.5, 2.0), 3.0: (0.5, 2.0)}
+#: decision rule (b): the flame must be detected in at least this share of the fire frames
+MIN_DETECTED_FRACTION = 0.9
 
 
 def flame_mask(fire: np.ndarray, reference: np.ndarray, threshold: int
@@ -215,6 +222,9 @@ def measure_node(root: str, node: str, scene: str, distance_m: float,
         top, left, bottom, right = reg
         heights.append(bottom - top + 1)
         border = border or top == 0 or left == 0 or bottom == SIZE - 1 or right == SIZE - 1
+    # (a): the no-fire frames, measured exactly like fire frames, must show no flame
+    nofire_detected = sum(flame_region(fr, reference, threshold) is not None
+                          for fr in ref_frames)
     med_frame = np.median(np.stack(fire), axis=0).astype(np.uint8)
     med_region = flame_region(med_frame, reference, threshold)
     exp = expected_px(flame_cm, measured_m, f224) if flame_cm else None
@@ -230,24 +240,33 @@ def measure_node(root: str, node: str, scene: str, distance_m: float,
         "measured_cm_median": round(med * 100.0 * measured_m / f224, 1),
         "ratio_measured_expected": None if not exp else round(med / exp, 2),
         "n_fire_frames": len(fire), "n_frames_detected": detected,
+        "detected_fraction": round(detected / float(len(fire)), 3),
+        "n_nofire_frames": len(ref_frames), "n_nofire_detected": int(nofire_detected),
         "touches_crop_border": border, "threshold": threshold,
-        "criterion_px": CRITERION_PX, "criterion": criterion(med, len(fire)),
+        "criterion_px": CRITERION_PX,
     }
-    band = VALIDATION_BAND.get(round(float(distance_m), 1))
-    ratio = row["ratio_measured_expected"]
-    row["validation_band"] = None if band is None else "%g-%g" % band
-    row["tool_validated"] = bool(band and ratio is not None and band[0] <= ratio <= band[1])
-    if not row["tool_validated"] and row["criterion"] != "INCOMPLETE":
-        # (b): no criterion decision where the tool is not validated
-        row["criterion"] = "NOT VALIDATED"
+    row["criterion"], failed = criterion(med, len(fire), detected, int(nofire_detected))
+    row["criterion_failed"] = ";".join(failed)
     return row, med_frame, med_region
 
 
-def criterion(median_px: float, n_frames: int) -> str:
-    """PASS / FAIL of one camera x distance; INCOMPLETE unless exactly CRITERION_FRAMES."""
+def criterion(median_px: float, n_frames: int, n_detected: Optional[int] = None,
+              n_nofire_detected: int = 0) -> Tuple[str, List[str]]:
+    """(PASS / FAIL / INCOMPLETE, failed conditions) of one camera x distance: (a) no
+    flame in any no-fire frame, (b) the flame detected in >= MIN_DETECTED_FRACTION of
+    the fire frames, (c) median height >= CRITERION_PX; INCOMPLETE unless exactly
+    CRITERION_FRAMES fire frames."""
     if n_frames != CRITERION_FRAMES:
-        return "INCOMPLETE"
-    return "PASS" if median_px >= CRITERION_PX else "FAIL"
+        return "INCOMPLETE", []
+    n_detected = n_frames if n_detected is None else n_detected
+    failed = []
+    if n_nofire_detected:
+        failed.append("a_nofire_detected_%d" % n_nofire_detected)
+    if n_detected < MIN_DETECTED_FRACTION * n_frames:
+        failed.append("b_detected_%d_of_%d" % (n_detected, n_frames))
+    if median_px < CRITERION_PX:
+        failed.append("c_median_%g_px" % median_px)
+    return ("FAIL" if failed else "PASS"), failed
 
 
 def distance_decision(rows: Sequence[Dict]) -> str:
@@ -263,9 +282,6 @@ def distance_decision(rows: Sequence[Dict]) -> str:
     if any(v == "INCOMPLETE" for v in verdicts.values()):
         return "distance %g m: NOT DECIDED -- a capture does not have %d frames (%s)" % (
             d, CRITERION_FRAMES, detail)
-    if any(v == "NOT VALIDATED" for v in verdicts.values()):
-        return ("distance %g m: NOT DECIDED -- the flame tool is not validated at this "
-                "distance on every camera (prereg 13.2 (b)) (%s)" % (d, detail))
     return "distance %g m: FAIL -- removed from the study's distance set (%s)" % (d, detail)
 
 
@@ -320,9 +336,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     w.writeheader()
     w.writerows(rows)
     for r in rows:
-        print("%s %g m: %s (median %.1f px over %d frames, criterion >= %d px over %d)" % (
-            r["node"], r["distance_m"], r["criterion"], r["measured_px_median"],
-            r["n_fire_frames"], CRITERION_PX, CRITERION_FRAMES), file=sys.stderr)
+        print("%s %g m: %s (median %.1f px over %d frames, detected %d of %d, no-fire "
+              "detections %d; rule: no-fire 0, detected >= %d%%, median >= %d px)%s" % (
+                  r["node"], r["distance_m"], r["criterion"], r["measured_px_median"],
+                  r["n_fire_frames"], r["n_frames_detected"], r["n_fire_frames"],
+                  r["n_nofire_detected"], round(100 * MIN_DETECTED_FRACTION), CRITERION_PX,
+                  " failed: " + r["criterion_failed"] if r["criterion_failed"] else ""),
+              file=sys.stderr)
     print(distance_decision(rows), file=sys.stderr)
     if args.out_csv:
         with open(args.out_csv, "w", newline="", encoding="utf-8") as f:

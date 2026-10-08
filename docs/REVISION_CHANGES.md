@@ -1751,3 +1751,12 @@ amendment.
   `NOT VALIDATED` (no criterion decision) outside it. Prereg 13.2 records the fix and its
   validation; both were committed before the fixed tool was run on any fire frame.
 * Tests: `tests/test_camera_e5_gates.py`.
+
+## Flame tool: decision rule (a) no-fire 0 px, (b) detected in >= 90 %, (c) median >= 5 px (2026-10-09, before s11)
+
+* `scripts/camera_flame_height.py`: the per-distance ratio band is removed. A camera x
+  distance PASSes only if the no-fire frames, measured like fire frames, show no flame
+  (`n_nofire_detected` == 0), the flame is detected in at least 90 % of the fire frames,
+  and the median height is >= 5 px; `criterion_failed` names what failed, and
+  `ratio_measured_expected` is descriptive. The flame-pixel rule (`76a7003`) is unchanged.
+  Prereg 13.2 records the rule, the s11 restart and the archived s03/s09/s10.

@@ -654,6 +654,35 @@ sections 1 and 4-6.
       corner and 3 m from the camera. s10 repeats the acceptance test at 1, 2 and 3 m
       with the tool, validation band and 5 px criterion of the items above, the same for
       every camera.
+  - *Clean restart of e5: s11, a new decision rule, the e5 capture order* (decided by
+    the author on 2026-10-09; written after the s03 and s10 results had been seen and
+    before any s11 data; committed and pushed before the first s11 capture).
+    - *Archive.* The e5 captures s03, s09 and s10 (frames, capture records, s09 locks)
+      were moved, not deleted, to `data/raw/camera_pilot/_archive_20261009_000714/` on
+      node_b and on the desktop. Every file was md5-checked, and the two archive
+      manifests are identical. The pilot s01, the calibration files, the e5 log and the
+      committed records stay where they were.
+    - *s11 = the repeat of e5.* The camera was tilted again. The new tilt is the new
+      reference view, from the taped reference tripod position. A framing check, the WB
+      rectangle check, a recalibration and a session check precede the first s11
+      capture.
+    - *Decision rule per camera x distance (s11 and every later camera).* It replaces
+      the ratio band (b) above. Reason: the band failed systematically, because the
+      measured flame includes the flame's glow halo and the four candles stand one
+      behind the other. A camera x distance PASSes if all three conditions hold;
+      otherwise it FAILs:
+      - (a) the no-fire frames, measured exactly like fire frames against the no-fire
+        median, show 0 px;
+      - (b) the flame is detected in at least 90 % of the 40 fire frames;
+      - (c) the median flame height over the 40 fire frames is at least N = 5 px.
+
+      `ratio_measured_expected` is descriptive only. The distance rule is unchanged: a
+      distance that fails on any camera is removed from the study's distance set. The
+      tool's flame-pixel rule and constants (`76a7003`) are unchanged.
+    - *e5 capture order (e5 only).* Fire at 3, 2, then 1 m; then no-fire at 1, 2, then
+      3 m. After the candles are put out, wait at least 2 minutes and check that no
+      ember glows before the no-fire captures. Study captures keep the order of the
+      pre-registration.
   - *To be filled from e5:* the median flame height per camera x distance in 224-pixels,
     the height in cm against the ruler, and the resulting distance set. [e5]
   - The two pillar candles of the pilot are not used further.

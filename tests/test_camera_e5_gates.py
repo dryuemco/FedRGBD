@@ -405,13 +405,15 @@ def test_flame_components_touching_the_crop_edge_are_dropped():
     assert cfh.flame_region(fire, ref, 40) == (100, 60, 107, 63)
 
 
-def test_tool_validation_band_per_distance():
+def test_decision_rule_a_b_c():
     from scripts import camera_flame_height as cfh
 
-    assert cfh.VALIDATION_BAND == {1.0: (0.5, 4.0), 2.0: (0.5, 2.0), 3.0: (0.5, 2.0)}
-    rows = [{"node": n, "distance_m": 2.0, "criterion": c} for n, c in
-            (("node_a", "PASS"), ("node_b", "NOT VALIDATED"), ("node_c", "FAIL"))]
-    assert "NOT DECIDED -- the flame tool is not validated" in cfh.distance_decision(rows)
+    assert not hasattr(cfh, "VALIDATION_BAND") and cfh.MIN_DETECTED_FRACTION == 0.9
+    assert cfh.criterion(6.0, 40, 36, 0) == ("PASS", [])
+    assert cfh.criterion(6.0, 40, 35, 0) == ("FAIL", ["b_detected_35_of_40"])
+    assert cfh.criterion(6.0, 40, 40, 2) == ("FAIL", ["a_nofire_detected_2"])
+    assert cfh.criterion(4.5, 40, 40, 0) == ("FAIL", ["c_median_4.5_px"])
+    assert cfh.criterion(9.0, 39, 39, 0) == ("INCOMPLETE", [])
 
 
 def test_flame_region_is_none_on_a_flame_free_frame():
@@ -445,19 +447,18 @@ def test_flame_criterion_is_the_median_over_40_frames_at_5_px(tmp_path):
     # 1080 -> 224: 30 rows are 6.2 px, 19 rows are 3.9 px
     ok = _criterion_row(tmp_path, "node_a", 30)
     assert ok["n_fire_frames"] == 40 and ok["measured_px_median"] >= 5
-    assert ok["criterion"] == "PASS"
-    assert ok["tool_validated"] and ok["validation_band"] == "0.5-2"
+    assert ok["criterion"] == "PASS" and ok["criterion_failed"] == ""
+    assert ok["n_nofire_detected"] == 0 and ok["detected_fraction"] == 1.0
     small = _criterion_row(tmp_path, "node_b", 19)
-    # 3.9 px against 8.6 expected: ratio 0.45, outside the 3 m band -> no criterion
-    # decision (prereg 13.2 (b)); criterion() itself would say FAIL
-    assert small["measured_px_median"] < 5 and not small["tool_validated"]
-    assert small["criterion"] == "NOT VALIDATED"
-    # 21 of 40 frames without a visible flame count as 0 px: the median is 0 -> FAIL
+    assert small["measured_px_median"] < 5 and small["criterion"] == "FAIL"
+    assert small["criterion_failed"].startswith("c_median_")
+    # 21 of 40 frames without a visible flame: detected 19 of 40 and median 0 -> FAIL
     flicker = _criterion_row(tmp_path, "node_c", [108] * 19 + [0] * 21)
     assert flicker["n_frames_detected"] == 19 and flicker["measured_px_min"] == 0
-    assert flicker["measured_px_median"] == 0 and flicker["criterion"] == "NOT VALIDATED"
-    assert cfh.criterion(5.0, 40) == "PASS" and cfh.criterion(4.5, 40) == "FAIL"
-    assert cfh.criterion(9.0, 39) == "INCOMPLETE"
+    assert flicker["criterion"] == "FAIL"
+    assert flicker["criterion_failed"] == "b_detected_19_of_40;c_median_0_px"
+    assert cfh.criterion(5.0, 40)[0] == "PASS" and cfh.criterion(4.5, 40)[0] == "FAIL"
+    assert cfh.criterion(9.0, 39)[0] == "INCOMPLETE"
 
 
 def test_a_distance_stays_only_if_all_three_cameras_pass():
