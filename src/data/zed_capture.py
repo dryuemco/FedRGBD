@@ -33,7 +33,8 @@ if _REPO not in sys.path:
 
 from src.data.camera_capture_common import (  # noqa: E402
     CameraBackend, CaptureError, Frame, add_capture_args, depth_to_mm_uint16,
-    run_capture, run_exposure_calibration, smoke_test, zed_usb_devices, zed_usb_speed_mbps,
+    run_capture, run_exposure_calibration, run_session_check, smoke_test, zed_usb_devices,
+    zed_usb_speed_mbps,
 )
 from src.data.camera_exposure import ExposureError  # noqa: E402
 
@@ -309,6 +310,13 @@ def main(argv=None, backend_factory=None) -> int:
             print("ERROR: %s" % e, file=sys.stderr)
             return 1
         return 0
+    if args.session_check:
+        try:
+            rec = run_session_check(factory(), args.root, args.node, args.notes)
+        except (CaptureError, ValueError, ExposureError) as e:
+            print("ERROR: %s" % e, file=sys.stderr)
+            return 1
+        return 0 if rec["session_check"] == "PASS" else 1
     if not (args.scene and args.label and args.distance_m is not None):
         print("--scene, --label and --distance_m are required for a capture", file=sys.stderr)
         return 2

@@ -164,3 +164,51 @@ def test_rectangle_and_224_luma_measure_what_they_say():
     assert cex.region_box(1920, 1080, r) == (480, 86, 960, 432)
     rgb[86:432, 480:960] = (200, 100, 50)
     assert cex.region_rgb(rgb, r) == (200.0, 100.0, 50.0)
+
+
+def _check(tmp_path, cam, node="node_b", notes=CAL_NOTES):
+    return ccc.run_session_check(cam, str(tmp_path), node, notes, log=lambda m: None)
+
+
+def test_session_check_passes_within_10_percent_and_is_logged(tmp_path):
+    rec = _cal(tmp_path, SceneCamera(k=0.8, clock=FakeClock()))
+    chk = _check(tmp_path, SceneCamera(k=0.8, clock=FakeClock()))
+    assert chk["session_check"] == "PASS"
+    assert chk["setting"] == {"exposure": rec["exposure"], "gain": rec["gain"],
+                              "white_balance": rec["white_balance"]}
+    ref = rec["luma_224_median"]
+    assert chk["band"] == [round(0.9 * ref, 3), round(1.1 * ref, 3)]
+    lines = (tmp_path / "node_b" / "_exposure" / "session_checks.jsonl").read_text().splitlines()
+    assert len(lines) == 1 and json.loads(lines[0])["session_check"] == "PASS"
+
+
+def test_session_check_fails_outside_the_band(tmp_path):
+    _cal(tmp_path, SceneCamera(k=0.8, clock=FakeClock()))
+    chk = _check(tmp_path, SceneCamera(k=0.6, clock=FakeClock()))   # 25 % darker scene
+    assert chk["session_check"] == "FAIL -> recalibrate"
+    assert len((tmp_path / "node_b" / "_exposure" / "session_checks.jsonl")
+               .read_text().splitlines()) == 1
+
+
+@pytest.mark.parametrize("notes,match", [
+    (FIRE_NOTES + "; " + LAMPS, "flame-free"),
+    (NOFIRE_NOTES + "; lamps_on=tavan lambasi, masa lambasi", "recalibrate"),
+])
+def test_session_check_refuses_flame_or_other_lamps(tmp_path, notes, match):
+    _cal(tmp_path, SceneCamera(clock=FakeClock()))
+    with pytest.raises(cex.ExposureError, match=match):
+        _check(tmp_path, SceneCamera(clock=FakeClock()), notes=notes)
+
+
+def test_session_check_same_measurement_for_zed_and_realsense(tmp_path):
+    class ZedLike(SceneCamera):
+        def exposure_defaults(self):
+            return {"gain": 0.0,
+                    "gain_range": {"min": 0.0, "max": 100.0, "step": 1.0, "default": 0.0},
+                    "white_balance_range": {"min": 2800.0, "max": 6500.0, "step": 100.0,
+                                            "default": None},
+                    "exposure_range": {"min": 1.0, "max": 100.0, "step": 1.0,
+                                       "default": None}}
+    _cal(tmp_path, ZedLike(k=8.0, clock=FakeClock()), node="node_c")
+    chk = _check(tmp_path, ZedLike(k=8.0, clock=FakeClock()), node="node_c")
+    assert chk["session_check"] == "PASS" and chk["node"] == "node_c"

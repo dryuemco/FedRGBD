@@ -316,3 +316,56 @@ def fixed_exposure(root: str, node: str, info: Optional[Dict[str, Any]] = None,
                 time.strftime("%Y-%m-%d %H:%M", time.localtime(rec.get("determined_unix", 0))),
                 rec.get("luma_224_median")),
             "lock_file": path}
+
+
+#: prereg 13.1: the session-start check passes within +-10 % of the calibration luma
+SESSION_BAND = 0.10
+SESSION_LOG = "session_checks.jsonl"
+
+
+def session_check(backend, root: str, node: str, notes: str = "",
+                  band: float = SESSION_BAND, clock: Callable[[], float] = time.time,
+                  log: Callable[[str], None] = print) -> Dict[str, Any]:
+    """Check at the start of a capture session (prereg 13.1): the camera's fixed setting,
+    one flame-free measurement exactly as in a calibration step (224 median luma, R/G/B
+    in the neutral rectangle), PASS if the luma lies within +-``band`` of the calibration
+    value.  Every check is appended to ``<root>/<node>/_exposure/session_checks.jsonl``.
+    ``backend`` is open."""
+    from src.data.camera_capture_common import notes_problems, parse_notes
+    bad = notes_problems(notes, "no_fire")
+    if bad:
+        raise ExposureError("session check must be flame-free and its --notes complete: "
+                            + "; ".join(bad))
+    path = exposure_path(root, node)
+    if not os.path.isfile(path):
+        raise ExposureError("no fixed exposure %s: calibrate first" % path)
+    with open(path, encoding="utf-8") as f:
+        cal = json.load(f)
+    serial = (backend.info() or {}).get("serial")
+    if cal.get("serial") is not None and serial is not None and str(cal["serial"]) != str(serial):
+        raise ExposureError("%s was calibrated on camera %s, this is %s"
+                            % (path, cal["serial"], serial))
+    lamps = parse_notes(notes).get("lamps_on")
+    if cal.get("lamps_on") is not None and lamps != cal["lamps_on"]:
+        raise ExposureError("lamps_on %r differs from the calibration's %r: recalibrate"
+                            % (lamps, cal["lamps_on"]))
+    m = measure(backend, {"exposure": cal["exposure"], "gain": cal["gain"],
+                          "white_balance": cal["white_balance"]},
+                cal.get("wb_region") or load_wb_region(node))
+    ref = float(cal["luma_224_median"])
+    lo, hi = (1.0 - band) * ref, (1.0 + band) * ref
+    ok = lo <= m["luma_224_median"] <= hi
+    rec = {"session_check": "PASS" if ok else "FAIL -> recalibrate", "node": node,
+           "serial": serial, "time_unix": clock(),
+           "time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(clock())),
+           "setting": m["setting"], "applied": m["applied"],
+           "luma_224_median": m["luma_224_median"], "calibration_luma_224": ref,
+           "band": [round(lo, 3), round(hi, 3)], "region_rgb_mean": m["region_rgb_mean"],
+           "r_minus_b": m["r_minus_b"], "notes": notes,
+           "calibration_file": path}
+    with open(os.path.join(os.path.dirname(path), SESSION_LOG), "a", encoding="utf-8") as f:
+        f.write(json.dumps(rec) + "\n")
+    log(json.dumps({k: rec[k] for k in ("session_check", "node", "time", "setting", "applied",
+                                        "luma_224_median", "calibration_luma_224", "band",
+                                        "region_rgb_mean", "r_minus_b")}))
+    return rec

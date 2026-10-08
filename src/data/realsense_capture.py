@@ -45,7 +45,7 @@ if _REPO not in sys.path:
 from src.data.camera_capture_common import (  # noqa: E402
     DEFAULT_FPS, DEFAULT_FRAMES, DEFAULT_ROOT, LABELS, NOTES_FORMAT, CameraBackend,
     CaptureError, Frame, depth_to_mm_uint16, run_capture, run_exposure_calibration,
-    smoke_test,
+    run_session_check, smoke_test,
 )
 from src.data.camera_exposure import ExposureError  # noqa: E402
 
@@ -653,6 +653,8 @@ def build_parser():
                              "(prereg 13.1 draft); no capture")
     parser.add_argument("--recalibrate", action="store_true",
                         help="with --calibrate_exposure: replace an existing exposure file")
+    parser.add_argument("--session_check", action="store_true",
+                        help="check at the start of a capture session (prereg 13.1)")
     parser.add_argument("--stream_fps", type=int, default=EXP_STREAM_FPS,
                         help="[camera experiment] stream rate, sampled down to --fps")
     return parser
@@ -660,7 +662,7 @@ def build_parser():
 
 def main(argv=None, backend_factory=None):
     args = build_parser().parse_args(argv)
-    experiment = (args.scene is not None or args.calibrate_exposure
+    experiment = (args.scene is not None or args.calibrate_exposure or args.session_check
                   or (args.test and args.node is not None))
     if not experiment:  # the original CLI, unchanged
         if args.list:
@@ -694,6 +696,16 @@ def main(argv=None, backend_factory=None):
             print("ERROR: %s" % e, file=sys.stderr)
             return 1
         return 0
+    if args.session_check:
+        if args.node is None:
+            print("--session_check needs --node (node_a or node_b)", file=sys.stderr)
+            return 2
+        try:
+            rec = run_session_check(factory(), args.root, args.node, args.notes)
+        except (CaptureError, ValueError, ExposureError) as e:
+            print("ERROR: %s" % e, file=sys.stderr)
+            return 1
+        return 0 if rec["session_check"] == "PASS" else 1
     if args.node is None or args.label is None or args.distance_m is None:
         print("--scene needs --label, --distance_m and --node (node_a or node_b)",
               file=sys.stderr)

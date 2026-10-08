@@ -1760,3 +1760,13 @@ amendment.
   and the median height is >= 5 px; `criterion_failed` names what failed, and
   `ratio_measured_expected` is descriptive. The flame-pixel rule (`76a7003`) is unchanged.
   Prereg 13.2 records the rule, the s11 restart and the archived s03/s09/s10.
+
+## Session-start check as a committed tool; ZED WB rectangle (2026-10-09, before the ZED calibration)
+
+* `src/data/camera_exposure.session_check` and `--session_check` in `realsense_capture.py`
+  and `zed_capture.py`: the prereg 13.1 check at the start of a capture session, the same
+  measurement for every camera (fixed setting, flame-free, median 224 luma and R/G/B in the
+  neutral rectangle, PASS within +-10 % of the calibration luma; lamps as calibrated).
+  Every check is appended to `<root>/<node>/_exposure/session_checks.jsonl`. It replaces
+  the ad hoc RealSense-only check script used for node_b and node_a.
+* `configs/camera_wb_region.json`: node_c (ZED 2i) rectangle, approved by the author.

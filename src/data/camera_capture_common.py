@@ -872,6 +872,9 @@ def add_capture_args(parser, default_node: str, frames_default=DEFAULT_FRAMES,
                              "(prereg 13.1 draft); no capture")
     parser.add_argument("--recalibrate", action="store_true",
                         help="with --calibrate_exposure: replace an existing exposure file")
+    parser.add_argument("--session_check", action="store_true",
+                        help="check at the start of a capture session (prereg 13.1): fixed "
+                             "setting, flame-free, 224 luma within +-10 %% of the calibration")
 
 
 def probe_sdks() -> Dict[str, Any]:
@@ -928,6 +931,18 @@ def run_exposure_calibration(backend: "CameraBackend", root: str, node: str, not
         % (rec["exposure"], rec["gain"], rec["white_balance"], rec["luma_224_median"],
            exposure_path(root, node)))
     return rec
+
+
+def run_session_check(backend: "CameraBackend", root: str, node: str, notes: str,
+                      log: Callable[[str], None] = print) -> Dict[str, Any]:
+    """``--session_check``: open the camera, run ``camera_exposure.session_check``, close."""
+    from src.data.camera_exposure import session_check
+    node = validate_node(node)
+    backend.open()
+    try:
+        return session_check(backend, root, node, notes=notes, log=log)
+    finally:
+        backend.close()
 
 
 if __name__ == "__main__":  # pragma: no cover - run on the nodes by the orchestrator
