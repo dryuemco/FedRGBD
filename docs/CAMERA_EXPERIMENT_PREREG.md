@@ -473,6 +473,14 @@ a change to section 2 that has to be disclosed in the paper and the response let
       serial, or if the capture's `lamps_on` differs from the calibration's. **If the
       lamp condition changes, the camera is recalibrated.** Recalibrating moves the old
       file to `_superseded/` and is disclosed.
+    - *Check at the start of every capture session* (decided by the author on
+      2026-10-08, committed before s03). With the camera's fixed setting applied, a
+      flame-free verification measurement is taken: the same measurement as a
+      calibration step, on the flame-free setup with `lamps_on` as calibrated. If its
+      224 mean luma lies outside +-10 % of the calibration value (the `luma_224_median`
+      of `exposure.json`), the camera is recalibrated before any capture of the session.
+      Every check, passed or not, and any recalibration it causes, is recorded in the
+      session log.
     - *No flame frame is used.* The values are chosen without looking at any frame with
       a flame. They are committed before the acceptance test.
     - The values go into every frame's metadata (`exposure_source: manual_lock`) and
