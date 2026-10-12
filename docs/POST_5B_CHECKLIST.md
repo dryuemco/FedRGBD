@@ -339,8 +339,15 @@ D435if depth, fewer in the D435i's (diagnosed in e5).
   properties only: exposure, framing, depth validity. Any technical change that follows
   is a dated amendment (prereg section 10) committed before the first study capture.
 
-**e5 [YOU] + [CLAUDE] Flame-source acceptance test and depth-hole diagnosis.** Still
-pilot: every frame only under `data/raw/camera_pilot/`, scene `s02` there; only
+**e5 -- DONE (2026-10-08 to 2026-10-12).** Run as prereg section 13 (Amendment 4) says,
+which supersedes the instructions below: four candles (`candles4`) instead of the torch,
+sequential capture, one fixed exposure per camera, the clean restart s11 and its decision
+rule, the D435if firmware update and repeat. All nine camera x distance cells PASS, the
+distance set is {1, 2, 3} m, and every `[e5]` value is filled (`a9aef35`). Records:
+`docs/e5/records/`.
+
+**e5 [YOU] + [CLAUDE] Flame-source acceptance test and depth-hole diagnosis (original
+instructions).** Still pilot: every frame only under `data/raw/camera_pilot/`, scene `s02` there; only
 technical image properties (flame size in pixels, depth validity), never accuracy, loss
 or prediction quality.
 - *Flame source.* The torch, alone (one lit source), with a ruler standing vertically
