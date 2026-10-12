@@ -725,6 +725,23 @@ sections 1 and 4-6.
       (`src/data/camera_capture_common.py`: `NOFIRE_MIN_WAIT_S`, `nofire_wait`;
       `tests/test_camera_capture.py`). The script cannot check for embers. The author's
       ember check and its line in the `--notes` stay as before.
+    - *Study capture order within a scene* (decided by the author on 2026-10-13, before
+      any study capture). Section 2 fixes no order, so "the order of the
+      pre-registration" above does not exist. This item fixes it.
+      - Each camera in turn does its fire captures first, at the scene's distances from
+        far to near, then its no-fire captures from near to far. This is the e5 order.
+      - After the candles are put out, the 2-minute wait and the ember check apply as
+        above.
+      - *Reason.* The no-fire wait in the capture script is checked per node. With fire
+        first, every fire-to-no-fire step of a scene happens on one camera and therefore
+        one node, so the code enforces the wait. Between cameras, and between scenes,
+        the order goes from no-fire to fire, where no wait is needed. With no-fire first,
+        the step from one camera's last fire capture to the next camera's first no-fire
+        capture would cross nodes, and the code would not see it.
+      - *Cost.* About 2 minutes of waiting inside every camera block, instead of waiting
+        while the cameras are swapped.
+      - The order of the cameras within a scene, the number of distances per scene, and
+        the rest of the study capture plan are not decided by this item.
   - *To be filled from e5:* the median flame height per camera x distance in 224-pixels,
     the height in cm against the ruler, and the resulting distance set.
     - *Filled 2026-10-13* from `docs/e5/records/flame/s11repeat_all_d{100,200,300}.csv`

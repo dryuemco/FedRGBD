@@ -89,14 +89,16 @@ a recalibration.
    | s13, s16, s19, ... | D435if | ZED | D435i |
    | s14, s17, s20, ... | ZED | D435i | D435if |
 
-3. **Per camera, proposed order: all no-fire first, then all fire** (open item O1).
-   - no-fire 1 -> 2 -> 3 m (candles unlit, cold, no ember), each after >= 10 s still;
+3. **Per camera: fire first, then no-fire** (O1, decided 2026-10-13, prereg 13.2 "Study
+   capture order within a scene").
    - light the candles, wait for steady flames;
    - fire 3 -> 2 -> 1 m (moving the lit base), each after >= 10 s still;
-   - put the candles out: **>= 2 min and an ember check** before the next camera's
-     no-fire. The camera swap (about 3 min) covers the wait if the candles go out before
-     the swap starts; the 2 min is timed, not assumed.
+   - put the candles out: **>= 2 min and an ember check**; the capture script refuses a
+     no-fire capture earlier than 120 s after the node's last fire capture of the scene;
+   - no-fire 1 -> 2 -> 3 m (candles unlit, cold, no ember), each after >= 10 s still;
    - (B) the same with the scene's two distances.
+   - The 2 min now falls inside every camera block (about +6 min per scene against the
+     earlier proposal, not yet in the time estimate of section 3).
 4. **Notes per capture:** `source`, `distance_measured_m`, `flame_height_cm`, scene sheet
    fields, `camera_order=...`, `capture_time`, `lighting=...`, `lamps_on=tavan lambasi`
    (exactly; a different value is refused by the code), `arrangement`, `spacing_cm`,
@@ -143,9 +145,9 @@ seen in s11 is replaced).
 
 ## 8. Open items for the review
 
-- **O1. Fire/no-fire order in the study.** The pre-registration does not fix it.
-  Proposal: per camera, no-fire 1-2-3, then fire 3-2-1. Needs a decision and a dated
-  entry in 13 before the first study capture.
+- **O1. Fire/no-fire order in the study. DECIDED 2026-10-13:** per camera, fire
+  far-to-near, then no-fire near-to-far (the e5 order), so that the per-node no-fire wait
+  of the capture script covers every fire-to-no-fire step (prereg 13.2).
 - **O2. One room, one lamp?** If scenes go to other rooms or lamps, every lamp condition
   needs its own calibration of all three cameras (13.1), and the session checks must
   follow it.
@@ -154,18 +156,18 @@ seen in s11 is replaced).
 - **O4. Candle burn-down.** When are the four candles replaced (a ruler height, or a
   number of fire captures)? The flame height in `--notes` records it either way.
 - **O5. The 2-minute rule in s11 (author, 2026-10-09).** The rule was not followed in
-  s11: the logged gap between the end of the 1 m fire capture and the start of the 1 m
-  no-fire capture was about 48-53 s on all three cameras (node_b 00:30:47 -> 00:31:35,
-  node_a 00:51:29 -> 00:52:22, node_c 01:35:04 -> 01:35:55). Check (a) (no-fire frames
-  0 px) passed on all three cameras. It is written into section 13 as a protocol
-  deviation.
+  s11. From the capture records (`end_unix` -> `start_actual_unix`) the gap was 51.9 s
+  (D435i), 55.8 s (ZED 2i) and 56.2 s (D435if before its update); the log time stamps
+  had suggested about 48-53 s. Check (a) (no-fire frames 0 px) passed on all three
+  cameras. **Recorded in prereg 13.2 (a9aef35).**
 - **O5a. A guard in the code for the study (author, 2026-10-09).** A no-fire capture is
   refused by the capture script if fewer than 120 s have passed since the end of the last
   fire capture of the same scene and distance. Code, test and section 13 before the first
-  study capture. (With the proposed order "no-fire first, then fire" per camera, the
+  study capture. **DONE a9aef35**, as "same scene, any distance" (approved by the author
+  2026-10-13), per node, `_retakes/` counted. (With the proposed order "no-fire first, then fire" per camera, the
   guard applies whenever a no-fire capture follows a fire capture of the same scene and
   distance, e.g. a retake.)
 - **O6. Tilt.** Still "unknown"; measure it once with the inclinometer before the study
   and record it.
-- **O7. The D435if repeat** (firmware 5.17.0.10, recalibration, s11, holes) comes first
-  tomorrow; the plan assumes it passes.
+- **O7. The D435if repeat. DONE 2026-10-12:** all three cameras PASS at 1, 2 and 3 m;
+  distance set {1, 2, 3} m (prereg 13.2, a9aef35).
