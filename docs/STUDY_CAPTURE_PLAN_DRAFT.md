@@ -58,22 +58,26 @@ so each pair occurs 6 times and each distance 12 times.
 - session start (each camera mounted at the reference position for its check, then back
   to the scene): about 4 min per camera, 12 min per session.
 
-**Per scene** (one camera block = its captures + the gaps between them; the >= 2 min
-after putting out the candles overlaps the next camera swap -- see section 4):
+**Per scene, updated 2026-10-13 for O1** (fire first per camera, prereg 13.2). One camera
+block = its captures and the gaps between them. The step from the last fire capture to
+the first no-fire capture is now >= 120 s (the capture script enforces it) instead of a
+~40 s gap, inside the block. Lighting the candles and waiting for steady flames is not
+timed yet and not included.
 
 | | (A) 3 distances | (B) 2 distances |
 |---|---|---|
 | captures per camera | 6 | 4 |
-| camera block | 6 x 14 s + 5 x 40 s = 4.7 min | 4 x 14 s + 3 x 40 s = 2.9 min |
-| + swap (3 cameras) | 3 x (4.7 + 3) = 23 min | 3 x (2.9 + 3) = 18 min |
+| camera block | 6 x 14 s + 4 x 40 s + 120 s = 6.1 min | 4 x 14 s + 2 x 40 s + 120 s = 4.3 min |
+| + swap (3 cameras) | 3 x (6.1 + 3) = 27 min | 3 x (4.3 + 3) = 22 min |
 | + scene set-up | 15 min | 15 min |
-| **per scene** | **about 38 min** | **about 33 min** |
-| all scenes | 15 x 38 = 9.5 h | 18 x 33 = 9.9 h |
-| + session starts (one per day, 12 min) | about 10 h, two days | about 10 h, two days |
+| **per scene** | **about 42 min** | **about 37 min** |
+| all scenes | 15 x 42 = 10.5 h | 18 x 37 = 11.1 h |
+| + session starts (one per day, 12 min) | about 11 h, two days | about 11.5 h, two days |
 
-Both options take about the same time; (B) gives 3 more scenes for the LOSO folds, (A)
-gives every scene all three distances. Neither estimate includes breaks, candle changes or
-a recalibration.
+(Before O1, with no-fire first and the 2 minutes inside the camera swap: about 38 and 33
+min per scene, 9.5 and 9.9 h.) Both options take about the same time; (B) gives 3 more
+scenes for the LOSO folds, (A) gives every scene all three distances. Neither estimate
+includes breaks, candle changes, lighting the candles or a recalibration.
 
 ## 4. Per scene (proposal)
 
