@@ -1306,6 +1306,15 @@ CAMERA_CONTENT_MARKER = "camera_fold"
 #: A5's "desktop simulation sensitivity analysis" (docs/A5_DIRICHLET_DRAWS_PREREG.md, A5-2)
 #: is reported separately and never pooled with the testbed: its tree is skipped too
 DESKTOP_SIM_TREE = "desktop_sim"
+#: A5's additional testbed draws (``rev_dirichlet<alpha>_ps<seed>_...``) are analysed only by
+#: scripts/a5_dirichlet_draws.py: descriptive, never pooled with or compared against the
+#: main study (A5-1 (c)), and without the clean-subset lists the summary needs
+A5_DRAW_RE = re.compile(r"_ps\d+_")
+
+
+def is_a5_draw_entry(entry: str) -> bool:
+    """A run directory of A5's additional Dirichlet draws."""
+    return bool(A5_DRAW_RE.search(entry))
 
 
 def is_excluded_entry(entry: str) -> bool:
@@ -1347,7 +1356,7 @@ def iter_run_dirs(results_dir: str, include_test_runs: bool = False) -> Iterator
         if is_excluded_entry(entry):
             continue
         if any(os.path.isfile(os.path.join(path, n)) for n in ("results.json", "summary.json")):
-            if not is_camera_run(path):
+            if not is_camera_run(path) and not is_a5_draw_entry(entry):
                 yield path
         else:
             for nested in iter_run_dirs(path, include_test_runs):

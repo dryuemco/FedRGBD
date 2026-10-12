@@ -1154,6 +1154,159 @@ def global_eval_tabular(analysis_dir: str,
     return "\n".join(out) + "\n"
 
 
+# --------------------------------------------------------------------------- #
+# A5 (docs/A5_DIRICHLET_DRAWS_PREREG.md): the additional Dirichlet draws, descriptive
+# only -- per run and range / SD across the draws, no test, no verdict, never pooled with
+# or set against the main study's Dirichlet results; testbed and desktop simulation in
+# separate tables.  Read from analysis/a5/ (scripts/a5_dirichlet_draws.py).
+# --------------------------------------------------------------------------- #
+A5_DIR = "a5"
+A5_STRATEGY = {"fedavg": r"\fedavg{}", "fedprox_0.01": r"\fedprox{} 0.01"}
+A5_ALPHA = {"0.1": "0.1", "0.5": "0.5", "1": "1.0"}
+
+
+def load_a5(analysis_dir: str) -> Optional[Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]]:
+    """(runs, spread, skew) of analysis/a5/, or None if any file is missing."""
+    paths = [os.path.join(analysis_dir, A5_DIR, n)
+             for n in ("a5_runs.csv", "a5_spread.csv", "a5_skew.csv")]
+    if not all(os.path.isfile(p) for p in paths):
+        return None
+    runs, spread, skew = (pd.read_csv(p, dtype={"alpha": str, "draw": str, "partition": str})
+                          for p in paths)
+    return runs, spread, skew
+
+
+def _a5_ci(row: Any, col: str) -> str:
+    return "%.1f [%.1f, %.1f]" % (100 * float(row[col]), 100 * float(row[col + "_ci_low"]),
+                                  100 * float(row[col + "_ci_high"]))
+
+
+def _a5_spread(row: Any, col: str) -> str:
+    """range / SD over the draws, in percentage points."""
+    return "%.1f / %.1f" % (100 * float(row[col + "_range"]), 100 * float(row[col + "_sd"]))
+
+
+def _a5_draw(draw: str) -> str:
+    return str(draw)[2:] if str(draw).startswith("ps") else str(draw)
+
+
+def _a5_jsd(skew: pd.DataFrame) -> Dict[str, float]:
+    allrows = skew[skew["node"] == "ALL"]
+    return {str(p): float(j) for p, j in zip(allrows["partition"], allrows["jsd"])}
+
+
+def _a5_block(runs: pd.DataFrame, spread: pd.DataFrame, setting: str, alpha: str,
+              jsd: Dict[str, float], times: bool) -> List[str]:
+    """Rows of one alpha: per strategy its draws, then the range / SD row."""
+    out: List[str] = []
+    for k, strategy in enumerate(A5_STRATEGY):
+        sel = runs[(runs["setting"] == setting) & (runs["alpha"] == alpha)
+                   & (runs["strategy"] == strategy)]
+        if sel.empty:
+            continue
+        if k:
+            out.append(r"\cmidrule(lr){1-%d}" % (8 if times else 6))
+        for i, (_, r) in enumerate(sel.iterrows()):
+            cells = [A5_STRATEGY[strategy] if i == 0 else "", _a5_draw(r["draw"]),
+                     "%.3f" % jsd[str(r["partition"])], "%d" % int(r["selected_round"]),
+                     _a5_ci(r, "ba_pooled"), _a5_ci(r, "ba_clientmean")]
+            if times:
+                cells += ["%.1f" % float(r["round1_time_s"]),
+                          "%.1f" % float(r["steady_round_time_s"])]
+            out.append(_row(cells))
+        s = spread[(spread["setting"] == setting) & (spread["alpha"] == alpha)
+                   & (spread["strategy"] == strategy)]
+        if len(s) != 1:
+            raise ValueError("no unique A5 spread row for %s/%s/%s" % (setting, alpha, strategy))
+        s = s.iloc[0]
+        if int(s["n_draws"]) != len(sel):
+            raise ValueError("A5 spread of %s/%s/%s is over %s draws, the table shows %d"
+                             % (setting, alpha, strategy, s["n_draws"], len(sel)))
+        cells = ["", r"\textit{range / SD, $n{=}%d$}" % len(sel), "", "",
+                 _a5_spread(s, "ba_pooled"), _a5_spread(s, "ba_clientmean")]
+        out.append(_row(cells + (["", ""] if times else [])))
+    return out
+
+
+def a5_testbed_tabular(analysis_dir: str) -> Optional[str]:
+    """tab:a5_testbed: the two additional alpha = 0.1 draws on the testbed (A5 sec. 3a)."""
+    loaded = load_a5(analysis_dir)
+    if loaded is None:
+        return None
+    runs, spread, skew = loaded
+    if runs[runs["setting"] == "testbed"].empty:
+        return None
+    out = [_GENERATED, r"\begin{tabular}{@{}llcccccc@{}}", r"\toprule",
+           _row([r"\textbf{Strategy}", r"\textbf{Draw}", r"\textbf{JSD}", r"\textbf{Round}",
+                 _stack(r"\textbf{Bal.\ acc., pooled}", r"\textbf{(\%) [95\% CI]}"),
+                 _stack(r"\textbf{Bal.\ acc., client}", r"\textbf{mean (\%) [95\% CI]}"),
+                 _stack(r"\textbf{Round 1}", r"\textbf{(s)}"),
+                 _stack(r"\textbf{Rounds 2--10,}", r"\textbf{median (s)}")]), r"\midrule"]
+    out += _a5_block(runs, spread, "testbed", "0.1", _a5_jsd(skew), times=True)
+    out += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(out) + "\n"
+
+
+def a5_desktop_sim_tabular(analysis_dir: str) -> Optional[str]:
+    """tab:a5_desktop_sim: the desktop simulation sensitivity analysis (A5 sec. 3b, A5-2)."""
+    loaded = load_a5(analysis_dir)
+    if loaded is None:
+        return None
+    runs, spread, skew = loaded
+    desk = runs[runs["setting"] == "desktop_sim"]
+    if desk.empty:
+        return None
+    jsd = _a5_jsd(skew)
+    out = [_GENERATED, r"\begin{tabular}{@{}llcccc@{}}", r"\toprule",
+           _row([r"\textbf{Strategy}", r"\textbf{Draw}", r"\textbf{JSD}", r"\textbf{Round}",
+                 _stack(r"\textbf{Bal.\ acc., pooled}", r"\textbf{(\%) [95\% CI]}"),
+                 _stack(r"\textbf{Bal.\ acc., client}", r"\textbf{mean (\%) [95\% CI]}")]),
+           r"\midrule"]
+    for k, alpha in enumerate(a for a in A5_ALPHA if a in set(desk["alpha"])):
+        if k:
+            out.append(r"\midrule")
+        out.append(r"\multicolumn{6}{@{}l}{\textit{Dirichlet $\alpha{=}%s$}} \\" % A5_ALPHA[alpha])
+        out += _a5_block(runs, spread, "desktop_sim", alpha, jsd, times=False)
+    out += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(out) + "\n"
+
+
+def a5_skew_tabular(analysis_dir: str) -> Optional[str]:
+    """tab:a5_skew: the measured skew of every A5 draw (A5 sec. 4; partitions, not results)."""
+    loaded = load_a5(analysis_dir)
+    if loaded is None:
+        return None
+    runs, _, skew = loaded
+    nodes = ("node_a", "node_b", "node_c")
+    order = runs.drop_duplicates("partition")[["alpha", "draw", "partition"]]
+    out = [_GENERATED, r"\begin{tabular}{@{}llccccccc@{}}", r"\toprule",
+           _row([r"$\alpha$", r"\textbf{Draw}", _stack(r"\textbf{Fire share}", r"\textbf{A / B / C (\%)}"),
+                 _stack(r"\textbf{Train images}", r"\textbf{A / B / C}"), r"\textbf{JSD}",
+                 _stack(r"\textbf{JSD,}", r"\textbf{unweighted}"), r"\textbf{max JSD}", r"\textbf{TV}",
+                 _stack(r"\textbf{Largest}", r"\textbf{node (\%)}")]), r"\midrule"]
+    previous = None
+    for alpha in A5_ALPHA:
+        for _, o in order[order["alpha"] == alpha].sort_values(
+                "draw", key=lambda s: s.str[2:].astype(int)).iterrows():
+            part = skew[skew["partition"] == o["partition"]]
+            per = {r["node"]: r for _, r in part.iterrows()}
+            a = per["ALL"]
+            if previous is not None and previous != alpha:
+                out.append(r"\midrule")
+            first = previous != alpha
+            previous = alpha
+            fire = " / ".join("%.1f" % (100.0 * float(per[n]["fire"]) / float(per[n]["n_train"]))
+                              for n in nodes)
+            size = " / ".join("{:,}".format(int(per[n]["n_train"])).replace(",", "{,}")
+                              for n in nodes)
+            out.append(_row([A5_ALPHA[alpha] if first else "", _a5_draw(o["draw"]), fire, size,
+                             "%.3f" % float(a["jsd"]), "%.3f" % float(a["jsd_unweighted"]),
+                             "%.3f" % float(a["jsd_max"]), "%.3f" % float(a["tv"]),
+                             "%.0f" % (100 * float(a["size_share"]))]))
+    out += [r"\bottomrule", r"\end{tabular}"]
+    return "\n".join(out) + "\n"
+
+
 #: sec:powercfg (docs/CROSS_CONFIG_COMPARISON.md): the two declared families
 CROSS_FAMILIES = (("rounds_1_3", "Rounds 1--3"), ("ten_rounds", "Ten rounds"))
 CROSS_QUANTITY = {"primary": "rounds 2--3 (primary)", "secondary": "MAXN 2--10 vs 2--3",
@@ -1546,6 +1699,10 @@ def export(analysis_dir: str, output_dir: str, metrics: Optional[Sequence[str]] 
     if power_config == DEFAULT_POWER_CONFIG:   # both declared families, one table each
         _write(global_eval_tabular(analysis_dir, ("heterogeneous",)), "global_eval_tabular.tex")
         _write(global_eval_tabular(analysis_dir, ("maxn",)), "global_eval_maxn_tabular.tex")
+        # A5 reads its own analysis/a5/ (both settings), whatever the power configuration
+        _write(a5_testbed_tabular(analysis_dir), "a5_testbed_tabular.tex")
+        _write(a5_desktop_sim_tabular(analysis_dir), "a5_desktop_sim_tabular.tex")
+        _write(a5_skew_tabular(analysis_dir), "a5_skew_tabular.tex")
         _write(perclient_paper_tabular(analysis_dir), "perclient_tabular.tex")
         _write(powercfg_acc_tabular(analysis_dir), "powercfg_acc_tabular.tex")
         _write(powercfg_time_tabular(analysis_dir), "powercfg_time_tabular.tex")
