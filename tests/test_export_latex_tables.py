@@ -521,3 +521,22 @@ def test_no_dagger_when_no_configuration_is_scarce():
     tex = summary_tex(pd.DataFrame(rows), "selected_test_balanced_accuracy", scarce=set())
     body = tex.split(r"\midrule")[-1].split(r"\bottomrule")[0]
     assert r"\dagger" not in body
+
+
+def test_sensitivity_table_needs_prediction_based_rows():
+    """tab:sensitivity is not written from logged-native figures alone (synthetic runs
+    without prediction files), and a mix of pooled and logged-native rows still fails."""
+    from scripts.export_latex_tables import (PRIMARY_BA, SECONDARY_BA, SENSITIVITY_ROWS,
+                                             sensitivity_tabular)
+    cids = [cid for _, _, cid in SENSITIVITY_ROWS][:2]
+
+    def rows(aggs):
+        return pd.DataFrame([{"config_id": cid, "metric": m, "aggregation": agg, "mean": 0.9,
+                              "ci_low": 0.85, "ci_high": 0.95, "n_seeds": 3}
+                             for cid, agg in zip(cids, aggs) for m in (PRIMARY_BA, SECONDARY_BA)])
+
+    assert sensitivity_tabular(rows(["logged_native", "logged_native"]), set()) is None
+    text = sensitivity_tabular(rows(["pooled", "pooled"]), set())
+    assert "90.0 [85.0, 95.0]" in text
+    with pytest.raises(ValueError, match="logged_native"):
+        sensitivity_tabular(rows(["pooled", "logged_native"]), set())

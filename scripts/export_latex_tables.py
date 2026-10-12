@@ -1432,6 +1432,15 @@ def sensitivity_tabular(summary: pd.DataFrame, scarce: set) -> Optional[str]:
     wanted = {cid for _, _, cid in SENSITIVITY_ROWS}
     if summary.empty or not set(summary["config_id"].astype(str)) & wanted:
         return None
+    # like the other paper tabulars: no table when none of its configurations has a figure
+    # under the declared aggregation (no prediction files, e.g. synthetic runs); a mix of
+    # pooled and logged-native rows still fails in check_aggregation
+    primary = summary[summary["config_id"].astype(str).isin(wanted)
+                      & (summary["metric"].astype(str) == PRIMARY_BA)]
+    if "aggregation" in primary.columns:
+        primary = primary[primary["aggregation"].astype(str) == "pooled"]
+    if primary.empty:
+        return None
     pooled_flag, mean_flag = scarce_cells(scarce, _SENS_D)
     out = [_GENERATED, r"\begin{tabular}{@{}llccc@{}}", r"\toprule",
            _row([r"\textbf{Factor}", r"\textbf{Setting}", r"\textbf{Bal.\ acc.}",
