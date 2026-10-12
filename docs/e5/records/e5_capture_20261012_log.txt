@@ -1,0 +1,423 @@
+[2026-10-12 23:30:22] SESSION 2026-10-12: nodes pulled to 1db967a, prereg 13.3 repeat decision 9de4273 pushed. D435if (node_a, FW 5.17.0.10) mounted on the plate at the reference position, plate tilt unchanged (s11 tilt, unknown); ZED off the plate. USB/serial check + FRAMING ONLY (not e5 data), candles unlit at 3 m on matte base, lamps_on=tavan lambasi
+9de4273
+{"import": true, "cameras": [{"name": "Intel RealSense D435I", "serial": "239722070442", "usb_type": "3.2", "firmware": "5.17.0.10"}]}
+{"framing_only_not_e5_data": true, "serial": "239722070442", "resolution": [1920, 1080], "auto_exposure_flag": 1, "crop_rect_native_xyxy": [420, 0, 1499, 1079], "files": {"/home/jetson-a/e5_framing/framing_20261012_233026_d435if_full_1920x1080_crop224rect.png": "c2c19e18ff03459dba8699dc586a97a3", "/home/jetson-a/e5_framing/framing_20261012_233026_d435if_crop224_x3.png": "fcc90e7c24429d8d3f4481612191cdaf"}}
+[2026-10-12 23:31:52] FRAMING CHECK vs framing_20261009_004251 (D435if, s11 calibration framing), framing frames only, not e5 data:
+  view shift (phase correlation, floor rows 400-1000): dx -26 px, dy -2 px (native 1920x1080); D435if remounted on the plate, plate tilt untouched
+  curtain left edge (row-mean luma < 60 over rows 50-300, from x=700): 810 px (9 Oct) -> 843 px (12 Oct); the 9 Oct edge position maps to ~784 px in today's view (= the room corner)
+  i.e. the curtain is pulled away from the corner; a strip of white wall is visible behind the candles at 3 m (side-by-side: logs/e5/framing/framing_20261012_233026_vs_20261009_004251_curtain.png)
+  node_a WB rectangle (x 0.03-0.28, y 0.12-0.30) on today's frame: plain white wall only (logs/e5/framing/framing_20261012_233026_d435if_wb_current_node_a.png)
+[2026-10-12 23:33:40] FRAMING ONLY, NOT E5 DATA: D435if (node_a) after the author moved the curtain edge back to the corner and fixed its bottom edge; candles unlit at 3 m; 10 s wait
+{"framing_only_not_e5_data": true, "serial": "239722070442", "resolution": [1920, 1080], "auto_exposure_flag": 1, "crop_rect_native_xyxy": [420, 0, 1499, 1079], "files": {"/home/jetson-a/e5_framing/framing_20261012_233350_d435if_full_1920x1080_crop224rect.png": "050f4fcefdf6b4b845ea60adf8606187", "/home/jetson-a/e5_framing/framing_20261012_233350_d435if_crop224_x3.png": "531331bdcb1cd40f2e756537736b99f9"}}
+[2026-10-12 23:34:42] CALIBRATION node_a D435if (s11 REPEAT, FW 5.17.0.10) START: python3 src/data/realsense_capture.py --calibrate_exposure --recalibrate --node node_a --root data/raw/camera_pilot --notes "source=none; distance_measured_m=3.00; flame_height_cm=0; e5 s11 REPEAT of the D435if after its firmware update (5.17.0.10), calibration; reference position; plate tilt unchanged (s11 tilt); tilt_deg=unknown; source on matte base; curtain edge restored to the corner; camera_order=sequential, D435if node_a only (repeat, prereg 13.3); capture_time=23:34:42; lighting=curtains closed, artificial light only; lamps_on=tavan lambasi"
+3d701d1f307f69a6ebadc5abdefca110  data/raw/camera_pilot/node_a/_exposure/exposure.json
+calibration WB 2800: R-B -78.63 (R,G,B [32.123, 76.378, 110.749])
+calibration WB 6500: R-B 48.83 (R,G,B [99.397, 69.061, 50.57])
+calibration WB 4650: R-B 2.60 (R,G,B [87.985, 69.952, 85.389])
+calibration WB 3720: R-B -34.98 (R,G,B [63.036, 73.341, 98.019])
+calibration WB 4180: R-B -10.04 (R,G,B [84.113, 70.209, 94.151])
+calibration WB 4420: R-B -3.41 (R,G,B [85.985, 70.129, 89.397])
+calibration WB 4540: R-B 0.13 (R,G,B [87.039, 70.057, 86.914])
+calibration WB 4480: R-B -1.64 (R,G,B [86.581, 70.073, 88.223])
+calibration WB 4510: R-B -0.60 (R,G,B [86.949, 70.04, 87.549])
+calibration WB 4530: R-B -0.26 (R,G,B [87.032, 70.052, 87.296])
+calibration exposure 166: 224 mean luma 51.70
+calibration exposure 235: 224 mean luma 66.74
+calibration exposure 280: 224 mean luma 74.99
+calibration exposure 305: 224 mean luma 79.22
+calibration exposure 319: 224 mean luma 81.48
+calibration exposure 326: 224 mean luma 82.57
+calibration exposure 329: 224 mean luma 83.04
+calibration exposure 331: 224 mean luma 83.36
+calibration exposure 332: 224 mean luma 83.50
+calibration exposure 333 (cap): 224 mean luma 83.74
+calibration gain 91 (exposure at cap 333): 224 mean luma 102.04
+verification: exposure 333, gain 91, white balance 4540 -> 224 mean luma 102.05, rectangle R,G,B [159.97, 136.556, 160.154], R-B -0.18
+fixed exposure 333.0, gain 91.0, white balance 4540.0 (224 mean luma 102.048) -> data/raw/camera_pilot/node_a/_exposure/exposure.json
+rc=0
+f51b77f3be20c257944ff48af864d0aa  data/raw/camera_pilot/node_a/_exposure/exposure.json
+data/raw/camera_pilot/node_a/_exposure/:
+total 112
+drwxrwxr-x 3 jetson-a jetson-a  4096 Eki 12 23:35 .
+drwxrwxr-x 4 jetson-a jetson-a 90112 Eki  9 00:54 ..
+-rw-rw-r-- 1 jetson-a jetson-a 11560 Eki 12 23:35 exposure.json
+drwxrwxr-x 2 jetson-a jetson-a  4096 Eki 12 23:35 _superseded
+
+data/raw/camera_pilot/node_a/_exposure/_superseded/:
+total 20
+drwxrwxr-x 2 jetson-a jetson-a  4096 Eki 12 23:35 .
+drwxrwxr-x 3 jetson-a jetson-a  4096 Eki 12 23:35 ..
+-rw-rw-r-- 1 jetson-a jetson-a 11443 Eki  9 00:46 20261012T233509_exposure.json
+3d701d1f307f69a6ebadc5abdefca110  data/raw/camera_pilot/node_a/_exposure/_superseded/20261012T233509_exposure.json
+[2026-10-12 23:35:11] CALIBRATION node_a D435if (s11 REPEAT) END
+[2026-10-12 23:35:30] node_a exposure.json (f51b77f3be20c257944ff48af864d0aa) committed cee5ee3, pushed; superseded 1f6c174 file in _superseded/20261012T233509_exposure.json (3d701d1f307f69a6ebadc5abdefca110)
+[2026-10-12 23:35:39] SESSION CHECK s11 repeat, node_a D435if START: python3 src/data/realsense_capture.py --session_check --node node_a --root data/raw/camera_pilot --notes "source=none; distance_measured_m=3.00; flame_height_cm=0; e5 s11 repeat session check D435if; candles unlit on matte base at 3 m; lamps_on=tavan lambasi"
+cee5ee3
+{"session_check": "PASS", "node": "node_a", "time": "2026-10-12 23:35:42", "setting": {"exposure": 333.0, "gain": 91.0, "white_balance": 4540.0}, "applied": {"exposure": 333.0, "gain": 91.0, "white_balance": 4540.0, "auto_exposure": 0.0, "auto_white_balance": 0.0}, "luma_224_median": 101.765, "calibration_luma_224": 102.048, "band": [91.843, 112.253], "region_rgb_mean": [157.559, 137.322, 160.132], "r_minus_b": -2.573}
+rc=0
+[2026-10-12 23:36:25] TEST FRAME, NOT E5 DATA: dry run of scripts/e5/e5_test_grab_d435if_fixed.py (D435if node_a, fixed setting 333/91/4540, AE off), candles UNLIT at 3 m
+{"framing_only_not_e5_data": true, "fixed_setting_applied": {"exposure": 333.0, "gain": 91.0, "white_balance": 4540.0, "auto_exposure": 0.0, "auto_white_balance": 0.0}, "serial": "239722070442", "firmware": "5.17.0.10", "resolution": [1920, 1080], "auto_exposure_flag": false, "exposure": 333, "gain": 91, "white_balance": 4540.0, "crop_rect_native_xyxy": [420, 0, 1499, 1079], "files": {"/home/jetson-a/e5_framing/framing_20261012_233625_d435if_full_1920x1080_crop224rect.png": "79e0bc42794e8efa9300cff5afd5ccf7", "/home/jetson-a/e5_framing/framing_20261012_233625_d435if_crop224_x3.png": "cba4213897ded55a6c2d4a8af7f43952"}}
+[2026-10-12 23:41:09] TEST FRAME, NOT E5 DATA: D435if (node_a), s11 repeat setup, candles LIT at 1 m on matte base, fixed setting 333/91/4540 (AE off); flame position check; 10 s wait
+{"framing_only_not_e5_data": true, "fixed_setting_applied": {"exposure": 333.0, "gain": 91.0, "white_balance": 4540.0, "auto_exposure": 0.0, "auto_white_balance": 0.0}, "serial": "239722070442", "firmware": "5.17.0.10", "resolution": [1920, 1080], "auto_exposure_flag": false, "exposure": 333, "gain": 91, "white_balance": 4540.0, "crop_rect_native_xyxy": [420, 0, 1499, 1079], "files": {"/home/jetson-a/e5_framing/framing_20261012_234119_d435if_full_1920x1080_crop224rect.png": "ddc4cd32ea69fed7e18420f7168bd09f", "/home/jetson-a/e5_framing/framing_20261012_234119_d435if_crop224_x3.png": "bed59d0053e61a337ed183ad018d1799"}}
+flame-core pixels (max channel >= 245, R>=G>=B) in the 224 crop: 247, components: 2
+component 1: 234 px, 224 bbox top=145 left=119 bottom=171 right=132 (h=27 w=14), touches crop edge=False, native bbox x=994-1060 y=699-828
+component 2: 13 px, 224 bbox top=195 left=126 bottom=199 right=129 (h=5 w=4), touches crop edge=False, native bbox x=1028-1046 y=940-963
+logs/e5/framing/framing_20261012_234119_d435if_crop224_x3_flamecore.png
+[2026-10-12 23:44:39] s11 REPEAT fire d300 node_a (D435if FW 5.17.0.10) REQUEST: realsense_capture.py --node node_a --scene s11 --label fire --distance_m 3 --frames 40 --retake --notes "source=candles4; distance_measured_m=3.00; flame_height_cm=3.5; flame height per author same as 9 Oct ruler measurement; e5 s11 REPEAT (D435if after firmware update 5.17.0.10, prereg 13.3 9de4273); matte base; reference position; tilt_deg=unknown; curtain edge restored to the corner; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435if node_a only (repeat); lighting=curtains closed, artificial light only; lamps_on=tavan lambasi; capture_time=<node time>"
+START 2026-10-12 23:44:49
+exposure lock (fixed_camera): exposure 333.0, gain 91.0, white balance 4540.0
+{"capture_id": "s11_fire_d300", "node": "node_a", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791837891.8166041, "status": "complete"}
+rc=0
+END 2026-10-12 23:45:02
+160
+{'capture_id': 's11_fire_d300', 'status': 'complete', 'n_frames_written': 40, 'retake_moved_to': 'data/raw/camera_pilot/node_a/_retakes/20261012T234449', 'notes': 'source=candles4; distance_measured_m=3.00; flame_height_cm=3.5; flame height per author same as 9 Oct ruler measurement; e5 s11 REPEAT (D435if after firmware update 5.17.0.10, prereg 13.3 9de4273); matte base; reference position; tilt_deg=unknown; curtain edge restored to the corner; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435if node_a only (repeat); lighting=curtains closed, artificial light only; lamps_on=tavan lambasi; capture_time=23:44:49'}
+{'exposure': 333, 'exposure_source': 'manual_lock', 'gain': 91, 'white_balance': 4540.0, 'auto_exposure': False, 'firmware': '5.17.0.10'}
+[2026-10-12 23:45:03] s11 REPEAT fire d300 node_a DONE
+[2026-10-12 23:45:59] s11 REPEAT fire d200 node_a (D435if FW 5.17.0.10) REQUEST: realsense_capture.py --node node_a --scene s11 --label fire --distance_m 2 --frames 40 --retake --notes "source=candles4; distance_measured_m=2.00; flame_height_cm=3.5; flame height per author same as 9 Oct ruler measurement; e5 s11 REPEAT (D435if after firmware update 5.17.0.10, prereg 13.3 9de4273); matte base; reference position; tilt_deg=unknown; curtain edge restored to the corner; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435if node_a only (repeat); lighting=curtains closed, artificial light only; lamps_on=tavan lambasi; capture_time=<node time>"
+START 2026-10-12 23:46:09
+exposure lock (fixed_camera): exposure 333.0, gain 91.0, white balance 4540.0
+{"capture_id": "s11_fire_d200", "node": "node_a", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791837971.1644156, "status": "complete"}
+rc=0
+END 2026-10-12 23:46:21
+160
+{'capture_id': 's11_fire_d200', 'status': 'complete', 'n_frames_written': 40, 'retake_moved_to': 'data/raw/camera_pilot/node_a/_retakes/20261012T234609', 'notes': 'source=candles4; distance_measured_m=2.00; flame_height_cm=3.5; flame height per author same as 9 Oct ruler measurement; e5 s11 REPEAT (D435if after firmware update 5.17.0.10, prereg 13.3 9de4273); matte base; reference position; tilt_deg=unknown; curtain edge restored to the corner; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435if node_a only (repeat); lighting=curtains closed, artificial light only; lamps_on=tavan lambasi; capture_time=23:46:09'}
+{'exposure': 333, 'exposure_source': 'manual_lock', 'gain': 91, 'white_balance': 4540.0, 'auto_exposure': False, 'firmware': '5.17.0.10'}
+[2026-10-12 23:46:22] s11 REPEAT fire d200 node_a DONE
+[2026-10-12 23:47:10] s11 REPEAT fire d100 node_a (D435if FW 5.17.0.10) REQUEST: realsense_capture.py --node node_a --scene s11 --label fire --distance_m 1 --frames 40 --retake --notes "source=candles4; distance_measured_m=1.00; flame_height_cm=3.5; flame height per author same as 9 Oct ruler measurement; e5 s11 REPEAT (D435if after firmware update 5.17.0.10, prereg 13.3 9de4273); matte base; reference position; tilt_deg=unknown; curtain edge restored to the corner; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435if node_a only (repeat); lighting=curtains closed, artificial light only; lamps_on=tavan lambasi; capture_time=<node time>"
+START 2026-10-12 23:47:20
+exposure lock (fixed_camera): exposure 333.0, gain 91.0, white balance 4540.0
+{"capture_id": "s11_fire_d100", "node": "node_a", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791838042.2114437, "status": "complete"}
+rc=0
+END 2026-10-12 23:47:32
+160
+{'capture_id': 's11_fire_d100', 'status': 'complete', 'n_frames_written': 40, 'retake_moved_to': 'data/raw/camera_pilot/node_a/_retakes/20261012T234720', 'notes': 'source=candles4; distance_measured_m=1.00; flame_height_cm=3.5; flame height per author same as 9 Oct ruler measurement; e5 s11 REPEAT (D435if after firmware update 5.17.0.10, prereg 13.3 9de4273); matte base; reference position; tilt_deg=unknown; curtain edge restored to the corner; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435if node_a only (repeat); lighting=curtains closed, artificial light only; lamps_on=tavan lambasi; capture_time=23:47:20'}
+{'exposure': 333, 'exposure_source': 'manual_lock', 'gain': 91, 'white_balance': 4540.0, 'auto_exposure': False, 'firmware': '5.17.0.10'}
+[2026-10-12 23:47:33] s11 REPEAT fire d100 node_a DONE
+[2026-10-12 23:48:55] s11 REPEAT no_fire d100 node_a (D435if FW 5.17.0.10) REQUEST: realsense_capture.py --node node_a --scene s11 --label no_fire --distance_m 1 --frames 40 --retake --notes "source=none; distance_measured_m=1.00; flame_height_cm=0; e5 s11 REPEAT (D435if after firmware update 5.17.0.10, prereg 13.3 9de4273); matte base; reference position; tilt_deg=unknown; curtain edge restored to the corner; candles out, no ember (author's check), start at least 120 s after the end of s11_fire_d100 (end 23:47:32, guard 23:49:35); arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435if node_a only (repeat); lighting=curtains closed, artificial light only; lamps_on=tavan lambasi; capture_time=<node time>"
+not-before guard: 2026-10-12 23:49:35, passed at 2026-10-12 23:49:35
+START 2026-10-12 23:49:35
+exposure lock (fixed_camera): exposure 333.0, gain 91.0, white balance 4540.0
+{"capture_id": "s11_no_fire_d100", "node": "node_a", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791838177.3255937, "status": "complete"}
+rc=0
+END 2026-10-12 23:49:47
+160
+{'capture_id': 's11_no_fire_d100', 'status': 'complete', 'n_frames_written': 40, 'retake_moved_to': 'data/raw/camera_pilot/node_a/_retakes/20261012T234935', 'notes': "source=none; distance_measured_m=1.00; flame_height_cm=0; e5 s11 REPEAT (D435if after firmware update 5.17.0.10, prereg 13.3 9de4273); matte base; reference position; tilt_deg=unknown; curtain edge restored to the corner; candles out, no ember (author's check), start at least 120 s after the end of s11_fire_d100 (end 23:47:32, guard 23:49:35); arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435if node_a only (repeat); lighting=curtains closed, artificial light only; lamps_on=tavan lambasi; capture_time=23:49:35"}
+{'exposure': 333, 'exposure_source': 'manual_lock', 'gain': 91, 'white_balance': 4540.0, 'auto_exposure': False, 'firmware': '5.17.0.10'}
+[2026-10-12 23:49:48] s11 REPEAT no_fire d100 node_a DONE
+[2026-10-12 23:50:27] s11 REPEAT no_fire d200 node_a (D435if FW 5.17.0.10) REQUEST: realsense_capture.py --node node_a --scene s11 --label no_fire --distance_m 2 --frames 40 --retake --notes "source=none; distance_measured_m=2.00; flame_height_cm=0; e5 s11 REPEAT (D435if after firmware update 5.17.0.10, prereg 13.3 9de4273); matte base; reference position; tilt_deg=unknown; curtain edge restored to the corner; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435if node_a only (repeat); lighting=curtains closed, artificial light only; lamps_on=tavan lambasi; capture_time=<node time>"
+START 2026-10-12 23:50:37
+exposure lock (fixed_camera): exposure 333.0, gain 91.0, white balance 4540.0
+{"capture_id": "s11_no_fire_d200", "node": "node_a", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791838239.8385973, "status": "complete"}
+rc=0
+END 2026-10-12 23:50:50
+160
+{'capture_id': 's11_no_fire_d200', 'status': 'complete', 'n_frames_written': 40, 'retake_moved_to': 'data/raw/camera_pilot/node_a/_retakes/20261012T235038', 'notes': 'source=none; distance_measured_m=2.00; flame_height_cm=0; e5 s11 REPEAT (D435if after firmware update 5.17.0.10, prereg 13.3 9de4273); matte base; reference position; tilt_deg=unknown; curtain edge restored to the corner; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435if node_a only (repeat); lighting=curtains closed, artificial light only; lamps_on=tavan lambasi; capture_time=23:50:37'}
+{'exposure': 333, 'exposure_source': 'manual_lock', 'gain': 91, 'white_balance': 4540.0, 'auto_exposure': False, 'firmware': '5.17.0.10'}
+[2026-10-12 23:50:51] s11 REPEAT no_fire d200 node_a DONE
+[2026-10-12 23:51:38] s11 REPEAT no_fire d300 node_a (D435if FW 5.17.0.10) REQUEST: realsense_capture.py --node node_a --scene s11 --label no_fire --distance_m 3 --frames 40 --retake --notes "source=none; distance_measured_m=3.00; flame_height_cm=0; e5 s11 REPEAT (D435if after firmware update 5.17.0.10, prereg 13.3 9de4273); matte base; reference position; tilt_deg=unknown; at least 1 m from every wall; curtain edge restored to the corner; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435if node_a only (repeat); lighting=curtains closed, artificial light only; lamps_on=tavan lambasi; capture_time=<node time>"
+START 2026-10-12 23:51:48
+exposure lock (fixed_camera): exposure 333.0, gain 91.0, white balance 4540.0
+{"capture_id": "s11_no_fire_d300", "node": "node_a", "n_frames_written": 40, "n_frames_requested": 40, "start_scheduled_unix": null, "start_actual_unix": 1791838310.2599022, "status": "complete"}
+rc=0
+END 2026-10-12 23:52:00
+160
+{'capture_id': 's11_no_fire_d300', 'status': 'complete', 'n_frames_written': 40, 'retake_moved_to': 'data/raw/camera_pilot/node_a/_retakes/20261012T235148', 'notes': 'source=none; distance_measured_m=3.00; flame_height_cm=0; e5 s11 REPEAT (D435if after firmware update 5.17.0.10, prereg 13.3 9de4273); matte base; reference position; tilt_deg=unknown; at least 1 m from every wall; curtain edge restored to the corner; arrangement=inline_axis; spacing_cm=5; distance_ref=front_candle; camera_order=sequential, D435if node_a only (repeat); lighting=curtains closed, artificial light only; lamps_on=tavan lambasi; capture_time=23:51:48'}
+{'exposure': 333, 'exposure_source': 'manual_lock', 'gain': 91, 'white_balance': 4540.0, 'auto_exposure': False, 'firmware': '5.17.0.10'}
+[2026-10-12 23:52:01] s11 REPEAT no_fire d300 node_a DONE
+planned moves: 967, md5 mismatches or missing: 0
+moved 967, md5 identical after the move: 967
+[2026-10-12 23:53:41] DESKTOP COPY (prereg 13.3, 9de4273): 967 earlier files moved md5-checked into node_a/_retakes/<stamp>/ and _exposure/_superseded/ as on the node; 968 new files copied (tar); desktop node_a tree md5-identical to node_a's (2579 files)
+[2026-10-12 23:53:54] DEPTH HOLES s11 REPEAT no-fire (D435if FW 5.17.0.10), descriptive only (prereg 13.3, 019922e), same method as bbe9c2c
+### node_a, own WB rectangle
+region (normalized) x [0.03, 0.28) y [0.12, 0.3) from ..\..\AppData\Local\Temp\claude\C--Users-CORSAIR-projects-FedRGBD\c1fd9a80-14bf-4743-b6bc-7346812cf3ba\scratchpad\holes_region_node_a.json
+node_a s11_no_fire_d100_0000 invalid=0.03125
+node_a s11_no_fire_d100_0001 invalid=0.01957
+node_a s11_no_fire_d100_0002 invalid=0.02839
+node_a s11_no_fire_d100_0003 invalid=0.02234
+node_a s11_no_fire_d100_0004 invalid=0.02640
+node_a s11_no_fire_d100_0005 invalid=0.02476
+node_a s11_no_fire_d100_0006 invalid=0.02341
+node_a s11_no_fire_d100_0007 invalid=0.03312
+node_a s11_no_fire_d100_0008 invalid=0.04083
+node_a s11_no_fire_d100_0009 invalid=0.01948
+node_a s11_no_fire_d100_0010 invalid=0.02466
+node_a s11_no_fire_d100_0011 invalid=0.02951
+node_a s11_no_fire_d100_0012 invalid=0.03035
+node_a s11_no_fire_d100_0013 invalid=0.02655
+node_a s11_no_fire_d100_0014 invalid=0.02835
+node_a s11_no_fire_d100_0015 invalid=0.02281
+node_a s11_no_fire_d100_0016 invalid=0.02833
+node_a s11_no_fire_d100_0017 invalid=0.03344
+node_a s11_no_fire_d100_0018 invalid=0.02554
+node_a s11_no_fire_d100_0019 invalid=0.02113
+node_a s11_no_fire_d100_0020 invalid=0.02747
+node_a s11_no_fire_d100_0021 invalid=0.02277
+node_a s11_no_fire_d100_0022 invalid=0.02253
+node_a s11_no_fire_d100_0023 invalid=0.03254
+node_a s11_no_fire_d100_0024 invalid=0.03151
+node_a s11_no_fire_d100_0025 invalid=0.03398
+node_a s11_no_fire_d100_0026 invalid=0.03056
+node_a s11_no_fire_d100_0027 invalid=0.02399
+node_a s11_no_fire_d100_0028 invalid=0.03368
+node_a s11_no_fire_d100_0029 invalid=0.01785
+node_a s11_no_fire_d100_0030 invalid=0.03887
+node_a s11_no_fire_d100_0031 invalid=0.02760
+node_a s11_no_fire_d100_0032 invalid=0.03606
+node_a s11_no_fire_d100_0033 invalid=0.02285
+node_a s11_no_fire_d100_0034 invalid=0.02936
+node_a s11_no_fire_d100_0035 invalid=0.03694
+node_a s11_no_fire_d100_0036 invalid=0.03986
+node_a s11_no_fire_d100_0037 invalid=0.02921
+node_a s11_no_fire_d100_0038 invalid=0.03159
+node_a s11_no_fire_d100_0039 invalid=0.02285
+{"capture": "s11_no_fire_d100", "image_wh": [1920, 1080], "invalid_max": 0.04083, "invalid_mean": 0.02831, "invalid_median": 0.02834, "invalid_min": 0.01785, "n_frames": 40, "node": "node_a", "region_px": [58, 130, 538, 324]}
+node_a s11_no_fire_d200_0000 invalid=0.02491
+node_a s11_no_fire_d200_0001 invalid=0.02253
+node_a s11_no_fire_d200_0002 invalid=0.02962
+node_a s11_no_fire_d200_0003 invalid=0.02143
+node_a s11_no_fire_d200_0004 invalid=0.02833
+node_a s11_no_fire_d200_0005 invalid=0.02416
+node_a s11_no_fire_d200_0006 invalid=0.03694
+node_a s11_no_fire_d200_0007 invalid=0.03651
+node_a s11_no_fire_d200_0008 invalid=0.02912
+node_a s11_no_fire_d200_0009 invalid=0.02375
+node_a s11_no_fire_d200_0010 invalid=0.04070
+node_a s11_no_fire_d200_0011 invalid=0.02498
+node_a s11_no_fire_d200_0012 invalid=0.05015
+node_a s11_no_fire_d200_0013 invalid=0.02908
+node_a s11_no_fire_d200_0014 invalid=0.02528
+node_a s11_no_fire_d200_0015 invalid=0.02889
+node_a s11_no_fire_d200_0016 invalid=0.03808
+node_a s11_no_fire_d200_0017 invalid=0.02693
+node_a s11_no_fire_d200_0018 invalid=0.02249
+node_a s11_no_fire_d200_0019 invalid=0.02796
+node_a s11_no_fire_d200_0020 invalid=0.02992
+node_a s11_no_fire_d200_0021 invalid=0.02846
+node_a s11_no_fire_d200_0022 invalid=0.02212
+node_a s11_no_fire_d200_0023 invalid=0.01817
+node_a s11_no_fire_d200_0024 invalid=0.02869
+node_a s11_no_fire_d200_0025 invalid=0.03469
+node_a s11_no_fire_d200_0026 invalid=0.02852
+node_a s11_no_fire_d200_0027 invalid=0.02307
+node_a s11_no_fire_d200_0028 invalid=0.03258
+node_a s11_no_fire_d200_0029 invalid=0.02524
+node_a s11_no_fire_d200_0030 invalid=0.02421
+node_a s11_no_fire_d200_0031 invalid=0.04942
+node_a s11_no_fire_d200_0032 invalid=0.03877
+node_a s11_no_fire_d200_0033 invalid=0.02373
+node_a s11_no_fire_d200_0034 invalid=0.03258
+node_a s11_no_fire_d200_0035 invalid=0.03430
+node_a s11_no_fire_d200_0036 invalid=0.03630
+node_a s11_no_fire_d200_0037 invalid=0.03003
+node_a s11_no_fire_d200_0038 invalid=0.02878
+node_a s11_no_fire_d200_0039 invalid=0.03466
+{"capture": "s11_no_fire_d200", "image_wh": [1920, 1080], "invalid_max": 0.05015, "invalid_mean": 0.0299, "invalid_median": 0.02874, "invalid_min": 0.01817, "n_frames": 40, "node": "node_a", "region_px": [58, 130, 538, 324]}
+node_a s11_no_fire_d300_0000 invalid=0.02756
+node_a s11_no_fire_d300_0001 invalid=0.04734
+node_a s11_no_fire_d300_0002 invalid=0.02822
+node_a s11_no_fire_d300_0003 invalid=0.02380
+node_a s11_no_fire_d300_0004 invalid=0.03136
+node_a s11_no_fire_d300_0005 invalid=0.02575
+node_a s11_no_fire_d300_0006 invalid=0.02330
+node_a s11_no_fire_d300_0007 invalid=0.02850
+node_a s11_no_fire_d300_0008 invalid=0.03417
+node_a s11_no_fire_d300_0009 invalid=0.02642
+node_a s11_no_fire_d300_0010 invalid=0.02872
+node_a s11_no_fire_d300_0011 invalid=0.03967
+node_a s11_no_fire_d300_0012 invalid=0.01456
+node_a s11_no_fire_d300_0013 invalid=0.02309
+node_a s11_no_fire_d300_0014 invalid=0.02116
+node_a s11_no_fire_d300_0015 invalid=0.02848
+node_a s11_no_fire_d300_0016 invalid=0.02371
+node_a s11_no_fire_d300_0017 invalid=0.02655
+node_a s11_no_fire_d300_0018 invalid=0.02193
+node_a s11_no_fire_d300_0019 invalid=0.02206
+node_a s11_no_fire_d300_0020 invalid=0.04250
+node_a s11_no_fire_d300_0021 invalid=0.03643
+node_a s11_no_fire_d300_0022 invalid=0.02768
+node_a s11_no_fire_d300_0023 invalid=0.02768
+node_a s11_no_fire_d300_0024 invalid=0.03267
+node_a s11_no_fire_d300_0025 invalid=0.03441
+node_a s11_no_fire_d300_0026 invalid=0.04538
+node_a s11_no_fire_d300_0027 invalid=0.01946
+node_a s11_no_fire_d300_0028 invalid=0.02270
+node_a s11_no_fire_d300_0029 invalid=0.02511
+node_a s11_no_fire_d300_0030 invalid=0.03986
+node_a s11_no_fire_d300_0031 invalid=0.02502
+node_a s11_no_fire_d300_0032 invalid=0.02592
+node_a s11_no_fire_d300_0033 invalid=0.03608
+node_a s11_no_fire_d300_0034 invalid=0.02208
+node_a s11_no_fire_d300_0035 invalid=0.02571
+node_a s11_no_fire_d300_0036 invalid=0.02599
+node_a s11_no_fire_d300_0037 invalid=0.03997
+node_a s11_no_fire_d300_0038 invalid=0.02816
+node_a s11_no_fire_d300_0039 invalid=0.02438
+{"capture": "s11_no_fire_d300", "image_wh": [1920, 1080], "invalid_max": 0.04734, "invalid_mean": 0.02884, "invalid_median": 0.02705, "invalid_min": 0.01456, "n_frames": 40, "node": "node_a", "region_px": [58, 130, 538, 324]}
+### node_a, baccca6 rectangle (NOT plain wall in the s11 view; not used for the decision)
+region (normalized) x [0.66, 0.95) y [0.18, 0.6) from configs\e5_depth_hole_region.json
+node_a s11_no_fire_d100_0000 invalid=0.01131
+node_a s11_no_fire_d100_0001 invalid=0.01195
+node_a s11_no_fire_d100_0002 invalid=0.01085
+node_a s11_no_fire_d100_0003 invalid=0.01469
+node_a s11_no_fire_d100_0004 invalid=0.01409
+node_a s11_no_fire_d100_0005 invalid=0.01539
+node_a s11_no_fire_d100_0006 invalid=0.01646
+node_a s11_no_fire_d100_0007 invalid=0.01681
+node_a s11_no_fire_d100_0008 invalid=0.01910
+node_a s11_no_fire_d100_0009 invalid=0.01355
+node_a s11_no_fire_d100_0010 invalid=0.01672
+node_a s11_no_fire_d100_0011 invalid=0.01031
+node_a s11_no_fire_d100_0012 invalid=0.01803
+node_a s11_no_fire_d100_0013 invalid=0.00856
+node_a s11_no_fire_d100_0014 invalid=0.01251
+node_a s11_no_fire_d100_0015 invalid=0.02126
+node_a s11_no_fire_d100_0016 invalid=0.02410
+node_a s11_no_fire_d100_0017 invalid=0.01323
+node_a s11_no_fire_d100_0018 invalid=0.01180
+node_a s11_no_fire_d100_0019 invalid=0.01357
+node_a s11_no_fire_d100_0020 invalid=0.01247
+node_a s11_no_fire_d100_0021 invalid=0.01153
+node_a s11_no_fire_d100_0022 invalid=0.01796
+node_a s11_no_fire_d100_0023 invalid=0.01143
+node_a s11_no_fire_d100_0024 invalid=0.01247
+node_a s11_no_fire_d100_0025 invalid=0.01454
+node_a s11_no_fire_d100_0026 invalid=0.01806
+node_a s11_no_fire_d100_0027 invalid=0.01696
+node_a s11_no_fire_d100_0028 invalid=0.02534
+node_a s11_no_fire_d100_0029 invalid=0.01384
+node_a s11_no_fire_d100_0030 invalid=0.01602
+node_a s11_no_fire_d100_0031 invalid=0.01814
+node_a s11_no_fire_d100_0032 invalid=0.01372
+node_a s11_no_fire_d100_0033 invalid=0.02233
+node_a s11_no_fire_d100_0034 invalid=0.01697
+node_a s11_no_fire_d100_0035 invalid=0.01246
+node_a s11_no_fire_d100_0036 invalid=0.02584
+node_a s11_no_fire_d100_0037 invalid=0.01297
+node_a s11_no_fire_d100_0038 invalid=0.02846
+node_a s11_no_fire_d100_0039 invalid=0.01731
+{"capture": "s11_no_fire_d100", "image_wh": [1920, 1080], "invalid_max": 0.02846, "invalid_mean": 0.01583, "invalid_median": 0.01462, "invalid_min": 0.00856, "n_frames": 40, "node": "node_a", "region_px": [1267, 194, 1824, 648]}
+node_a s11_no_fire_d200_0000 invalid=0.01014
+node_a s11_no_fire_d200_0001 invalid=0.01342
+node_a s11_no_fire_d200_0002 invalid=0.01190
+node_a s11_no_fire_d200_0003 invalid=0.01497
+node_a s11_no_fire_d200_0004 invalid=0.01158
+node_a s11_no_fire_d200_0005 invalid=0.01373
+node_a s11_no_fire_d200_0006 invalid=0.01484
+node_a s11_no_fire_d200_0007 invalid=0.01593
+node_a s11_no_fire_d200_0008 invalid=0.01644
+node_a s11_no_fire_d200_0009 invalid=0.01321
+node_a s11_no_fire_d200_0010 invalid=0.01594
+node_a s11_no_fire_d200_0011 invalid=0.01459
+node_a s11_no_fire_d200_0012 invalid=0.01803
+node_a s11_no_fire_d200_0013 invalid=0.01587
+node_a s11_no_fire_d200_0014 invalid=0.01392
+node_a s11_no_fire_d200_0015 invalid=0.01590
+node_a s11_no_fire_d200_0016 invalid=0.01707
+node_a s11_no_fire_d200_0017 invalid=0.01099
+node_a s11_no_fire_d200_0018 invalid=0.02279
+node_a s11_no_fire_d200_0019 invalid=0.01412
+node_a s11_no_fire_d200_0020 invalid=0.01456
+node_a s11_no_fire_d200_0021 invalid=0.01294
+node_a s11_no_fire_d200_0022 invalid=0.01126
+node_a s11_no_fire_d200_0023 invalid=0.02142
+node_a s11_no_fire_d200_0024 invalid=0.01274
+node_a s11_no_fire_d200_0025 invalid=0.01733
+node_a s11_no_fire_d200_0026 invalid=0.01142
+node_a s11_no_fire_d200_0027 invalid=0.01456
+node_a s11_no_fire_d200_0028 invalid=0.01079
+node_a s11_no_fire_d200_0029 invalid=0.02088
+node_a s11_no_fire_d200_0030 invalid=0.01284
+node_a s11_no_fire_d200_0031 invalid=0.01775
+node_a s11_no_fire_d200_0032 invalid=0.01330
+node_a s11_no_fire_d200_0033 invalid=0.01461
+node_a s11_no_fire_d200_0034 invalid=0.01643
+node_a s11_no_fire_d200_0035 invalid=0.01127
+node_a s11_no_fire_d200_0036 invalid=0.01674
+node_a s11_no_fire_d200_0037 invalid=0.01289
+node_a s11_no_fire_d200_0038 invalid=0.01809
+node_a s11_no_fire_d200_0039 invalid=0.01267
+{"capture": "s11_no_fire_d200", "image_wh": [1920, 1080], "invalid_max": 0.02279, "invalid_mean": 0.01475, "invalid_median": 0.01456, "invalid_min": 0.01014, "n_frames": 40, "node": "node_a", "region_px": [1267, 194, 1824, 648]}
+node_a s11_no_fire_d300_0000 invalid=0.01339
+node_a s11_no_fire_d300_0001 invalid=0.01014
+node_a s11_no_fire_d300_0002 invalid=0.00956
+node_a s11_no_fire_d300_0003 invalid=0.01724
+node_a s11_no_fire_d300_0004 invalid=0.01402
+node_a s11_no_fire_d300_0005 invalid=0.01195
+node_a s11_no_fire_d300_0006 invalid=0.01713
+node_a s11_no_fire_d300_0007 invalid=0.01686
+node_a s11_no_fire_d300_0008 invalid=0.01246
+node_a s11_no_fire_d300_0009 invalid=0.01529
+node_a s11_no_fire_d300_0010 invalid=0.01464
+node_a s11_no_fire_d300_0011 invalid=0.01188
+node_a s11_no_fire_d300_0012 invalid=0.01338
+node_a s11_no_fire_d300_0013 invalid=0.01024
+node_a s11_no_fire_d300_0014 invalid=0.00910
+node_a s11_no_fire_d300_0015 invalid=0.01770
+node_a s11_no_fire_d300_0016 invalid=0.01327
+node_a s11_no_fire_d300_0017 invalid=0.01280
+node_a s11_no_fire_d300_0018 invalid=0.01086
+node_a s11_no_fire_d300_0019 invalid=0.01815
+node_a s11_no_fire_d300_0020 invalid=0.01448
+node_a s11_no_fire_d300_0021 invalid=0.01552
+node_a s11_no_fire_d300_0022 invalid=0.01448
+node_a s11_no_fire_d300_0023 invalid=0.00976
+node_a s11_no_fire_d300_0024 invalid=0.00936
+node_a s11_no_fire_d300_0025 invalid=0.01200
+node_a s11_no_fire_d300_0026 invalid=0.01535
+node_a s11_no_fire_d300_0027 invalid=0.01053
+node_a s11_no_fire_d300_0028 invalid=0.01991
+node_a s11_no_fire_d300_0029 invalid=0.01130
+node_a s11_no_fire_d300_0030 invalid=0.01707
+node_a s11_no_fire_d300_0031 invalid=0.01691
+node_a s11_no_fire_d300_0032 invalid=0.00984
+node_a s11_no_fire_d300_0033 invalid=0.02100
+node_a s11_no_fire_d300_0034 invalid=0.01503
+node_a s11_no_fire_d300_0035 invalid=0.01821
+node_a s11_no_fire_d300_0036 invalid=0.01169
+node_a s11_no_fire_d300_0037 invalid=0.01187
+node_a s11_no_fire_d300_0038 invalid=0.01637
+node_a s11_no_fire_d300_0039 invalid=0.01962
+{"capture": "s11_no_fire_d300", "image_wh": [1920, 1080], "invalid_max": 0.021, "invalid_mean": 0.01401, "invalid_median": 0.01371, "invalid_min": 0.0091, "n_frames": 40, "node": "node_a", "region_px": [1267, 194, 1824, 648]}
+[2026-10-12 23:54:58] s11 ALL THREE CAMERAS, flame tool 49d3537 (rule a/b/c); node_a = D435if s11 REPEAT after its firmware update (5.17.0.10), prereg 13.3 9de4273; node_b/node_c s11 of 2026-10-09 (desktop copies md5-identical to the nodes)
+### s11 d=1, all nodes (node_a repeat)
+node_a 1 m: PASS (median 29.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+node_b 1 m: PASS (median 33.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+node_c 1 m: PASS (median 21.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+distance 1 m: PASS on all three cameras (node_a PASS, node_b PASS, node_c PASS)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,detected_fraction,n_nofire_frames,n_nofire_detected,touches_crop_border,threshold,criterion_px,criterion_failed,criterion
+node_a,s11,1.0,1.0,3.5,1366.72216796875,283.47,9.92,29.0,28,30,10.2,2.92,40,40,1.0,40,0,False,40,5,,PASS
+node_b,s11,1.0,1.0,3.5,1360.349609375,282.15,9.88,33.0,32,34,11.7,3.34,40,40,1.0,40,0,False,40,5,,PASS
+node_c,s11,1.0,1.0,3.5,1051.128173828125,218.01,7.63,21.0,21,22,9.6,2.75,40,40,1.0,40,0,False,40,5,,PASS
+rc=0
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,detected_fraction,n_nofire_frames,n_nofire_detected,touches_crop_border,threshold,criterion_px,criterion_failed,criterion
+node_a,s11,1.0,1.0,3.5,1366.72216796875,283.47,9.92,29.0,28,30,10.2,2.92,40,40,1.0,40,0,False,40,5,,PASS
+node_b,s11,1.0,1.0,3.5,1360.349609375,282.15,9.88,33.0,32,34,11.7,3.34,40,40,1.0,40,0,False,40,5,,PASS
+node_c,s11,1.0,1.0,3.5,1051.128173828125,218.01,7.63,21.0,21,22,9.6,2.75,40,40,1.0,40,0,False,40,5,,PASS
+### s11 d=2, all nodes (node_a repeat)
+node_a 2 m: PASS (median 12.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+node_b 2 m: PASS (median 15.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+node_c 2 m: PASS (median 10.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+distance 2 m: PASS on all three cameras (node_a PASS, node_b PASS, node_c PASS)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,detected_fraction,n_nofire_frames,n_nofire_detected,touches_crop_border,threshold,criterion_px,criterion_failed,criterion
+node_a,s11,2.0,2.0,3.5,1366.72216796875,283.47,4.96,12.0,12,12,8.5,2.42,40,40,1.0,40,0,False,40,5,,PASS
+node_b,s11,2.0,2.0,3.5,1360.349609375,282.15,4.94,15.0,15,15,10.6,3.04,40,40,1.0,40,0,False,40,5,,PASS
+node_c,s11,2.0,2.0,3.5,1050.9969482421875,217.98,3.81,10.0,10,10,9.2,2.62,40,40,1.0,40,0,False,40,5,,PASS
+rc=0
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,detected_fraction,n_nofire_frames,n_nofire_detected,touches_crop_border,threshold,criterion_px,criterion_failed,criterion
+node_a,s11,2.0,2.0,3.5,1366.72216796875,283.47,4.96,12.0,12,12,8.5,2.42,40,40,1.0,40,0,False,40,5,,PASS
+node_b,s11,2.0,2.0,3.5,1360.349609375,282.15,4.94,15.0,15,15,10.6,3.04,40,40,1.0,40,0,False,40,5,,PASS
+node_c,s11,2.0,2.0,3.5,1050.9969482421875,217.98,3.81,10.0,10,10,9.2,2.62,40,40,1.0,40,0,False,40,5,,PASS
+### s11 d=3, all nodes (node_a repeat)
+node_a 3 m: PASS (median 8.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+node_b 3 m: PASS (median 9.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+node_c 3 m: PASS (median 6.0 px over 40 frames, detected 40 of 40, no-fire detections 0; rule: no-fire 0, detected >= 90%, median >= 5 px)
+distance 3 m: PASS on all three cameras (node_a PASS, node_b PASS, node_c PASS)
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,detected_fraction,n_nofire_frames,n_nofire_detected,touches_crop_border,threshold,criterion_px,criterion_failed,criterion
+node_a,s11,3.0,3.0,3.5,1366.72216796875,283.47,3.31,8.0,8,8,8.5,2.42,40,40,1.0,40,0,False,40,5,,PASS
+node_b,s11,3.0,3.0,3.5,1360.349609375,282.15,3.29,9.0,9,10,9.6,2.73,40,40,1.0,40,0,False,40,5,,PASS
+node_c,s11,3.0,3.0,3.5,1051.0540771484375,218.0,2.54,6.0,6,6,8.3,2.36,40,40,1.0,40,0,False,40,5,,PASS
+rc=0
+node,scene,distance_m,distance_measured_m,flame_height_cm,fy_native,fy_224,expected_px,measured_px_median,measured_px_min,measured_px_max,measured_cm_median,ratio_measured_expected,n_fire_frames,n_frames_detected,detected_fraction,n_nofire_frames,n_nofire_detected,touches_crop_border,threshold,criterion_px,criterion_failed,criterion
+node_a,s11,3.0,3.0,3.5,1366.72216796875,283.47,3.31,8.0,8,8,8.5,2.42,40,40,1.0,40,0,False,40,5,,PASS
+node_b,s11,3.0,3.0,3.5,1360.349609375,282.15,3.29,9.0,9,10,9.6,2.73,40,40,1.0,40,0,False,40,5,,PASS
+node_c,s11,3.0,3.0,3.5,1051.0540771484375,218.0,2.54,6.0,6,6,8.3,2.36,40,40,1.0,40,0,False,40,5,,PASS

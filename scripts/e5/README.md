@@ -11,6 +11,7 @@ steps. None of them is a study tool; the study tools are `src/data/realsense_cap
 | `e5_framing_grab_d435if.py` | the same for the D435if (S/N 239722070442) on node_a | `ssh node_a "... python3 -" < ...` |
 | `e5_framing_grab_zed.py` | the same for the ZED 2i on node_c, through `ZedBackend` (HD1080, NEURAL, 15 fps), camera settings as they are | via node_a to node_c |
 | `e5_test_grab_zed_fixed.py` | ZED test frame with the committed fixed setting applied (`fixed_exposure` + `apply_lock`) | the same |
+| `e5_test_grab_d435if_fixed.py` | D435if test frame through `RealSenseBackend` with node_a's committed fixed setting applied (`fixed_exposure` + `apply_lock`); used for the 1 m flame-position check of the s11 repeat (2026-10-12) | `ssh node_a "cd ~/FedRGBD && . ~/fedrgbd_venv/bin/activate && python3 -" < ...` |
 | `e5_flame_position.py` | flame-core position in the 224 crop of one test frame (absolute rule only) | on the desktop, on the copied `*_crop224_x3.png` |
 | `e5_imu_tilt_d435i.py` | D435i accelerometer tilt; **gave no data under the RSUSB backend** (HARDWARE_SETUP.md) | not used for any value |
 | `archive_e5.sh` | moves (never deletes) s03/s09/s10 of node_b under `data/raw/camera_pilot/_archive_<stamp>/` with an md5 manifest | `bash -s <pilot_root> <stamp>` on node_b and the desktop |
