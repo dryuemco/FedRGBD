@@ -1770,3 +1770,65 @@ amendment.
   Every check is appended to `<root>/<node>/_exposure/session_checks.jsonl`. It replaces
   the ad hoc RealSense-only check script used for node_b and node_a.
 * `configs/camera_wb_region.json`: node_c (ZED 2i) rectangle, approved by the author.
+
+## e5 closed: D435if repeat, Amendment 4 [e5] values, no-fire wait, study order (2026-10-12/13)
+
+* D435if (node_a) recalibrated after its firmware update (`cee5ee3`) and its six s11
+  captures retaken with `--retake` (prereg 13.3, decided before any frame of the repeat,
+  `9de4273`); earlier captures in `node_a/_retakes/`, desktop copy md5-identical to the
+  node. The flame tool (`49d3537`, rule (a)/(b)/(c)) passes all nine camera x distance
+  cells; the distance set stays {1, 2, 3} m. Records as text in `docs/e5/records/`
+  (`fe2909e`); `scripts/e5/e5_test_grab_d435if_fixed.py` for the 1 m test frame.
+* `docs/CAMERA_EXPERIMENT_PREREG.md` section 13 (`a9aef35`): every `[e5]` value filled
+  from the committed records, the s11 2-minute deviation (gaps 51.9-56.2 s from the
+  capture records), the firmware rule's outcome and the post-update hole fraction
+  (descriptive), the record of the repeat. The draft status of section 13 is unchanged.
+* `src/data/camera_capture_common.py` (`a9aef35`): `NOFIRE_MIN_WAIT_S`, `nofire_wait`,
+  `last_fire_capture`. With the study gates, a no-fire capture is refused before the camera
+  opens if the node's last fire capture of the same scene (any distance; `_retakes/`
+  included) ended < 120 s earlier; every no-fire record stores the check as
+  `nofire_wait`. Tests in `tests/test_camera_capture.py`.
+* Prereg 13.2, study capture order (`a2bb847`): per camera fire far-to-near, then no-fire
+  near-to-far, so the per-node wait covers every fire-to-no-fire step.
+
+## Paper tables: overflow fixes, one float per Holm family, MAXN time table (2026-10-13)
+
+* `scripts/export_latex_tables.py` (`93d0b0a`): `tab:time` prints time cells and headers on
+  two lines (`_stack`, `_time_cell`; each line braced, since a line starting with `[` would
+  be read as the optional argument of `\`), `\footnotesize`, 4 pt column gap
+  (`latex_table(font=, tabcolsep=)`); the MAXN table is labelled `tab:time_maxn`.
+  `global_eval_tabular(families=)` writes one tabular per Holm family
+  (`global_eval_tabular.tex`, `global_eval_maxn_tabular.tex`). No number or column
+  changed. `paper/main.tex`: `tab:global_eval_maxn` float, `tables/maxn/time.tex` input.
+* `sensitivity_tabular` (`a8f95e9`): no table when none of its configurations has a
+  prediction-based figure, like the other paper tabulars. This repairs
+  `test_main_and_export_end_to_end`, broken since `2a27846` (2026-10-07) and unnoticed
+  because the standard test command deselects `end_to_end` tests; all eight pass.
+
+## A5 analysis, descriptive only (2026-10-13)
+
+* `scripts/a5_dirichlet_draws.py` (`c077cfb`): reads exactly the 22 declared runs of
+  `docs/A5_DIRICHLET_DRAWS_PREREG.md` (4 testbed, 18 desktop simulation), checks each is
+  the declared one (MAXN_SUPER before and after on all nodes / clean simulation, 10
+  rounds, seed 42), recomputes the selected round's metrics from the prediction files
+  (they equal the logged ones), and writes per run the balanced accuracy pooled and as the
+  client mean with the sequence bootstrap (B = 1000), range and SD across the draws
+  (testbed n = 2, desktop n = 3), the skew of all nine draws, and the testbed times under
+  rule 12, to `analysis/a5/`. No test, no verdict, no clean subset, nothing pooled across
+  settings or set against the main study.
+* `scripts/analyze_results.py`: `is_a5_draw_entry` -- the `_ps<seed>` runs are skipped
+  (they lack clean-subset lists and are analysed only by the A5 script); a full re-run
+  reproduces the committed `analysis/` CSVs.
+* `scripts/export_latex_tables.py`: `tab:a5_testbed` (results, `sec:res_dirichlet`),
+  `tab:a5_desktop_sim` and `tab:a5_skew` (supplement). `paper/main.tex`: the A5 `\todo`
+  replaced by the declared statement (its own paragraph in `sec:noniid`). Tests:
+  `tests/test_a5_dirichlet_draws.py`.
+
+## Low-data sequence coverage (2026-10-13)
+
+* `scripts/lowdata_sequence_coverage.py` -> `analysis/lowdata_sequence_coverage.csv`
+  (`e67cd93`): per node, the training sequences of the full split that keep at least one
+  frame in the rho = 0.05 / 0.01 subsample (from the committed manifests). At rho = 0.01
+  only 14-26 % do, so the paper's sentences that the regime removes frames before
+  sequences are not supported; both are flagged in their `\todo`s for the author, the text
+  is unchanged. Test: `tests/test_lowdata_sequence_coverage.py`.
