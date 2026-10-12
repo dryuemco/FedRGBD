@@ -142,8 +142,10 @@ Output goes to `analysis/cross_config_timing/`.
 
 ## (c) Post-5b fixes (desktop code; the nodes get them in step d)
 
-**DONE (2026-10-05: c1 `2c31a9c`, c2 `3cca463`, c3 `de924db`, pushed). Still open from
-c1: the dry run on node_a after step d.**
+**DONE (2026-10-05: c1 `2c31a9c`, c2 `3cca463`, c3 `de924db`, pushed). c1's dry run on
+node_a DONE 2026-10-13 01:04 (repo a9aef35): no restart (last block finished
+2026-10-08 04:13), NTPSynchronized yes on all three nodes, offsets node_b +141 ms,
+node_c +143 ms (`logs/resume.log` on node_a).**
 
 **c1 [CLAUDE]** `scripts/resume_after_reboot.py` waits for synchronised clocks. Before the
 pre-flight, it polls all three nodes until each reports
