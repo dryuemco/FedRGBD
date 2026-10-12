@@ -85,6 +85,7 @@ GENERATED = {"tab:fullmetrics": "fullmetrics_tabular.tex",
              "tab:fedbn10": "maxn/fedbn10_tabular.tex",
              "tab:sensitivity": "sensitivity_tabular.tex",
              "tab:global_eval": "global_eval_tabular.tex",
+             "tab:global_eval_maxn": "global_eval_maxn_tabular.tex",
              "tab:powercfg_acc": "powercfg_acc_tabular.tex",
              "tab:powercfg_time": "powercfg_time_tabular.tex",
              "tab:powercfg_straggler": "powercfg_straggler_tabular.tex"}
@@ -399,7 +400,8 @@ def test_global_eval_table_is_the_declared_analysis_verbatim():
     verdict phrases exactly as scripts/global_evaluation.py wrote them (GLOBAL_EVALUATION.md)."""
     import pandas as pd
     df = pd.read_csv(os.path.join(ROOT, "analysis", "global_eval", "global_eval_comparisons.csv"))
-    text = _generated("global_eval_tabular.tex")
+    # one float per Holm family: heterogeneous (tab:global_eval), then maxn
+    text = _generated("global_eval_tabular.tex") + _generated("global_eval_maxn_tabular.tex")
     rows = [l for l in text.splitlines() if l.count(" & ") == 8 and "textbf" not in l]
     full = df[df["subset"] == "full"]
     assert len(rows) == len(full) == 22

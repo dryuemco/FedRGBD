@@ -103,14 +103,17 @@ def test_time_table_prints_both_rule_columns_per_configuration():
     hetero = pd.DataFrame(_rows(3, "heterogeneous", 1432.0, 1371.0, 4128.0)
                           + _rows(10, "heterogeneous", 1500.0, 1400.0, 14000.0))
     text = time_tex(hetero)
-    assert "Round 1 (s)" in text and "Rounds 2--3, median (s)" in text
-    assert "(3 Rounds)" in text and "MAXN" not in text
+    # headers and time cells are two-line cells: {top} \\ {bottom}
+    assert "{Round 1} \\\\ {(s)}" in text and "{Rounds 2--3,} \\\\ {median (s)}" in text
+    assert "(3 Rounds)" in text and "MAXN" not in text and "\\label{tab:time}" in text
     line = next(l for l in text.splitlines() if l.startswith("3N IID FedAvg"))
-    assert "1432.0 $\\pm$ 2.0 [1429.0, 1435.0] (5)" in line and "1371.0 $\\pm$ 2.0" in line
+    assert "{1432.0 $\\pm$ 2.0} \\\\ {[1429.0, 1435.0] (5)}" in line
+    assert "{1371.0 $\\pm$ 2.0}" in line
     assert "1500" not in text                        # the 10-round runs are not the 3-round point
 
     maxn = pd.DataFrame(_rows(10, "maxn", 1062.0, 925.0, 9400.0))
     text = time_tex(maxn, power_config="maxn")
-    assert "Rounds 2--10, median (s)" in text and "All Nodes at MAXN" in text
-    assert "1062.0 $\\pm$ 2.0" in text and "925.0 $\\pm$ 2.0" in text
+    assert "{Rounds 2--10,} \\\\ {median (s)}" in text and "All Nodes at MAXN" in text
+    assert "\\label{tab:time_maxn}" in text          # main.tex inputs both tables
+    assert "{1062.0 $\\pm$ 2.0}" in text and "{925.0 $\\pm$ 2.0}" in text
     assert time_tex(maxn) is None                    # never at the heterogeneous point
