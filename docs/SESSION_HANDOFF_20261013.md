@@ -1,0 +1,119 @@
+# Session handoff -- 2026-10-13 (evening of 12 October to the night of 13 October)
+
+Read this first in a new session; then `CLAUDE.md` and, for the camera experiment,
+`docs/CAMERA_EXPERIMENT_PREREG.md` section 13. Branch `revision-ncaa`, everything below is
+committed and pushed; all three nodes are at the last commit of the session.
+The previous handoff (`SESSION_HANDOFF_20261009.md`) is superseded.
+
+## 1. Where things stand
+
+- **All FLAME federated runs are done and analysed**: the 98-run heterogeneous matrix, 5a,
+  5b (MAXN, ten rounds) and A5 (Dirichlet draws). Paper tables come from `analysis/`; a
+  full re-run of `analyze_results.py` reproduces the committed CSVs (checked 13 Oct).
+- **e5 (camera flame-source acceptance) is closed.** The D435if was recalibrated after its
+  firmware update and its s11 retaken (`--retake`, prereg 13.3). All nine camera x
+  distance cells PASS, so the study's distance set is {1, 2, 3} m. Every `[e5]` value of
+  Amendment 4 is filled. **Section 13 is still marked DRAFT**: it is lifted together with
+  the study-capture decisions (section 4 below).
+- **Capture script:** a no-fire capture is refused < 120 s after the node's last fire
+  capture of the same scene (any distance). The study order is fixed: per camera fire
+  far-to-near, then no-fire near-to-far (prereg 13.2, O1).
+- **Paper:** every table builds without an overfull box. A5 is in the paper
+  (`tab:a5_testbed`, supplementary `tab:a5_desktop_sim`, `tab:a5_skew`) with its methods
+  paragraph. About 45 `\todo`s remain, most of them "Narrative" or camera results.
+
+## 2. Physical set-up (as left at about 23:52 on 12 Oct)
+
+- Tripod at the taped reference position, plate tilt unchanged since s11.
+- **D435if on the plate**, on node_a (USB 3.2). ZED 2i off the plate, still plugged into
+  node_c. D435i off the plate, not plugged in (node_b showed no RealSense on 12 Oct).
+- `candles4` unlit on the matte base at the 3 m mark. Curtain closed, its left edge
+  moved back to the room corner on 12 Oct (it had moved since 9 Oct) and fixed. Only
+  the ceiling lamp (`lamps_on=tavan lambasi`).
+- Nodes: MAXN_SUPER, no FL process, WiFi off, clocks synchronised.
+
+## 3. Commits of 12/13 Oct
+
+```
+9de4273 prereg 13.3: D435if repeat keeps scene id s11, --retake (before any frame of the repeat)
+cee5ee3 D435if recalibrated (333 / 91 / 4540), old calibration in _superseded/
+fe2909e e5 repeat records as text; scripts/e5/e5_test_grab_d435if_fixed.py
+8228d88 HARDWARE_SETUP + POST_5B_CHECKLIST e1-e4 notes (paused since 8 Oct)
+a9aef35 Amendment 4 [e5] values; 120 s no-fire wait in the capture script + tests
+a2bb847 prereg 13.2: study capture order (O1, fire first per camera)
+93d0b0a tab:time two-line cells, tab:global_eval one float per Holm family, tab:time_maxn
+c077cfb A5 analysis (scripts/a5_dirichlet_draws.py, analysis/a5/), tables, methods text
+e67cd93 low-data sequence coverage (analysis/lowdata_sequence_coverage.csv) -- see 4.2
+a8f95e9 tab:sensitivity fix; test_main_and_export_end_to_end repaired (broken since 2a27846)
+04e1c7d resume_after_reboot dry run on node_a done (checklist c1)
+97defeb REVISION_CHANGES entries for all of the above
+6c79731 response skeleton R3.4 (A5)
+475cc11 scripts/camera_calibration_table.py (Level-1 evidence tool, run after the study)
+91be8cb last three overfull boxes removed (grouping_tradeoff table*, tab:leakage, a path)
+4cae5b6 POST_5B_CHECKLIST e5 DONE note
+8dad714 study plan draft: time estimate for fire-first
+```
+
+## 4. Decisions for the author (collected overnight)
+
+1. **Plate tilt.** The phone level gave X 1.8 deg, Y 22 deg. From the D435if images
+   (candle base row, camera height 56.5 cm, fy/cy from the record) the optical axis is
+   tilted about 16.4 deg (3 m) and 16.7 deg (1 m) -- about 5.5 deg less, more than the
+   assumptions explain (e5 log, 13 Oct). How and where was the phone placed? Then record
+   the tilt (section 13 / scene sheet). The RealSense IMUs give no data (RSUSB backend);
+   the ZED 2i IMU would work but needs the ZED on the plate.
+2. **Low-data wording is not supported by the data.** The paper says the frame-level
+   subsample "removes redundant near-duplicate frames before it removes sequences" and
+   (methods) "reduces the number of frames per client rather than the number of scenes".
+   The manifests show that at rho = 0.01 a node keeps frames from only 14-26 % of its
+   training sequences (rho = 0.05: 25-44 %), because uniform frame sampling drops small
+   sequences (`analysis/lowdata_sequence_coverage.csv`). Both sentences carry a `\todo`;
+   they need rewriting. Also `docs/RESPONSE_TO_REVIEWERS.md` (R3, low-data item) says
+   "subsampled at group level", which matches neither the paper nor the manifests.
+3. **Timing todos** (`sec:res_time`, discussion): "time of FedAvg and FedProx 0.01 under
+   label skew and their ratio with 95 % CIs", "FedProx first round vs FedAvg per round",
+   "overhead factor". No ratio method is declared. Proposal: the seed-paired ratio per
+   seed (same partition and seed), geometric mean over seeds with a seed bootstrap,
+   per-seed ratios printed next to it, interval called indicative -- the method already
+   declared for the MAXN/heterogeneous timing comparison (`docs/CROSS_CONFIG_COMPARISON.md`
+   (c)). Needs the author's yes (and the wording "declared on <date>, after the times were
+   seen").
+4. **A5 text** (written overnight from the prereg; please read): the methods paragraph
+   after the Dirichlet description in `sec:noniid`, the paragraph and `tab:a5_testbed` in
+   `sec:res_dirichlet` (with a `\todo{Narrative.}`), the two supplementary tables.
+5. **Study capture** (lift the DRAFT of section 13 once these are recorded there):
+   (A) 15 scenes x 3 distances or (B) 18 x 2; O2 one room / one lamp; O3 light-emitting
+   distractors; O4 when candles are replaced; camera order rotation across scenes;
+   the background/floor pairs; materials (backdrops, floor covers, unbranded distractors,
+   spare candles, snuffer). Plan: `docs/STUDY_CAPTURE_PLAN_DRAFT.md` (time estimate
+   updated for fire-first: about 42 / 37 min per scene).
+6. **Narrative session** for the ~25 `\todo{Narrative...}` items, the abstract and the
+   conclusion; the aggregation-flip wording (`analysis/aggregation_flips.md`); the 7 W
+   mechanism wording.
+7. **Author-only:** funding / AI-assistance wording, testbed photo (Fig. 1).
+8. node_a keeps an untracked `results/_gate_failed/20260928_pc_maxn_rev_iid_fedavg_r10_seed42/`
+   that makes `test_main_on_real_repository_results` fail on node_a only (905 other tests
+   pass there). Leave, or move it outside `results/`?
+
+## 5. Working notes
+
+- SSH from the desktop: Windows OpenSSH (`C:\Windows\System32\OpenSSH\ssh.exe`,
+  `jetson-a@192.168.1.10`); Git Bash's ssh has no key access. From node_a use IPs
+  (`jetson-b@192.168.1.7`, `yunus@192.168.1.6`); the names node_b/node_c do not resolve.
+  Pipe scripts with `cmd //c "ssh ... bash -s < file"` (PowerShell pipes add a BOM).
+- The Bash tool turns `\\` in an inline command into `\`: write Python with backslashes
+  to a file with the Write tool (or use raw strings with single backslashes).
+- Regenerating `paper/tables` on Windows rewrites unchanged files with CRLF; restore those
+  with `git diff --quiet --ignore-cr-at-eol -- f && git checkout -- f` before committing.
+- Standard tests: `python -m pytest tests -q -k "not end_to_end"` (911 pass); run
+  `-k end_to_end` too after touching analysis or export code (8 pass).
+- e5 log (desktop, gitignored): `logs/e5/e5_capture.log`; text copy of the 12/13 Oct part:
+  `docs/e5/records/e5_capture_20261012_log.txt`.
+
+## 6. Rules (reminder)
+
+`CLAUDE.md` hard rules; rule before data (every measurement decision written into
+section 13 and pushed before the data it applies to); no number typed by hand into the
+paper; pilot/e5 data only under `data/raw/camera_pilot`, never accuracy or predictions;
+before each physical step tell the author and wait for "ready"; sudo only
+`sudo -n nvpmodel -m 2|3` on node_c, never while FL runs.
