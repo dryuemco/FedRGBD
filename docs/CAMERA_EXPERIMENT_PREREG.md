@@ -799,6 +799,28 @@ sections 1 and 4-6.
     property of the unit / its filter. The update itself is recorded before and after
     (`rs-enumerate-devices` and `rs-enumerate-devices -c`: firmware, serial,
     calibration), with the firmware file's source, URL and checksum.
+  - *The D435if repeat: scene id and the earlier captures* (decided by the author on
+    2026-10-12; committed and pushed after the firmware update and before any frame of
+    the repeat).
+    - The repeat keeps the scene id **s11**, so that the three cameras' s11 remain one
+      scene id for the flame tool and the distance decision.
+    - Every repeated capture is taken with `--retake`. The capture script moves the
+      earlier capture of the same id (its frames and its capture record) unchanged to
+      `node_a/_retakes/<timestamp>/`, never deletes it, and writes that destination into
+      the new record (`retake_moved_to`). The earlier captures are the D435if's s11 at
+      firmware 5.13.0.55. They stay on record, and the flame-tool and hole-fraction
+      results already computed on them stay in the e5 log and the committed records,
+      labelled "before the firmware update".
+    - On the desktop, the earlier copies of node_a's s11 are moved, md5-checked, into
+      the same `_retakes/<timestamp>/` directories as on the node before the repeated
+      frames are copied. Afterwards the desktop's node_a tree is md5-identical to
+      node_a's.
+    - The repeated s11 replaces the earlier one in the flame-tool run on all three
+      cameras (distance decision, the `[e5]` values) and in the descriptive hole
+      fraction. Nothing else changes: the reference position and plate tilt, the WB
+      rectangle check and calibration before the first capture, the e5 capture order and
+      waits of 13.2, the tool, the decision rule (a)/(b)/(c) and the region files are as
+      for s11.
 
 ## 14. Erratum (2026-10-07)
 
