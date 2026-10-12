@@ -90,6 +90,35 @@ $ sudo ethtool enP8p1s0 | grep -E "Speed|Duplex|Link detected"
 | JetPack | 6.2 | 6.2 | 6.2 |
 | CUDA | 12.6 | 12.6 | 12.6 |
 
+**Node A camera name.** librealsense reports node_a's D435if (S/N 239722070442) as
+"Intel RealSense D435I" (`camera_capture_session.py --check`, 2026-10-08). This is expected:
+per the Intel datasheet the D435if is a D435i with an NIR filter, and the SDK device
+name does not distinguish the two. Identify the camera by its serial number, not its name.
+
+**Node B D435i IMU: no data (2026-10-08).** On node_b the D435i (S/N 405622076256, FW
+5.17.0.10, USB 3.2) lists its Motion Module with accel profiles at 100 and 200 Hz and gyro
+profiles at 200 and 400 Hz, but no accelerometer frame arrives. Two attempts, both empty:
+the pipeline timed out ("Frame didn't arrive within 2000"), and the Motion Module opened
+directly at 100 Hz gave no frame in 4 s. librealsense 2.55.1 on the node is built with
+`FORCE_RSUSB_BACKEND=true`. This was not investigated further. The IMU is not used; e5
+reads the plate tilt with a phone inclinometer instead.
+
+### Node C: two ZED 2i units
+
+The v1 captures and the revision use different ZED 2i units (prereg sections 12 and 14).
+fx is the left RGB camera's at 1920 x 1080, from the capture records. The field of view
+follows as 2 atan(960 / fx) horizontally and 2 atan(540 / fx) vertically.
+
+| | v1 (April 2026) | revision (from 2026-10-06) |
+|---|---|---|
+| S/N | 32608934 | 35201583 |
+| Firmware | 1523 | 1523 |
+| fx at 1920 x 1080 | 1951.5-1952.5 px (five scenes) | 1051.0 px |
+| Horizontal / vertical FOV | 52.4 deg / 30.9 deg | 84.8 deg / 54.4 deg |
+| Lens | not recorded (fx consistent with the 4 mm option) | not recorded (fx consistent with the 2.1 mm option) |
+
+Lens stays "not recorded" until it is read off the units' physical labels.
+
 ## Verify Network Connectivity
 
 ```bash

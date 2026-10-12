@@ -255,15 +255,37 @@ Under `docs/CAMERA_EXPERIMENT_PREREG.md` section 10: pilot footage only under
 `data/raw/camera_pilot/`. The pilot checks only that the pipeline runs without error; no
 accuracy, loss or prediction quality is computed or looked at.
 
-**e1 [YOU]**
+**e1 [YOU] -- DONE (2026-10-07).** The three cameras on one plate on one tripod, raised
+and tilted down (a single-camera tripod first; capturing them one after another would
+have broken the simultaneous capture of prereg section 2). node_a's D435if enumerated at
+USB 2.1 (480 Mb/s), where the 1920x1080 colour + depth profile does not resolve; a USB 3
+cable fixed it (5000M). On node_a and node_b the source-built `pyrealsense2` is only on
+`PYTHONPATH` for interactive shells (`.bashrc` returns early otherwise), so every SSH
+capture imported an empty namespace package; the export was appended to
+`~/fedrgbd_venv/bin/activate` on both nodes (backups `activate.bak_20261007`).
+
+**e1 [YOU] (original instructions)**
 - mount the rig: D435if on node_a, D435i on node_b, ZED 2i on node_c, side by side,
   pointing the same way;
 - connect the cameras;
 - install any missing camera SDK (needs sudo).
 
+**e2 -- DONE (2026-10-07), PASS** with the serial gate of commit `2dab803`: node_a
+239722070442, node_b 405622076256, node_c 35201583; offsets +0.0 / +22.3 / +17.0 ms.
+
 **e2 [CLAUDE]** `python3 scripts/camera_capture_session.py --check` on node_a.
 *Verify:* PASS -- SSH, SDK and camera detected on every node, every clock offset under
 1 s (the check now fails otherwise).
+
+**e3 -- DONE (2026-10-07).** Four captures, all PASS, 40/40 frames per camera, starts
++0.10 to +0.18 s: `s01_fire_d200`, `s01_no_fire_d200`, `s01_no_fire_d300`,
+`s01_fire_d300` (order as captured). Calibration complete in every record; baselines
+49.99 / 50.02 / 119.92 mm; ZED `depth_range_mm` [300, 20000], NEURAL. No d100 pair: with
+the plate tilt that gives valid depth near the rig, a flame at 1 m falls below the
+RealSense colour field of view (seen in the setup snapshots), so the pilot used 2 and 3
+m; the session log records only the four captures, not this reason. No `--notes` were
+given, so the log does not say which source was lit; from the frames, two pillar
+candles one behind the other in both fire shots (two flame tips visible at 2 m and 3 m).
 
 **e3 [YOU] + [CLAUDE]** You set the scene and the flame, and the assistant starts each
 capture when you say "ready". Four captures:
@@ -279,6 +301,21 @@ capture when you say "ready". Four captures:
 - every capture record carries the Amendment 3 calibration: RGB and depth intrinsics
   with distortion, stereo baseline (about 50 mm D435if/D435i; 120 mm ZED 2i, as in v1),
   depth scale, SDK and firmware. The ZED's `depth_range_mm` is [300, 20000].
+
+**e4 -- DONE (2026-10-07).** 1772 files copied, per-file md5 identical to the nodes;
+480 frames, no exclusion; 1280 preprocessed files, `--verify` identical; every frame
+loads at 224 x 224, finite (`rgb_d_ir` 5 ch on the RealSense nodes, `rgb_d` 4 ch on the
+ZED); metadata keys complete; depth 1920 x 1080 like RGB; IR on node_a/node_b only.
+Contact sheet, 224 crops and descriptive table in the pilot tree (`contact_sheet.png`,
+`crops_224.png`, `crop_rectangles.png`, `pilot_descriptive.csv`). Findings that need
+a change are in the Amendment 4 draft (prereg section 13): the logged RealSense
+exposure/gain/white balance are the sensor *option* values (`exposure_source:
+sensor_option` in all 320 frames; under the RSUSB backend, confirmed in CMakeCache on
+both nodes, the D435 colour frame carries no `actual_exposure`, `gain_level` or
+`white_balance` metadata, while the depth frame does), so they are not what auto
+exposure used; the ZED records only the rectified
+calibration (all distortion coefficients 0); dotted depth holes on the wall in the
+D435if depth, fewer in the D435i's (diagnosed in e5).
 
 **e4 [CLAUDE]** Copy the pilot frames of all three nodes to the desktop under
 `data/raw/camera_pilot/`, then:
