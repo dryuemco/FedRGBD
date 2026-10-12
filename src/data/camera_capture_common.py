@@ -60,6 +60,9 @@ DEFAULT_FPS = 5.0
 START_TOLERANCE_S = 1.0
 CAPTURES_DIR = "_captures"
 RETAKES_DIR = "_retakes"
+#: prereg 13.2: a no-fire capture starts at least this long after the end of the last
+#: fire capture of the same scene on the node (candles out, no ember, no smoke)
+NOFIRE_MIN_WAIT_S = 120.0
 
 #: keys every {frame_id}_meta.json carries (tests pin this list)
 FRAME_META_KEYS = (
@@ -402,6 +405,59 @@ def prepare_capture(root: str, node: str, capture_id: str, retake: bool = False,
 
 
 # --------------------------------------------------------------------------- #
+# no-fire wait after a fire capture
+# --------------------------------------------------------------------------- #
+def last_fire_capture(root: str, node: str, scene: str) -> Optional[Dict[str, Any]]:
+    """The fire capture of ``scene`` on ``node`` that ended last, at any distance.
+
+    Reads the current records and those moved to ``_retakes/`` (the candles were lit
+    for a retaken capture too).  ``end_unix`` comes from the record, or from the
+    record file's modification time if the record has none.  None if there is none.
+    """
+    pat = re.compile(r"^%s_fire_d\d+\.json$" % re.escape(validate_scene(scene)))
+    node_dir = os.path.join(root, node)
+    dirs = [os.path.join(node_dir, CAPTURES_DIR)]
+    retakes = os.path.join(node_dir, RETAKES_DIR)
+    if os.path.isdir(retakes):
+        dirs += [os.path.join(retakes, d) for d in sorted(os.listdir(retakes))]
+    best: Optional[Dict[str, Any]] = None
+    for d in dirs:
+        if not os.path.isdir(d):
+            continue
+        for name in sorted(os.listdir(d)):
+            if not pat.match(name):
+                continue
+            path = os.path.join(d, name)
+            try:
+                with open(path, encoding="utf-8") as f:
+                    end = json.load(f).get("end_unix")
+            except (OSError, ValueError):
+                end = None
+            if end is None:
+                end = os.path.getmtime(path)
+            if best is None or float(end) > best["end_unix"]:
+                best = {"capture_id": name[:-len(".json")], "end_unix": float(end),
+                        "record": os.path.relpath(path, root)}
+    return best
+
+
+def nofire_wait(root: str, node: str, scene: str, now: float,
+                min_wait_s: float = NOFIRE_MIN_WAIT_S) -> Dict[str, Any]:
+    """How long ago the last fire capture of ``scene`` on ``node`` ended.
+
+    ``ok`` is False if it ended fewer than ``min_wait_s`` seconds before ``now``.
+    """
+    last = last_fire_capture(root, node, scene)
+    since = None if last is None else now - last["end_unix"]
+    return {"min_wait_s": float(min_wait_s),
+            "last_fire_capture": None if last is None else last["capture_id"],
+            "last_fire_record": None if last is None else last["record"],
+            "last_fire_end_unix": None if last is None else last["end_unix"],
+            "seconds_since": since,
+            "ok": since is None or since >= min_wait_s}
+
+
+# --------------------------------------------------------------------------- #
 # one capture
 # --------------------------------------------------------------------------- #
 #: intrinsics fields every stream must carry (prereg Amendment 3)
@@ -617,8 +673,10 @@ def run_capture(backend: CameraBackend, scene: str, label: str, distance_m, node
     Returns the record.
 
     ``study_gates`` (every study capture; prereg sec. 13 draft): the --notes must parse
-    (:func:`notes_problems`, checked before the camera opens) and the camera must be on a
-    USB 3.x link (:func:`usb_problems`).  ``exposure_lock``: the camera's one fixed
+    (:func:`notes_problems`, checked before the camera opens), a no-fire capture must
+    start at least ``NOFIRE_MIN_WAIT_S`` after the end of the node's last fire capture of
+    the same scene (:func:`nofire_wait`, checked before the camera opens; recorded as
+    ``nofire_wait``), and the camera must be on a USB 3.x link (:func:`usb_problems`).  ``exposure_lock``: the camera's one fixed
     exposure, gain and white balance (``camera_exposure.fixed_exposure``), and the capture FAILs if
     any colour frame reports auto exposure on (or does not report it).
     """
@@ -629,10 +687,21 @@ def run_capture(backend: CameraBackend, scene: str, label: str, distance_m, node
     fps = float(fps)
     if frames < 1 or fps <= 0:
         raise ValueError("frames must be >= 1 and fps > 0")
+    wait = None
     if study_gates:
         bad = notes_problems(notes, label)
         if bad:
             raise CaptureError("capture refused before it started: %s" % "; ".join(bad))
+        if label == "no_fire":
+            # checked before anything is moved aside, so a refused retake changes nothing
+            wait = nofire_wait(root, node, scene, clock())
+            if not wait["ok"]:
+                raise CaptureError(
+                    "no-fire capture refused: %s ended %.1f s ago, at least %.0f s are "
+                    "required after the end of a fire capture of the same scene (prereg "
+                    "13.2); wait %.0f s more"
+                    % (wait["last_fire_capture"], wait["seconds_since"], wait["min_wait_s"],
+                       math.ceil(wait["min_wait_s"] - wait["seconds_since"])))
     prep = prepare_capture(root, node, capture_id, retake=retake, clock=clock)
     node_dir = prep["node_dir"]
 
@@ -730,6 +799,7 @@ def run_capture(backend: CameraBackend, scene: str, label: str, distance_m, node
                                 notes, errors, lateness, prep.get("retake_moved_to"))
         record["notes_parsed"] = parse_notes(notes)
         record["study_gates"] = bool(study_gates)
+        record["nofire_wait"] = wait
         record["usb"] = {"usb_type": info.get("usb_type"),
                          "usb_speed_mbps": info.get("usb_speed_mbps"),
                          "usb_devices": info.get("usb_devices"),

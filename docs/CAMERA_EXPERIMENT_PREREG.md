@@ -377,6 +377,8 @@ family, verdict phrase or interpretation rule, and not the preprocessing of sect
 > calibration value existed:** the whole of section 13 as it stands then, including
 > the exposure and white-balance policy of 13.1, sequential capture (13.2) and the
 > cancelled e5 steps. The `[e5]` values are filled later, each as a dated change.
+> **2026-10-13:** all `[e5]` values are filled (13.1, 13.2, 13.3), after the D435if
+> repeat. The draft status stays until the study-capture decisions are recorded here.
 
 Written after the pilot of section 10 (scene `s01`, four captures on 2026-10-07, all
 PASS), and after its frames were looked at for technical image properties only:
@@ -520,7 +522,13 @@ a change to section 2 that has to be disclosed in the paper and the response let
       in 5 of 5 colour frames, while the settings read back off. The capture is kept as
       it is (status incomplete, not moved to `_retakes/`). The cause was not
       investigated.
-    - [e5: the s03 acceptance test runs under the policy above once it is decided]
+    - *Filled 2026-10-13.* The policy was committed (`58bff21`, `46a1320`) before the
+      s03 acceptance test, and the acceptance captures s03, s10 and s11 ran under it:
+      every one of their frames has `exposure_source: manual_lock` with auto exposure
+      off. The calibrations of record for s11 are the byte copies in
+      `data/camera_exposure/camera_pilot/<node>/exposure.json`: D435i `e727516`, ZED 2i
+      `57f5f3c`, and D435if `cee5ee3`, recalibrated after its firmware update (13.3).
+      The D435if's earlier calibration (`1f6c174`) is kept under `_superseded/`.
 * **ZED raw calibration.** *Pilot:* the ZED record holds the calibration of the
   rectified images (all distortion coefficients 0, correct for the saved frames). The
   factory calibration is not kept. *Change:* every ZED capture record also stores
@@ -695,8 +703,54 @@ sections 1 and 4-6.
       3 m. After the candles are put out, wait at least 2 minutes and check that no
       ember glows before the no-fire captures. Study captures keep the order of the
       pre-registration.
+    - *Deviation in s11 of 2026-10-09 (recorded 2026-10-13).* The 2-minute wait was not
+      kept. The capture records show the gap from the end of `s11_fire_d100`
+      (`end_unix`) to the start of `s11_no_fire_d100` (`start_actual_unix`): 51.9 s on
+      the D435i, 55.8 s on the ZED 2i and 56.2 s on the D435if's pre-update s11. The
+      notes of those no-fire captures say "candles out at least 2 min", which is wrong.
+      Check (a) of the decision rule (0 px on the no-fire frames) passed on all three
+      cameras. The D435i's and the ZED's s11 stand with this deviation. The D435if
+      repeat of 2026-10-12 kept the wait: 125.5 s. A time guard in the capture command
+      would have refused an earlier start.
+    - *No-fire wait in the capture script* (written 2026-10-13 because of the s11
+      deviation; committed with its code and tests before any study capture). It covers
+      every capture with the study gates (`realsense_capture.py`, `zed_capture.py`), the
+      study as well as e5. A no-fire capture is refused before the camera opens if the
+      node's last fire capture of the **same scene**, at **any distance**, ended fewer
+      than 120 s earlier. The end time is the fire record's `end_unix`. Records moved to
+      `_retakes/` count too, because their candles were lit. A refused `--retake` moves
+      nothing aside. The check is per node, since each camera's captures are on its own
+      node. Every no-fire record stores the check as `nofire_wait`: the last fire
+      capture, its end time, the seconds since, and the 120 s minimum
+      (`src/data/camera_capture_common.py`: `NOFIRE_MIN_WAIT_S`, `nofire_wait`;
+      `tests/test_camera_capture.py`). The script cannot check for embers. The author's
+      ember check and its line in the `--notes` stay as before.
   - *To be filled from e5:* the median flame height per camera x distance in 224-pixels,
-    the height in cm against the ruler, and the resulting distance set. [e5]
+    the height in cm against the ruler, and the resulting distance set.
+    - *Filled 2026-10-13* from `docs/e5/records/flame/s11repeat_all_d{100,200,300}.csv`
+      (flame tool `49d3537`, decision rule (a)/(b)/(c) above). Scene s11: the D435if
+      is its repeat of 2026-10-12 after the firmware update (13.3); the D435i and the
+      ZED 2i are from 2026-10-09. Each cell gives three things. The first is the median
+      flame height over the 40 fire frames in the 224 input, with the min-max over
+      the frames. The second is that median converted to cm at the measured distance
+      (`measured_cm_median`). The third is the decision. The ruler gave 3.5 cm for the
+      flame in every fire capture.
+
+      | camera | 1 m | 2 m | 3 m |
+      |---|---|---|---|
+      | D435if (node_a) | 29 px (28-30), 10.2 cm, PASS | 12 px (12-12), 8.5 cm, PASS | 8 px (8-8), 8.5 cm, PASS |
+      | D435i (node_b) | 33 px (32-34), 11.7 cm, PASS | 15 px (15-15), 10.6 cm, PASS | 9 px (9-10), 9.6 cm, PASS |
+      | ZED 2i (node_c) | 21 px (21-22), 9.6 cm, PASS | 10 px (10-10), 9.2 cm, PASS | 6 px (6-6), 8.3 cm, PASS |
+
+    - In all nine cells, three things hold. The flame was detected in 40 of 40 fire
+      frames, the no-fire frames gave 0 px, and no measured flame touched the crop
+      border. `ratio_measured_expected` is descriptive only and lies between 2.36 and
+      3.34.
+    - *Distance set:* every distance passes on all three cameras, so no distance is
+      removed. The study's distance set is {1, 2, 3} m.
+    - The D435if's pre-update s11 gave the same nine decisions
+      (`docs/e5/records/flame/s11_all_d{100,200,300}.csv`, "before the firmware
+      update").
   - The two pillar candles of the pilot are not used further.
   - Section 2 already allows the source type to be chosen per scene. What is new is the
     size criterion.
@@ -726,7 +780,12 @@ sections 1 and 4-6.
   all three colour images *and* inside the 224 crop, while also keeping the 3 m flame
   there and depth valid. If no tilt does, the study's distance set is {2, 3} m for every
   scene, and that narrowing of section 2's {1, 2, 3} m (2 or 3 per scene) is disclosed
-  here. [e5: outcome]
+  here. *Outcome (filled 2026-10-13).* At the s11 plate tilt, all three cameras had
+  the flame inside the 224 crop at 1, 2 and 3 m, and all three distances pass (13.2
+  above). No measured flame touched the crop border. The distance set stays
+  {1, 2, 3} m; nothing is narrowed. Depth validity at the s11 tilt was not measured as
+  a criterion. The only depth measurement at that tilt is the hole fraction of 13.3,
+  inside the WB rectangles.
 
 * **Sequential capture: one tripod, one camera at a time** (decided by the author on
   2026-10-08, during e5, before the s03 acceptance test). This changes section 2 and
@@ -773,7 +832,8 @@ sections 1 and 4-6.
   decided after e5, together with the dotted depth holes seen on the wall in the D435if
   depth (fewer in the D435i's). Since capture is sequential (13.2), the holes are
   measured on the D435if's own s03 no-fire frames, inside the `baccca6` rectangle; the
-  test against the second camera's projector (s06-s08) is cancelled.
+  test against the second camera's projector (s06-s08) is cancelled. *Decided on
+  2026-10-09 by the rule of the next item; the outcome is recorded there.*
 
 * **Depth holes and the D435 firmware: measurement and rule** (decided by the author on
   2026-10-09; committed and pushed before any hole fraction of s11 was computed).
@@ -788,6 +848,12 @@ sections 1 and 4-6.
     the D435if is updated to firmware 5.17.0.10 before the study capture, and the
     D435if's calibration and its s11 are repeated. Otherwise the firmware stays as it
     is, and the versions are reported.
+  - *Outcome (2026-10-09; recorded 2026-10-13).* The means over 40 frames, at 1 / 2 / 3 m
+    in each camera's own WB rectangle, were 0.03534 / 0.03347 / 0.03317 for the D435if
+    and 0.00353 / 0.00404 / 0.00429 for the D435i. That is more than 2 x and more than
+    1 % at every distance (e5 log, "DEPTH HOLES s11"). The D435if was updated to
+    5.17.0.10 on 2026-10-09 (`a727863`, `5f0c132`). Its calibration and its s11 were
+    repeated on 2026-10-12 (below).
   - *The `baccca6` rectangle* (`configs/e5_depth_hole_region.json`) is computed
     unchanged on the D435if's s11 no-fire frames. It is labelled "not plain wall in the
     s11 view": there it covers the curtain, the skirting board and the floor. It is not
@@ -799,6 +865,10 @@ sections 1 and 4-6.
     property of the unit / its filter. The update itself is recorded before and after
     (`rs-enumerate-devices` and `rs-enumerate-devices -c`: firmware, serial,
     calibration), with the firmware file's source, URL and checksum.
+    - *Result (2026-10-12, descriptive only).* On the repeated s11 no-fire frames, in
+      the same rectangle, the D435if gave 0.02831 / 0.0299 / 0.02884 at 1 / 2 / 3 m
+      (e5 log, "DEPTH HOLES s11 REPEAT"; `docs/e5/records/e5_capture_20261012_log.txt`).
+      Nothing further is done.
   - *The D435if repeat: scene id and the earlier captures* (decided by the author on
     2026-10-12; committed and pushed after the firmware update and before any frame of
     the repeat).
@@ -821,6 +891,29 @@ sections 1 and 4-6.
       rectangle check and calibration before the first capture, the e5 capture order and
       waits of 13.2, the tool, the decision rule (a)/(b)/(c) and the region files are as
       for s11.
+    - *What was done (2026-10-12, recorded 2026-10-13).* The D435if (USB 3.2, FW
+      5.17.0.10) was mounted on the plate at the reference position. The plate tilt was
+      not changed. Its framing frame was compared with the D435if's s11 framing frame of
+      2026-10-09 and showed two differences:
+      - *View shift.* The view had moved by -26 px horizontally and -2 px vertically
+        (native 1920 x 1080, phase correlation on the floor). The cause was the
+        remounting of the camera, and the camera was left as it was.
+      - *Curtain.* The curtain's left edge had moved away from the room corner since
+        2026-10-09. This left a strip of white wall behind the source at 3 m, where the
+        other two cameras' s11 have the curtain.
+
+      The author moved the curtain edge back to the corner before the calibration. A
+      second framing frame put it 16 px from its 2026-10-09 position, relative to the
+      room. The WB rectangle still covered plain wall only and was not changed. The
+      calibration (`cee5ee3`) gave exposure 333, gain 91, white balance 4540 and 224
+      luma 102.048, and the session check passed. A 1 m test frame (candles lit, not
+      e5 data) put the flame core inside the 224 crop. The six captures followed the e5
+      order with `--retake`, and all have 40 frames. The earlier captures are in
+      `node_a/_retakes/`, one directory per capture (`20261012T234449` to
+      `20261012T235148`). The
+      desktop copy was moved and copied as above and is md5-identical to node_a's tree
+      (2579 files). Framing comparison, commands and raw output:
+      `docs/e5/records/e5_capture_20261012_log.txt`.
 
 ## 14. Erratum (2026-10-07)
 

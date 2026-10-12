@@ -294,6 +294,76 @@ def test_retake_of_a_missing_capture_moves_nothing(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# no-fire wait after a fire capture (prereg 13.2)
+# --------------------------------------------------------------------------- #
+def _gated(tmp_path, clock, label, distance_m, scene="s03", camera=None, **kw):
+    """A capture through the study gates, as the capture CLIs run it."""
+    notes = FIRE_NOTES if label == "fire" else NOFIRE_NOTES
+    return _capture(tmp_path, clock=clock, camera=camera or FakeCamera(clock=clock),
+                    scene=scene, label=label, distance_m=distance_m, study_gates=True,
+                    notes=notes, **kw)
+
+
+def test_nofire_capture_waits_120_s_after_any_fire_capture_of_the_scene(tmp_path):
+    clock = FakeClock()
+    fire, _ = _gated(tmp_path, clock, "fire", 1.0)
+    assert fire["nofire_wait"] is None
+    end = fire["end_unix"]
+    clock.t = end + 119.0
+    for d in (1.0, 2.0):  # the same scene at any distance
+        cam = FakeCamera(clock=clock)
+        with pytest.raises(CaptureError, match="no-fire capture refused: s03_fire_d100 "
+                                               "ended 119.0 s ago.*wait 1 s more"):
+            _gated(tmp_path, clock, "no_fire", d, camera=cam)
+        assert not cam.opened
+    assert not os.path.exists(tmp_path / "node_a" / "_captures" / "s03_no_fire_d100.json")
+    assert not [n for n in os.listdir(tmp_path / "node_a") if "no_fire" in n]
+    other, _ = _gated(tmp_path, clock, "no_fire", 1.0, scene="s04")  # another scene
+    assert other["nofire_wait"]["last_fire_capture"] is None
+    clock.t = end + 120.0
+    rec, _ = _gated(tmp_path, clock, "no_fire", 1.0)
+    w = rec["nofire_wait"]
+    assert w["ok"] and w["last_fire_capture"] == "s03_fire_d100"
+    assert w["seconds_since"] == pytest.approx(120.0) and w["min_wait_s"] == 120.0
+    assert w["last_fire_record"] == os.path.join("node_a", "_captures", "s03_fire_d100.json")
+
+
+def test_nofire_wait_uses_the_latest_fire_capture_and_retaken_ones(tmp_path):
+    clock = FakeClock()
+    first, _ = _gated(tmp_path, clock, "fire", 3.0)
+    clock.t += 30.0
+    second, _ = _gated(tmp_path, clock, "fire", 2.0)
+    w = ccc.nofire_wait(str(tmp_path), "node_a", "s03", second["end_unix"] + 10.0)
+    assert w["last_fire_capture"] == "s03_fire_d200" and not w["ok"]
+    # a fire capture moved aside by a retake still counts: its candles were lit
+    ccc.move_to_retakes(str(tmp_path), "node_a", "s03_fire_d200", clock=clock)
+    w = ccc.nofire_wait(str(tmp_path), "node_a", "s03", second["end_unix"] + 10.0)
+    assert w["last_fire_capture"] == "s03_fire_d200" and "_retakes" in w["last_fire_record"]
+    assert not w["ok"]
+    assert ccc.nofire_wait(str(tmp_path), "node_b", "s03", 0.0)["ok"]  # per node
+
+
+def test_refused_nofire_retake_moves_nothing(tmp_path):
+    clock = FakeClock()
+    _gated(tmp_path, clock, "no_fire", 1.0)
+    clock.t += 5.0
+    fire, _ = _gated(tmp_path, clock, "fire", 1.0)
+    before = sorted(os.listdir(tmp_path / "node_a"))
+    clock.t = fire["end_unix"] + 60.0
+    with pytest.raises(CaptureError, match="no-fire capture refused"):
+        _gated(tmp_path, clock, "no_fire", 1.0, retake=True)
+    assert sorted(os.listdir(tmp_path / "node_a")) == before
+    assert not os.path.exists(tmp_path / "node_a" / "_retakes")
+
+
+def test_nofire_wait_applies_only_with_the_study_gates(tmp_path):
+    clock = FakeClock()
+    _capture(tmp_path, clock=clock, label="fire", distance_m=1.0)
+    rec, _ = _capture(tmp_path, clock=clock, label="no_fire", distance_m=1.0)
+    assert rec["status"] == "complete" and rec["nofire_wait"] is None
+
+
+# --------------------------------------------------------------------------- #
 # scheduling
 # --------------------------------------------------------------------------- #
 def test_wait_until_sleeps_to_the_scheduled_time():
