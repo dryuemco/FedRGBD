@@ -198,6 +198,15 @@ Commit c1-c3 (one commit each, tests passing) and push.
     identical values);
   - node_a's real-results analysis test refuses, by design, because of
     `results/_gate_failed/`.
+    *Decided 2026-10-13 (author delegated the decision): leave as it is.* Moving
+    `_gate_failed/` out of `results/` was tried (md5-checked) and does not make the test
+    pass: `analyze_results.py` then refuses the untracked diagnostic runs in
+    `results/_diag/` (`diag_resume_smoke_try2_resumed` records `power_config` maxn in the
+    heterogeneous namespace) and `results/diag_*`. Those cannot move either:
+    `diag_smoke_maxn` and `diag_smoke_maxn_r2` are the declared `determinism_gate` paths of
+    `maxn_long_horizon`. The gate evidence was moved back to `results/_gate_failed/`
+    (md5-identical, the location `docs/CROSS_CONFIG_COMPARISON.md` (b) names). The
+    analysis runs only on the desktop; on node_a this one test is expected to fail.
 - d3: PRE-FLIGHT OK. All three nodes are MAXN_SUPER, with WiFi disabled, GUI off and NTP
   synchronised.
 - The c1 dry run logged `clocks: node_a sync=yes, node_b +1134 ms, node_c +121 ms`. The

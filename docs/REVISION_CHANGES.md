@@ -1866,3 +1866,40 @@ amendment.
   CPU-resident copy of w^t are worded as an attribution that was not isolated (no
   GPU-resident variant was timed). `docs/RESPONSE_TO_REVIEWERS.md` (R3.7) filled, and its
   stale 110.3 MB replaced by the measured 165.5 MB.
+
+## Narrative stage, FLAME (2026-10-13)
+
+The author asked for the narrative `\todo`s to be written for review. Drafted from
+`analysis/` only (every number printed by a script, then applied by script), checked
+against the CSVs, and applied to `paper/main.tex`:
+
+* `sec:primary`: metric rationale cites Brodersen et al. (ICPR 2010, verified: pp.
+  3121-3124, doi 10.1109/ICPR.2010.764; new bibitem `brodersen2010balanced`); the
+  timing paragraph says what prompted the rule (an inversion that mixed a client-mean
+  with a pooled figure) and that with one aggregation it holds for the client mean only;
+  the aggregation paragraph states how flipping comparisons are handled (41 of 210 flip;
+  a difference from local-only is never stated on one aggregation alone).
+* `sec:res_metrics`: the reference band rewritten in pooled balanced accuracy with the
+  federated rows placed in it; the accuracy inversion attributed to node B's no-fire class
+  (local model 55.6 % specificity); the per-client paragraph; the `tab:fullmetrics` caption
+  sentence that was wrong under the declared aggregation replaced. The protocol paragraph
+  now says its 12.6 / 6.5 points are accuracies, and "nearly doubles" (x1.94) replaces
+  "more than doubles" (also in CLAUDE.md).
+* `sec:res_dirichlet` (minority-class recovery at alpha = 0.1, cost at alpha = 1.0; the
+  three partitions in order of skew with paired differences to local-only), A5 testbed
+  paragraph (descriptive), `sec:res_lowdata` (paired differences to local-only per rho;
+  every method's change from rho = 1 to 0.01, all methods listed, not only the resolved
+  ones), `sec:res_sensitivity` (mu, E, lr), `sec:powercfg` (six "no detectable
+  difference", timing ratios, stragglers), the 7 W mechanism worded as inferred,
+  `sec:res_fedbn` (ten rounds only, no verdict, evaluation asymmetry stated),
+  `sec:res_global` (Holm verdicts, interval-vs-Holm differences named, clean subset).
+* Discussion: per-round / per-client reporting; the low-data question "at which rho"
+  answered (no single rho); the round-1 collapse qualified to the default point of the
+  sweep (at eta = 1e-4 it does not occur under label skew); FedBN causal wording softened
+  (`sec:generalise` (ii), the FedBN paragraph of the methods).
+* Abstract rewritten (about 265 words, was about 370) with the main FLAME results;
+  conclusion's quantitative paragraph written. Both keep a `\todo` for the camera
+  experiment. Test: `test_abstract_and_conclusion_numbers_are_the_computed_ones`.
+* Still open in `docs/RESPONSE_TO_REVIEWERS.md`: the R3.4 block keeps the old
+  mixed-aggregation inversion (88.6 vs 94.7, MCC 0.81 vs 0.88) and the 6.5-point band as
+  accuracy; to be rewritten with the response letter.

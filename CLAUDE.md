@@ -219,7 +219,7 @@ These two numbers, and every other reference number in the paper, come from
 `analysis/summary_table.csv` (protocol `group`), written by `scripts/analyze_results.py`; never
 re-type them from here, and re-read them after any run. The same runs reported at their **final
 epoch** instead (protocol `group_final_epoch`, kept for comparison) give 90.9 % and 78.3 %, a
-12.6-point band: final-epoch reporting more than doubles the apparent advantage of pooling,
+12.6-point band: final-epoch reporting nearly doubles (x1.94) the apparent advantage of pooling,
 because the local-only models are the unstable ones across epochs. Report the `group` numbers;
 cite `group_final_epoch` only when the point *is* the reporting protocol.
 

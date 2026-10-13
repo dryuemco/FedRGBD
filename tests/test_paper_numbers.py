@@ -523,3 +523,34 @@ def test_strategy_timing_ratios_are_the_declared_analysis():
     assert "(per-seed ratios %.3f--%.3f)" % (min(v), max(v)) in tex
     assert "at most %d distinct resamples" % int(r.max_distinct_resamples) in tex
     assert "TODO" not in tex[tex.index(r"\label{sec:res_time}"):tex.index(r"\input{tables/time.tex}")]
+
+
+def test_abstract_and_conclusion_numbers_are_the_computed_ones():
+    """The balanced accuracies, the flip count and the time factor quoted in the abstract
+    and the conclusion come from analysis/ (summary_table, aggregation_flips, strategy_timing)."""
+    tex = open(MAIN_TEX, encoding="utf-8").read()
+    abstract = tex[tex.index(r"\begin{abstract}"):tex.index(r"\end{abstract}")]
+    conclusion = tex[tex.index(r"\label{sec:conclusion}"):tex.index(r"\label{sec:future}")]
+    df = pd.read_csv(SUMMARY)
+
+    def ba(label, power="heterogeneous"):
+        r = df[(df.protocol == "group") & (df.power_config == power) & (df.aggregation == "pooled")
+               & (df.metric == "selected_test_balanced_accuracy") & (df.label == label)]
+        assert len(r) == 1, label
+        return "%.1f" % (100 * r.iloc[0]["mean"])
+
+    cen, loc = ba("Centralized iid {group}", "desktop_gpu"), ba("Local-only iid {group}", "desktop_gpu")
+    prox, avg = ba("FedProx(mu=0.01) iid [3N] {group}"), ba("FedAvg iid [3N] {group}")
+    assert (r"references reach %s\%% and %s\%%; \fedprox{} ($\mu=0.01$) reaches %s\%% and \fedavg{} %s\%%"
+            % (cen, loc, prox, avg)) in abstract
+    assert (r"and under label skew %s\%% and %s\%%" % (
+        ba("FedProx(mu=0.01) non_iid_label [3N] {group}"), ba("FedAvg non_iid_label [3N] {group}"))) in abstract
+    assert (r"(%s\%%, against %s\%% centralized and %s\%% local-only)" % (prox, cen, loc)) in conclusion
+    flips = pd.read_csv(os.path.join(ROOT, "analysis", "aggregation_flips.csv"))
+    full = flips[flips.subset == "full"]
+    assert "(%d of %d pairwise comparisons change)" % (int(full.verdict_flip.sum()), len(full)) in abstract
+    rat = pd.read_csv(os.path.join(ROOT, "analysis", "strategy_timing", "ratios.csv"))
+    steady = rat[(rat.power_config == "heterogeneous") & (rat.quantity == "steady")].ratio
+    factor = {"%.2f" % v for v in steady}
+    assert len(factor) == 1
+    assert "costs %s times a \\fedavg{} round" % factor.pop() in abstract

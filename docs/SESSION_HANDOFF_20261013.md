@@ -5,6 +5,32 @@ Read this first in a new session; then `CLAUDE.md` and, for the camera experimen
 committed and pushed; all three nodes are at the last commit of the session.
 The previous handoff (`SESSION_HANDOFF_20261009.md`) is superseded.
 
+## 0. Update, morning of 13 October (read this first)
+
+- **Power cut** about 07:59 (desktop event log), nodes back at 08:12, desktop at 09:31.
+  Nothing was running (the night session had ended at 01:25, everything pushed). Checked
+  after the cut: all three nodes MAXN_SUPER, WiFi off, NTP synchronised, GUI off, no FL
+  process; `resume_after_reboot` correctly logged "no restart" (its 07:52 time stamp was
+  written before NTP sync). Nodes are still at `8dad714` (docs-only commits since).
+- **Author's decisions of section 4 below, as applied:**
+  1. Plate tilt **17 deg**, held fixed (prereg 13.1, `12f1e9a`).
+  2. Low-data wording rewritten to the measured coverage (`d2438ad`): the retained
+     sequences hold 97-99 % of a node's frames; the dropped ones are short.
+  3. Timing ratio method approved, declared (`docs/STRATEGY_TIMING_RATIO.md`, `32f4e29`)
+     and computed (`aa75664`): FedProx/FedAvg steady factor 1.55 (heterogeneous).
+  4. A5 text: the author will read it.
+  5. Study capture: recommendation given to the author (B = 18 scenes x 2 distances; one
+     room / one lamp; no light-emitting distractors; candles changed only between scenes;
+     Latin-square camera order). **Waiting for the author's yes**; then write into
+     section 13 and lift its DRAFT.
+  6. Narrative: every FLAME `\todo` written (see `docs/REVISION_CHANGES.md`, "Narrative
+     stage, FLAME"), including abstract and conclusion; **the author reads it next**.
+     Remaining `\todo`s: camera experiment, Level-1 calibration table, testbed photo,
+     funding/AI wording, final scene count.
+  7. Author-only items: later, low priority.
+  8. node_a `results/_gate_failed/`: left in place (decided; reasons in
+     `docs/POST_5B_CHECKLIST.md` d2). On node_a the real-results test is expected to fail.
+
 ## 1. Where things stand
 
 - **All FLAME federated runs are done and analysed**: the 98-run heterogeneous matrix, 5a,
