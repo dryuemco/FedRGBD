@@ -39,7 +39,7 @@
 \title{Empirical Evaluation of Federated Learning on Edge GPU Clusters with Heterogeneous RGB-D Sensors}
 
 \author{Yunus~Emre~\c{C}o\u{g}urcu%
-\thanks{Y. E. \c{C}o\u{g}urcu is with the Department of Computer Engineering / Mechatronics Engineering, \c{C}ukurova University, 01330 Adana, Turkey (e-mail: yecogurcu@cu.edu.tr).}%
+\thanks{Y. E. \c{C}o\u{g}urcu is with the Department of Computer Engineering, \c{C}ukurova University, 01330 Adana, Turkey (e-mail: yecogurcu@cu.edu.tr).}%
 }
 
 \markboth{Neural Computing and Applications, 2026}%
@@ -51,7 +51,7 @@
 % ABSTRACT
 % ============================================================
 \begin{abstract}
-Federated learning (FL) results are mostly obtained from virtual clients simulated on a single server-class GPU. This paper reports an \emph{empirical, deliberately narrow-scope} evaluation of FL on a physical edge cluster: three NVIDIA Jetson Orin Nano Super nodes on wired Gigabit Ethernet, each with a different depth camera (two Intel RealSense variants and one Stereolabs ZED~2i). The federated experiments train MobileNetV3-Small on RGB partitions of the FLAME aerial fire-detection dataset---IID, a manual label skew, three Dirichlet partitions and a low-data regime---and compare \fedavg{} and \fedprox{} with centralised and local-only references under a three-round budget, and \fedbn{} under a ten-round budget only. A near-duplicate audit showed that under a random image-level split 99.6\% of the validation and test images have a near-duplicate in some node's training data, so every result uses a sequence-level split. Balanced accuracy is the declared primary metric, reported pooled over the held-out images and as a mean over the clients, with sequence-level bootstrap intervals. Under IID the centralised and local-only references reach 93.7\% and 85.3\%; \fedprox{} ($\mu=0.01$) reaches 92.9\% and \fedavg{} 86.4\%, and under label skew 95.8\% and 92.4\%. At the default hyperparameters the \fedavg{} global model collapses after the first round and the \fedprox{} model does not, but a \fedprox{} round costs 1.55 times a \fedavg{} round on the testbed. Whether federation beats local training often depends on how balanced accuracy is aggregated over the clients (41 of 210 pairwise comparisons change), so both aggregations are reported. The cameras are not inputs of the federated classifier; a separate, pre-registered experiment measures cross-sensor generalisation under leave-one-scene-out and federated training with sensor-skewed clients.\todo{camera experiment results: one sentence with the leave-one-scene-out result.} Code, configurations and analysis scripts are public at \url{https://github.com/dryuemco/FedRGBD}.
+Most federated learning (FL) results come from clients simulated on one server GPU; this \emph{empirical, deliberately narrow-scope} study uses a physical edge cluster: three NVIDIA Jetson Orin Nano Super nodes, each with a different depth camera (two RealSense variants, one ZED~2i). MobileNetV3-Small learns fire detection on FLAME partitions (IID, label skew, three Dirichlet, low data) with \fedavg{} and \fedprox{} over three rounds and \fedbn{} over ten rounds only, against centralised and local-only references. Splits are sequence-level: a random image-level split left near-duplicates of 99.6\% of the held-out images in training. The declared primary metric is balanced accuracy, with bootstrap intervals. Under IID the centralised and local-only references reach 93.7\% and 85.3\%; \fedprox{} ($\mu=0.01$) reaches 92.9\% and \fedavg{} 86.4\%, and under label skew 95.8\% and 92.4\%. At default hyperparameters \fedavg{}'s global model collapses after round one, unlike \fedprox{}'s, but a \fedprox{} round costs 1.55 times a \fedavg{} round. Whether federation beats local training often depends on pooling versus averaging over clients (41 of 210 pairwise comparisons change); both are reported. The cameras are not classifier inputs; a separate pre-registered experiment tests cross-sensor generalisation and sensor-skewed federated training.\todo{camera experiment results: merge the result into the sentence before (leave-one-scene-out), adding at most about 12 words, so that the abstract stays at about 200 words.} Code: \url{https://github.com/dryuemco/FedRGBD}.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -896,9 +896,24 @@ Three directions follow directly from the limitations above.
 % ============================================================
 \section*{Acknowledgment}
 
-This work was supported by \c{C}ukurova University. The authors acknowledge the use of AI-assisted tools (Claude, Anthropic) for code development, statistical analysis code generation, and English language editing. All experimental results were obtained from real hardware runs; no results were fabricated or simulated.
+The author acknowledges the use of AI-assisted tools (Claude, Anthropic) for code development, statistical analysis code generation, and English language editing. All experimental results were obtained from real hardware runs; no results were fabricated or simulated.
 
-\todo{Add funding/grant numbers if applicable, and confirm the AI-assistance disclosure wording against the journal policy.}
+\todo{Add a grant or project number if there is one, and confirm the AI-assistance disclosure wording against the journal policy.}
+
+% ============================================================
+% DECLARATIONS
+% ============================================================
+\section*{Declarations}
+
+\textbf{Funding.} This work was supported by \c{C}ukurova University.
+
+\textbf{Competing interests.} The author has no competing interests to declare that are relevant to the content of this article.
+
+\textbf{Ethics approval and consent to participate.} Not applicable: the study involves no human participants and no animals.
+
+\textbf{Data availability.} The FLAME dataset~\cite{shamsoshoara2021flame} is publicly available; this study uses its Kaggle distribution~\cite{flame_dataset}. The sequence-level partition manifests, the per-run results and the analysis outputs are in the code repository below. The RGB-D recordings of the camera experiment are available from the author on reasonable request.
+
+\textbf{Code availability.} The code, configurations and analysis scripts are publicly available at \url{https://github.com/dryuemco/FedRGBD}.
 
 
 % ============================================================

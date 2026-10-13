@@ -1903,3 +1903,21 @@ against the CSVs, and applied to `paper/main.tex`:
 * Still open in `docs/RESPONSE_TO_REVIEWERS.md`: the R3.4 block keeps the old
   mixed-aggregation inversion (88.6 vs 94.7, MCC 0.81 vs 0.88) and the 6.5-point band as
   accuracy; to be rewritten with the response letter.
+
+### Front and end matter (author, 2026-10-13)
+
+* Affiliation: Department of Computer Engineering, Cukurova University (was "Computer
+  Engineering / Mechatronics Engineering").
+* Abstract shortened to about 190 words (was about 275 by the same count), on the author's
+  instruction "200 words without losing the meaning". Every number and claim of the
+  previous version is kept (the test strings of
+  `test_abstract_and_conclusion_numbers_are_the_computed_ones` are unchanged); dropped are
+  "wired Gigabit Ethernet", the camera vendor names and "sequence-level" before
+  "bootstrap". The camera `\todo` now says the result is merged into the camera sentence
+  with at most about 12 words, so that the abstract stays at about 200.
+* New `Declarations` section (Springer): funding (Cukurova University, moved from the
+  acknowledgment), competing interests (none, author 2026-10-13), ethics (not applicable),
+  data availability (FLAME public; manifests, per-run results and analysis outputs in the
+  repository; the camera recordings on reasonable request, author 2026-10-13), code
+  availability (the public repository). The acknowledgment now reads "The author" (single
+  author). Its `\todo` is narrowed to a grant number, if any, and the AI-disclosure wording.
