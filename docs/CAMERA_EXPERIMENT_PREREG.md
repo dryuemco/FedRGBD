@@ -379,8 +379,10 @@ family, verdict phrase or interpretation rule, and not the preprocessing of sect
 > cancelled e5 steps. The `[e5]` values are filled later, each as a dated change.
 > **2026-10-13:** all `[e5]` values are filled (13.1, 13.2, 13.3), after the D435if
 > repeat. The draft status stays until the study-capture decisions are recorded here.
-> **2026-10-13 (later):** 13.4 records the first of them (18 scenes x 2 distances, one
-> room and one lamp, candle replacement) and lists the items still open.
+> **2026-10-13 (later):** 13.4 records most of them: 18 scenes x 2 distances, one room
+> and one lamp, candle replacement, no light-emitting distractors, the Latin-square camera
+> order, and turning the tripod. It also lists the two items still open: the
+> background/floor pairs and the materials.
 
 Written after the pilot of section 10 (scene `s01`, four captures on 2026-10-07, all
 PASS), and after its frames were looked at for technical image properties only:
@@ -1009,11 +1011,53 @@ proposals of `docs/STUDY_CAPTURE_PLAN_DRAFT.md`.
     13.1).
   - Replacement sets are of the same candle type, in the arrangement of 13.2
     ("Arrangement of `candles4`").
+* **No light-emitting distractors** (plan O3; decided by the author on 2026-10-13). No
+  object that emits visible light is in any camera's field of view: no lamp, LED, screen
+  or indicator light. Such an object would change the lamp condition of the calibrations
+  of record (13.1).
+  - The fire-like distractors of section 2 are non-emitting objects: red or orange
+    objects, and reflective metal that mirrors the ceiling lamp. The "warm lamp" that
+    section 2 gives as an example is not used.
+* **Camera order across scenes: Latin square** (decided by the author on 2026-10-13).
+  - The order of the three camera blocks within a scene is one of three cyclic orders:
+    - order 0: D435i (node_b), D435if (node_a), ZED 2i (node_c);
+    - order 1: D435if, ZED 2i, D435i;
+    - order 2: ZED 2i, D435i, D435if.
+
+    Across the three orders, each camera is first, second and third once.
+  - For scene `s<n>` the order is floor((n - 12) / 3) mod 3. Scenes `s12`-`s14` use
+    order 0, `s15`-`s17` order 1, `s18`-`s20` order 2, `s21`-`s23` order 0, and so on to
+    `s27`-`s29` (order 2).
+  - Each of the nine combinations of distance pair (above, (n - 12) mod 3) and camera
+    order occurs in exactly two scenes, and each camera is first in six scenes.
+  - The proposal table of the plan draft (section 4) used (n - 12) mod 3 for the order.
+    That would have tied every distance pair to one camera order, so it is not used.
+  - The order goes into every capture's `--notes` (`camera_order=...`) and the scene
+    sheet.
+* **The tripod may face another wall of the room** (decided by the author on 2026-10-13).
+  A scene may be captured with the tripod turned to another wall or corner of the same
+  room, so that its background differs in more than the backdrop.
+  - Only the pan of the tripod head is turned. The plate's tilt joint is not loosened
+    (13.1).
+  - The tripod stays on its taped reference position and is only turned. Moving it
+    elsewhere is not decided. The scene's distance marks are taped from the plate's
+    front edge in the direction it faces. At the scene's farthest distance, the source
+    must stand at least 1 m from every wall (as in s10/s11); a direction without that
+    clearance is not used.
+  - *Tilt after turning.* On an uneven floor, turning the head can change the pitch.
+    After every turn, and before the scene's first capture, the tilt is checked on the
+    D435if with the image method of 13.1: the candles unlit on the matte base at 3 m,
+    the same formula and assumptions. The result must lie within 17 +- 1 deg; the check
+    frame is not study data.
+    - If the check fails, the tilt is set again by the rule of 13.1, and no capture
+      starts until a check passes.
+    - Each check and its value go into the session log.
+  - The calibrations and the session check of 13.1 stay at the taped reference position
+    and direction. At the start of every session the tripod faces the reference direction
+    for the session checks, and is then turned for the scene.
+  - The scene sheet records the tripod position and the direction it faces.
 * **Still open.** The DRAFT status of section 13 stays until the following are recorded
   here:
-  - light-emitting distractors (plan O3);
-  - the camera order across scenes;
-  - whether the tripod may face another wall of the room in some scenes;
   - the background and floor pairs of the 18 scenes;
   - the materials.
 

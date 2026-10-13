@@ -85,7 +85,9 @@ includes breaks, candle changes, lighting the candles or a recalibration.
    distractors, tape the 1/2/3 m marks from the tripod's front edge, fill in the scene
    sheet: background, floor, distractors (each named, unbranded), lamps (`tavan lambasi`),
    source `candles4`, distances, tilt `17` deg (prereg 13.1, held fixed). Curtain edge fixed.
-2. **Camera order rotates across scenes** (Latin square), so no camera is always first:
+2. **Camera order rotates across scenes** (Latin square). **DECIDED 2026-10-13 with a different
+   assignment** (prereg 13.4: order = floor((n-12)/3) mod 3, so that distance pair and order are
+   crossed); the table below is the superseded proposal:
 
    | scene | 1st | 2nd | 3rd |
    |---|---|---|---|
@@ -156,7 +158,8 @@ seen in s11 is replaced).
 - **O2. One room, one lamp. DECIDED 2026-10-13:** every scene in the pilot/e5 room under
   the ceiling lamp only; disclosed as a limitation (prereg 13.4). Whether the tripod may
   face another wall in some scenes is still open.
-- **O3. Light-emitting distractors** (warm lamps): excluded under the current
+- **O3. DECIDED 2026-10-13: no light-emitting object in view** (prereg 13.4). Original question:
+  light-emitting distractors (warm lamps): excluded under the current
   calibration rule, or allowed with recalibration?
 - **O4. Candle burn-down. DECIDED 2026-10-13:** only between scenes; the set is replaced
   if the ruler flame height at the scene start is outside 3.5 +- 1 cm or the shortest
