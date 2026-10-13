@@ -379,6 +379,8 @@ family, verdict phrase or interpretation rule, and not the preprocessing of sect
 > cancelled e5 steps. The `[e5]` values are filled later, each as a dated change.
 > **2026-10-13:** all `[e5]` values are filled (13.1, 13.2, 13.3), after the D435if
 > repeat. The draft status stays until the study-capture decisions are recorded here.
+> **2026-10-13 (later):** 13.4 records the first of them (18 scenes x 2 distances, one
+> room and one lamp, candle replacement) and lists the items still open.
 
 Written after the pilot of section 10 (scene `s01`, four captures on 2026-10-07, all
 PASS), and after its frames were looked at for technical image properties only:
@@ -950,6 +952,70 @@ sections 1 and 4-6.
       desktop copy was moved and copied as above and is md5-identical to node_a's tree
       (2579 files). Framing comparison, commands and raw output:
       `docs/e5/records/e5_capture_20261012_log.txt`.
+
+### 13.4 Study capture design (decided by the author on 2026-10-13, before any study capture)
+
+Recorded and pushed before any study frame exists. Checked on 2026-10-13:
+`data/raw/camera` is absent on all three nodes, and on the desktop it holds only the empty
+scene-sheet template `scenes_template.csv` (2026-09-28). The author chose among the
+proposals of `docs/STUDY_CAPTURE_PLAN_DRAFT.md`.
+
+* **18 scenes x 2 distances (option B).** This lies within section 2's ranges (15 to 20
+  scenes, 2 or 3 distances per scene), so it does not change section 2.
+  - The study scenes are `s12` to `s29`, numbered in capture order. Ids are never reused
+    (section 2); `s01` to `s11` were pilot and e5.
+  - *Distances per scene.* The pair is fixed by the scene id: for scene `s<n>`,
+    (n - 12) mod 3 = 0, 1, 2 gives {1, 2}, {1, 3}, {2, 3} m. So `s12` is {1, 2}, `s13`
+    {1, 3}, `s14` {2, 3}, `s15` {1, 2}, and so on to `s29` {2, 3}. Each pair occurs in six
+    scenes, and each distance in twelve.
+  - A scene's two distances are the same for fire and no-fire and for all three cameras
+    (section 2).
+  - *Order within a camera block.* 13.2 (O1) applies to the scene's two distances: fire
+    from far to near, then no-fire from near to far.
+  - *Size.* 18 scenes x 2 classes x 2 distances x 3 cameras = 216 captures of 40 frames,
+    8,640 frames in all.
+  - *Reason.* The scene is the unit of every split and of the bootstrap (sections 4-6).
+    More scenes therefore give more independent units than a third distance per scene
+    would. 18 also leaves three scenes of margin above the 15 of section 2 for the
+    exclusions there. The estimated capture time is about the same as for 15 x 3 (plan,
+    section 3).
+* **One room, one lamp.**
+  - Every study scene is captured in the room of the pilot and e5, with only the ceiling
+    lamp on (`lamps_on=tavan lambasi`) and the curtain closed, as in the calibrations of
+    record (13.1).
+  - The lamp condition therefore never changes, and no camera is recalibrated because of
+    it. The session check of 13.1 still applies at the start of every session.
+  - Scenes differ in background and floor (13.2 "Scene diversity"), through movable
+    backdrops and floor covers, and in their distractors.
+  - *Disclosed.* Section 2 defines a scene as one location with one background. Here every
+    scene shares one location and differs only in backdrop, floor and distractors. The
+    paper states this as a limitation of the camera experiment.
+* **Candle replacement (`candles4`).**
+  - The four candles are replaced only between scenes, never within a scene. All fire
+    captures of a scene, on all three cameras, therefore use the same four candles.
+  - At the start of every scene, before its first fire capture, the candles are lit and
+    left until the flames are steady. The author then reads the flame height with the
+    vertical ruler, as in e5.
+  - The whole set of four is replaced if (a) the flame height lies outside 3.5 +- 1 cm
+    (below 2.5 cm or above 4.5 cm), or (b) the shortest candle has burnt down to half its
+    height when new, or less.
+  - When a set is first used, each candle's height is measured and written into the scene
+    sheet. This is the "height when new" of (b). The e5 set's height when new was not
+    recorded, so the study starts with a new set.
+  - After a replacement, the ruler check is repeated on the new set. No fire capture of
+    the scene starts until a set passes (a).
+  - Every replacement, the candle heights and every ruler reading go into the scene sheet.
+    The flame height of every fire capture stays in its `--notes` (`flame_height_cm`,
+    13.1).
+  - Replacement sets are of the same candle type, in the arrangement of 13.2
+    ("Arrangement of `candles4`").
+* **Still open.** The DRAFT status of section 13 stays until the following are recorded
+  here:
+  - light-emitting distractors (plan O3);
+  - the camera order across scenes;
+  - whether the tripod may face another wall of the room in some scenes;
+  - the background and floor pairs of the 18 scenes;
+  - the materials.
 
 ## 14. Erratum (2026-10-07)
 

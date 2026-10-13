@@ -29,7 +29,7 @@ scene. Section 2 does not state one; the e5 order (fire 3-2-1, then no-fire 1-2-
 declared "e5 only", and 13.2 says study captures "keep the order of the
 pre-registration", which does not exist as such. **Open item O1.**
 
-## 2. Two options
+## 2. Two options -- (B) DECIDED 2026-10-13 (prereg 13.4)
 
 | | (A) 15 scenes x 3 distances | (B) 18 scenes x 2 distances |
 |---|---|---|
@@ -153,13 +153,14 @@ seen in s11 is replaced).
 - **O1. Fire/no-fire order in the study. DECIDED 2026-10-13:** per camera, fire
   far-to-near, then no-fire near-to-far (the e5 order), so that the per-node no-fire wait
   of the capture script covers every fire-to-no-fire step (prereg 13.2).
-- **O2. One room, one lamp?** If scenes go to other rooms or lamps, every lamp condition
-  needs its own calibration of all three cameras (13.1), and the session checks must
-  follow it.
+- **O2. One room, one lamp. DECIDED 2026-10-13:** every scene in the pilot/e5 room under
+  the ceiling lamp only; disclosed as a limitation (prereg 13.4). Whether the tripod may
+  face another wall in some scenes is still open.
 - **O3. Light-emitting distractors** (warm lamps): excluded under the current
   calibration rule, or allowed with recalibration?
-- **O4. Candle burn-down.** When are the four candles replaced (a ruler height, or a
-  number of fire captures)? The flame height in `--notes` records it either way.
+- **O4. Candle burn-down. DECIDED 2026-10-13:** only between scenes; the set is replaced
+  if the ruler flame height at the scene start is outside 3.5 +- 1 cm or the shortest
+  candle is at half its height when new; the study starts with a new set (prereg 13.4).
 - **O5. The 2-minute rule in s11 (author, 2026-10-09).** The rule was not followed in
   s11. From the capture records (`end_unix` -> `start_actual_unix`) the gap was 51.9 s
   (D435i), 55.8 s (ZED 2i) and 56.2 s (D435if before its update); the log time stamps
