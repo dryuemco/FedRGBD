@@ -402,6 +402,25 @@ a change to section 2 that has to be disclosed in the paper and the response let
   distances used are recorded per scene. Distances are measured on the floor tape from
   the plate's front edge. A distance at which the flame is not in all three colour
   images is not captured for that scene.
+  - *Plate tilt of record: 17 deg, held fixed* (decided by the author on 2026-10-13,
+    before any study capture). The tilt is the s11 tilt, under which e5 passed at 1, 2
+    and 3 m (13.2), and it is not changed for the study.
+    - *How the value was obtained.* The tilt had not been measured at s11 (notes
+      `tilt_deg=unknown`). Two auxiliary readings were taken afterwards (13 Oct, not e5
+      data; e5 log): the author's phone level on the plate read X 1.8 deg, Y 22 deg, with
+      the phone's placement and axes not established; and the optical-axis pitch
+      computed from the D435if images gave 16.4 deg (3 m framing frame) and 16.7 deg
+      (1 m test frame), from fy and cy of the s11 record, the candle base row and the
+      optical-centre height of 56.5 cm. The author fixed the tilt of record at 17 deg,
+      the image value rounded to the degree. The phone reading is not used.
+    - *Held fixed.* The plate's tilt joint is not loosened during the study. Cameras
+      are swapped on the plate without touching it. Every study capture's `--notes`
+      carry `tilt_deg=17`, and the scene sheet records it.
+    - *If the plate is moved* (knocked, or the joint loosened), no capture is taken
+      until the tilt is set again and checked by the same image method on the D435if
+      (candle base row at 3 m, same formula and assumptions), within 17 +- 1 deg. The
+      check and its value go into the session log. Captures taken before the movement
+      stand.
 * **USB 3.x gate.** *Pilot:* node_a's D435if enumerated at USB 2.1 (480 Mb/s), where the
   colour and depth profile of section 2 does not resolve. The v1 records did not log the
   USB type. *Change:* a capture FAILs unless every RealSense reports

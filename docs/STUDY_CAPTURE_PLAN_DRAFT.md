@@ -84,7 +84,7 @@ includes breaks, candle changes, lighting the candles or a recalibration.
 1. **Scene set-up.** Change the background and the floor (section 5), place the
    distractors, tape the 1/2/3 m marks from the tripod's front edge, fill in the scene
    sheet: background, floor, distractors (each named, unbranded), lamps (`tavan lambasi`),
-   source `candles4`, distances, tilt (if measured). Curtain edge fixed.
+   source `candles4`, distances, tilt `17` deg (prereg 13.1, held fixed). Curtain edge fixed.
 2. **Camera order rotates across scenes** (Latin square), so no camera is always first:
 
    | scene | 1st | 2nd | 3rd |
@@ -144,7 +144,8 @@ seen in s11 is replaced).
 - The vertical ruler; floor tape for the marks; the tape measure.
 - Backdrops (cloths, boards) and floor covers from section 5, with clamps/stands.
 - The unbranded distractors from section 6.
-- A phone inclinometer (tilt is still "unknown").
+- No inclinometer needed: the tilt of record is 17 deg (prereg 13.1); it is re-checked by
+  the image method only if the plate is moved.
 - The scene sheet (printed or a file), a timer for the 2 min / 10 s waits.
 
 ## 8. Open items for the review
@@ -171,7 +172,7 @@ seen in s11 is replaced).
   2026-10-13), per node, `_retakes/` counted. (With the proposed order "no-fire first, then fire" per camera, the
   guard applies whenever a no-fire capture follows a fire capture of the same scene and
   distance, e.g. a retake.)
-- **O6. Tilt.** Still "unknown"; measure it once with the inclinometer before the study
-  and record it.
+- **O6. Tilt. DECIDED 2026-10-13:** 17 deg, the s11 tilt from the D435if images (16.4 /
+  16.7 deg), held fixed; the phone reading (22 deg) is not used (prereg 13.1).
 - **O7. The D435if repeat. DONE 2026-10-12:** all three cameras PASS at 1, 2 and 3 m;
   distance set {1, 2, 3} m (prereg 13.2, a9aef35).
