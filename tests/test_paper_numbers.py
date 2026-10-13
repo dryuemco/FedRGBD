@@ -461,3 +461,34 @@ def test_paper_figures_are_generated(tmp_path):
     for name in ("fig_confmat", "fig_sensitivity", "fig_mu_tradeoff", "fig_dirichlet",
                  "fig_timecomm"):
         assert (tmp_path / (name + ".pdf")).stat().st_size > 1000
+
+
+def test_lowdata_sequence_coverage_sentences_are_the_computed_ones():
+    """The low-data coverage figures of sec:lowdata / sec:res_lowdata come from
+    analysis/lowdata_sequence_coverage.csv (scripts/lowdata_sequence_coverage.py)."""
+    tex = open(MAIN_TEX, encoding="utf-8").read()
+    cov = pd.read_csv(os.path.join(ROOT, "analysis", "lowdata_sequence_coverage.csv"),
+                      dtype={"rho": str})
+    lo, hi = cov[cov.rho == "0.01"], cov[cov.rho == "0.05"]
+    assert "between %d and %d per node have fewer than ten frames" % (
+        cov.sequences_full_lt10.min(), cov.sequences_full_lt10.max()) in tex
+    assert "keeps frames from only %d to %d of its %d to %d training sequences" % (
+        lo.train_sequences_sub.min(), lo.train_sequences_sub.max(),
+        lo.train_sequences_full.min(), lo.train_sequences_full.max()) in tex
+    assert r"(at $\rho = 0.05$, from %d to %d)" % (
+        hi.train_sequences_sub.min(), hi.train_sequences_sub.max()) in tex
+    lost = lo.groupby("partition")[["sequences_full_ge100", "sequences_sub_ge100"]].sum()
+    assert ((lost.sequences_full_ge100 - lost.sequences_sub_ge100) == 1).all()
+    assert "of at least 100 frames keeps some frames except one in each partition" in tex
+    share = r"%d--%d\%%" % (round(100 * lo.frame_share_kept_sequences.min()),
+                            round(100 * lo.frame_share_kept_sequences.max()))
+    assert tex.count("hold " + share) == 2
+    mid = lo.groupby("partition")[["sequences_sub_10_99", "sequences_full_10_99"]].sum()
+    assert "(%d of %d retained under IID, %d of %d under label skew;" % (
+        mid.loc["iid", "sequences_sub_10_99"], mid.loc["iid", "sequences_full_10_99"],
+        mid.loc["non_iid_label", "sequences_sub_10_99"],
+        mid.loc["non_iid_label", "sequences_full_10_99"]) in tex
+    union = lo.groupby("partition").train_sequences_sub.sum()
+    assert "%d to %d retained sequences against %d to %d on a single node" % (
+        union.min(), union.max(), lo.train_sequences_sub.min(), lo.train_sequences_sub.max()) in tex
+    assert "removes redundant near-duplicate frames before it removes sequences" not in tex

@@ -287,7 +287,8 @@ comparison has almost no resolution, and we say so explicitly in the scope state
 resolution of accuracy-based comparisons"). Two harder conditions were added:
 
 - **Low-data regime (new Section III-F, results Section IV-E).** Each node's *training* split is
-  subsampled at group level, stratified per class, to ρ ∈ {1.00, 0.05, 0.01} of its size
+  subsampled uniformly over the frames of its own training sequences (whole sequences are too
+  large to reach 5 % or 1 %), stratified per class, to ρ ∈ {1.00, 0.05, 0.01} of its size
   (Eq. 4), with validation and test untouched so that all regimes are evaluated on identical
   data. At ρ = 0.01 a node holds on the order of 10² training images, i.e. a regime where a
   federated model should be clearly better than a local one. The reported quantity is the
@@ -310,8 +311,12 @@ the wrong method first, which is exactly the metric issue the reviewer raised, n
 our own data. Under Dirichlet skew the local-only balanced accuracy falls to 56.2 % at α = 0.1
 (two clients never see a no-fire frame), 82.3 % at α = 0.5 and 94.4 % at α = 1.0 (Table XI). In the
 low-data regime the local-only reference loses little under IID and about eight points under
-label skew when a node is reduced to ~112 training frames, because the frame-level subsample
-still covers most of a node's sequences; we state this conservative reading in the manuscript.
+label skew when a node is reduced to ~112 training frames. The frame-level subsample keeps the
+long sequences, which hold 97-99 % of a node's training frames, but drops most of the short ones:
+at ρ = 0.01 a node keeps frames from 5 to 11 of its 24 to 57 training sequences
+(`analysis/lowdata_sequence_coverage.csv`, corrected 2026-10-13; an earlier draft said the
+subsample left the sequences intact). The manuscript states both counts, and that a federated
+advantage in this regime mixes the larger number of frames with the other nodes' sequences.
 The federated rows of these tables await the Jetson runs.
 
 **Note on the size of the reference gap (raised by us).** Under the declared model-selection

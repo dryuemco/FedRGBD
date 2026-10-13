@@ -1832,3 +1832,16 @@ amendment.
   only 14-26 % do, so the paper's sentences that the regime removes frames before
   sequences are not supported; both are flagged in their `\todo`s for the author, the text
   is unchanged. Test: `tests/test_lowdata_sequence_coverage.py`.
+* **Wording corrected (author's decision, 2026-10-13).** The script now also writes, per
+  node, the share of the full training frames that lie in the retained sequences
+  (`frame_share_kept_sequences`) and the full/retained sequence counts in three size bands
+  (< 10, 10-99, >= 100 training frames). They show that the dropped sequences are mostly
+  the short ones: at rho = 0.01 the retained sequences hold 97-99 % of a node's training
+  frames, every sequence of >= 100 frames keeps frames except one per partition, and most
+  sequences of 10-99 frames are lost. `sec:lowdata` and `sec:res_lowdata` now state these
+  counts, and that a federated or centralized advantage over local-only in the low-data
+  table mixes the larger number of frames with the other nodes' sequences (the claim that
+  the advantage "has to come from combining sequences" is withdrawn). The two `\todo`s
+  are removed. `docs/RESPONSE_TO_REVIEWERS.md` (R3, "subsampled at group level")
+  corrected. Test:
+  `tests/test_paper_numbers.py::test_lowdata_sequence_coverage_sentences_are_the_computed_ones`.
