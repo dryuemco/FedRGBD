@@ -422,12 +422,19 @@ and the partition is now group-level, so the v1 timings (including the v1 FedPro
 are superseded rather than extended, and are no longer reported (see the note on the testbed
 network above). Results Section IV-H keeps the argument the reviewer asks for — "an improvement
 that is obtained per *round* is not necessarily an improvement per *second*" — and the identical
-communication volume of FedAvg and FedProx (110.3 MB over three rounds with K = 3, from Eq. 21,
-because FedProx changes the local objective, not the payload). The measured time ratio, and
-whether FedAvg completes more than one round within FedProx's first-round time, are marked
-placeholders to be filled from the revision runs. The practical-implications paragraph states
-the FedProx recommendation conditionally on those timings ("when rounds are expensive
-(scheduled, bandwidth-limited or manually supervised aggregation)"). Table XV is now generated
+communication volume of FedAvg and FedProx (165.5 MB measured over three rounds with K = 3,
+because FedProx changes the local objective, not the payload). **Filled 2026-10-13** from a
+declared analysis (`docs/STRATEGY_TIMING_RATIO.md`, fixed after the per-strategy times of the
+time tables had been seen, before any paired ratio existed; `analysis/strategy_timing/`): in
+the main matrix a steady-state FedProx round takes 1.546 [1.537, 1.556] times as long as a
+FedAvg round under label skew and 1.548 [1.541, 1.556] under IID (seed-paired geometric mean
+over five seeds, seed-bootstrap interval, indicative), 1.641 / 1.618 at MAXN_SUPER. FedProx's
+first round costs 1.555 [1.546, 1.565] steady FedAvg rounds under label skew, so FedAvg does
+complete more than one round in that time, and the time of three FedProx rounds pays for
+4.63 [4.61, 4.64] FedAvg rounds. Whether those extra rounds close the round-1 gap is not
+tested. The practical-implications paragraph states the FedProx recommendation accordingly
+("holds when rounds are expensive (scheduled, bandwidth-limited or manually supervised
+aggregation) and weakens when the constraint is total training time on the device"). Table XV is now generated
 by `scripts/export_latex_tables.py` from the revision runs only, with a measured communication
 column, and the time/accuracy figure becomes a three-panel figure (accuracy vs. round, vs.
 elapsed seconds, vs. cumulative MB) drawn from the revision runs only; v1 runs are not placed on

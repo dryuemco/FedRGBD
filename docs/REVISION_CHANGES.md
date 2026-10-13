@@ -1845,3 +1845,24 @@ amendment.
   are removed. `docs/RESPONSE_TO_REVIEWERS.md` (R3, "subsampled at group level")
   corrected. Test:
   `tests/test_paper_numbers.py::test_lowdata_sequence_coverage_sentences_are_the_computed_ones`.
+
+## Wall-clock ratio FedProx(0.01) / FedAvg (2026-10-13)
+
+* Declared in `docs/STRATEGY_TIMING_RATIO.md` (`32f4e29`, author's approval of the
+  handoff proposal 4.3), committed and pushed before any value existed, after the
+  per-strategy times of `tab:time` / `tab:time_maxn` had been seen. The method of
+  `docs/CROSS_CONFIG_COMPARISON.md` (c): seed-paired ratio, geometric mean over seeds,
+  seed bootstrap (indicative interval), per-seed ratios always printed; quantities
+  `steady` (overhead factor), `round1`, `total`, `prox_round1_vs_avg_steady`, and the
+  derived FedAvg rounds within FedProx's budget; heterogeneous (primary) and MAXN cells,
+  never pooled.
+* `scripts/strategy_timing_ratio.py` -> `analysis/strategy_timing/{runs,ratios}.csv`,
+  `ratios.md`. Tests: `tests/test_strategy_timing_ratio.py` (synthetic runs, and the
+  committed output against the real tree).
+* `paper/main.tex`: the five timing `\todo`s of `sec:res_time`, the practical
+  implications and `sec:generalise` are filled from `ratios.csv` (test
+  `test_strategy_timing_ratios_are_the_declared_analysis`); the dead placeholder branch
+  of `tab:time` is replaced by `\input{tables/time.tex}`. The two causal sentences on the
+  CPU-resident copy of w^t are worded as an attribution that was not isolated (no
+  GPU-resident variant was timed). `docs/RESPONSE_TO_REVIEWERS.md` (R3.7) filled, and its
+  stale 110.3 MB replaced by the measured 165.5 MB.

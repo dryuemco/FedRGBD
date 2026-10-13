@@ -492,3 +492,34 @@ def test_lowdata_sequence_coverage_sentences_are_the_computed_ones():
     assert "%d to %d retained sequences against %d to %d on a single node" % (
         union.min(), union.max(), lo.train_sequences_sub.min(), lo.train_sequences_sub.max()) in tex
     assert "removes redundant near-duplicate frames before it removes sequences" not in tex
+
+
+def test_strategy_timing_ratios_are_the_declared_analysis():
+    """The FedProx/FedAvg wall-clock ratios in the text come from
+    analysis/strategy_timing/ratios.csv (docs/STRATEGY_TIMING_RATIO.md)."""
+    tex = open(MAIN_TEX, encoding="utf-8").read()
+    rat = pd.read_csv(os.path.join(ROOT, "analysis", "strategy_timing", "ratios.csv"))
+
+    def cell(config, part, q, nd=3):
+        r = rat[(rat.power_config == config) & (rat.partition == part) & (rat.quantity == q)].iloc[0]
+        f = "%%.%df" % nd
+        return "$%s$ [$%s$, $%s$]" % (f % r.ratio, f % r.ci_low, f % r.ci_high)
+
+    for config, part, q, nd in [
+            ("heterogeneous", "non_iid_label", "total", 3), ("heterogeneous", "iid", "total", 3),
+            ("heterogeneous", "non_iid_label", "steady", 3), ("heterogeneous", "iid", "steady", 3),
+            ("heterogeneous", "non_iid_label", "prox_round1_vs_avg_steady", 3),
+            ("heterogeneous", "iid", "prox_round1_vs_avg_steady", 3),
+            ("maxn", "non_iid_label", "steady", 3), ("maxn", "iid", "steady", 3),
+            ("heterogeneous", "non_iid_label", "fedavg_rounds_in_fedprox_budget", 2),
+            ("maxn", "non_iid_label", "fedavg_rounds_in_fedprox_budget", 1)]:
+        assert cell(config, part, q, nd) in tex, (config, part, q)
+    steady = rat[(rat.power_config == "heterogeneous") & (rat.quantity == "steady")].ratio
+    assert {"%.2f" % v for v in steady} == {"1.55"}
+    assert "a steady-state factor of 1.55 per round under both partitions" in tex
+    r = rat[(rat.power_config == "heterogeneous") & (rat.partition == "non_iid_label")
+            & (rat.quantity == "total")].iloc[0]
+    v = [float(x) for x in r.per_seed_ratios.split()]
+    assert "(per-seed ratios %.3f--%.3f)" % (min(v), max(v)) in tex
+    assert "at most %d distinct resamples" % int(r.max_distinct_resamples) in tex
+    assert "TODO" not in tex[tex.index(r"\label{sec:res_time}"):tex.index(r"\input{tables/time.tex}")]
