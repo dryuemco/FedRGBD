@@ -19,10 +19,13 @@ The previous handoff (`SESSION_HANDOFF_20261009.md`) is superseded.
   3. Timing ratio method approved, declared (`docs/STRATEGY_TIMING_RATIO.md`, `32f4e29`)
      and computed (`aa75664`): FedProx/FedAvg steady factor 1.55 (heterogeneous).
   4. A5 text: the author will read it.
-  5. Study capture: recommendation given to the author (B = 18 scenes x 2 distances; one
-     room / one lamp; no light-emitting distractors; candles changed only between scenes;
-     Latin-square camera order). **Waiting for the author's yes**; then write into
-     section 13 and lift its DRAFT.
+  5. Study capture: decided by the author and recorded in prereg 13.4 (`905aa63`,
+     `843c5ea`): 18 scenes x 2 distances (s12-s29, pair by scene id), one room / one
+     lamp, candles changed only between scenes (ruler 3.5 +- 1 cm or half height; start
+     with a new set), no light-emitting object in view, Latin-square camera order crossed
+     with the distance pair, tripod may be turned (tilt re-checked after each turn).
+     **Still open before the DRAFT of section 13 is lifted:** the 18 background/floor
+     pairs and the materials (needs the author's inventory).
   6. Narrative: every FLAME `\todo` written (see `docs/REVISION_CHANGES.md`, "Narrative
      stage, FLAME"), including abstract and conclusion; **the author reads it next**.
      Remaining `\todo`s: camera experiment, Level-1 calibration table, testbed photo,
