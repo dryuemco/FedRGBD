@@ -34,6 +34,50 @@ The previous handoff (`SESSION_HANDOFF_20261009.md`) is superseded.
   8. node_a `results/_gate_failed/`: left in place (decided; reasons in
      `docs/POST_5B_CHECKLIST.md` d2). On node_a the real-results test is expected to fail.
 
+## 0a. Update, evening of 13 October -- "where did we stop" (tell the author this first)
+
+- **Done** (`0ffa8aa`, pushed): affiliation = Department of Computer Engineering, Cukurova
+  University; abstract shortened to about 190 words, every number kept (the camera result
+  is to be merged into the camera sentence with at most ~12 words, so it stays ~200); new
+  `Declarations` section: funding Cukurova University, no competing interests, ethics not
+  applicable, data: FLAME public + manifests/results/analysis in the repo, **camera
+  recordings on reasonable request** (author), code = the public repo. Acknowledgment
+  "The author". 920 tests pass, 32 pages, no overfull box.
+- **Waiting for the author (asked on 13 Oct evening):**
+  1. A grant / BAP project number? (none -> remove the acknowledgment `\todo`)
+  2. Keep the AI-assistance wording as it is?
+  3. **Study-capture inventory** (blocks the 18 background/floor pairs, the materials list
+     and lifting the DRAFT of prereg section 13). The author has: 4 candles, a red book, a
+     red toy car, a red toothpaste tube. Asked for:
+     - were these 4 candles burnt in e5? (then not usable: height when new unknown);
+       buy **at least 4 new sets (16 candles) of the same type as `candles4`** (ask before
+       buying another type: 13.4 requires the same type) and a snuffer;
+     - the toothpaste's brand/text fully covered with matte tape (the branded red tube of
+       s11 was to be replaced);
+     - 3-5 more non-emitting distractors from home: orange/mandarin, red apple or pepper,
+       an orange/red towel, a steel pot/tray or aluminium foil (reflection), an orange
+       plastic box;
+     - backgrounds/floors: colours and rough sizes of sheets, duvet covers, blankets,
+       rugs, mats at home; for each direction the tripod could face, the free distance to
+       the wall (needs about 3 m for {1,2} m scenes, about 4 m for scenes with 3 m).
+       Proposal: 6 backgrounds x 6 floors, each used 3 times -> 18 distinct pairs.
+       Coverage at 3.5 m on the ZED crop about 1.2 m high x 3.6 m wide (RealSense about
+       0.85 x 2.8 m). Safety: candles on the matte base, textiles >= 0.5 m from flames,
+       water / extinguisher at hand.
+  4. Still to read: abstract, conclusion, A5 text and all narrative sections.
+  5. Later: testbed photo (Fig. 1); journal limits (keywords: 9 now -- check the NCAA
+     guidelines, the page needed a login); Editorial Manager upload: **editable source
+     files only, no PDF** (editor's letter), the new title in the title field, the response
+     letter.
+- **Claude's own open items:** response letter (R3.4 old mixed-aggregation numbers, stale
+  "PENDING EXPERIMENT" labels); a single-file `.tex` + figures package for the upload;
+  after the study capture: camera analyses, Level-1 calibration table, camera `\todo`s.
+- **Nodes:** checked 22:59, all three idle (no FL / capture process), at `8dad714`,
+  tracked tree clean. The author asked to shut them down; a shutdown needs sudo, which
+  CLAUDE.md leaves to the author, so the author shuts them down. After the next power-on,
+  check as after the power cut: MAXN_SUPER on all three, WiFi off, NTP synchronised,
+  GUI off, no FL process, `logs/resume.log` "no restart".
+
 ## 1. Where things stand
 
 - **All FLAME federated runs are done and analysed**: the 98-run heterogeneous matrix, 5a,
