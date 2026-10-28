@@ -39,8 +39,9 @@ the narrative text, testbed photo, upload package).
 - Floors: laminate; kilim 1 mustard and blue; kilim 2 blue and black; each about 3-4 m.
 - Distractors: red book (cover/spine text taped), red toy car (logo taped), red PS
   controller (off, no cable, light bar dark, PS logo taped), red cardboard sheet, 5 l
-  bottle with red cap (label removed; filled or empty kept the same), teapot or pot
-  (author picks one, the same in all six scenes).
+  bottle with red cap (label removed, **half full** -- author, 2026-10-28; kept so in
+  all its scenes), teapot or pot (the author decides at the first pot scene, s14; the
+  same one in all six scenes, named in the scene sheet).
 
 ## 2. When the author is back, before s12
 
