@@ -363,7 +363,14 @@ family, verdict phrase or interpretation rule, and not the preprocessing of sect
   lens options of the ZED 2i, but the lens is not recorded. Commit `2dab803` called the
   old number a transcription error; that was wrong and is corrected here.*
 
-## 13. Amendment 4 (DRAFT 2026-10-07 -- after the pilot, before any study footage)
+## 13. Amendment 4 (2026-10-07, completed 2026-10-28 -- after the pilot, before any study footage)
+
+> **2026-10-28: complete, DRAFT lifted.** 13.4 now records the second tripod position,
+> the session-check set-up, the backgrounds, floors and distractors of all 18 scenes,
+> and the materials. Section 13 is in force as committed and pushed, before the first
+> study capture. On the desktop `data/raw/camera` holds only the scene-sheet template
+> (checked 2026-10-28); the nodes are checked for `data/raw/camera` before the first
+> study capture. The DRAFT notes below are kept as the record.
 
 > **DRAFT.** Values marked `[e5]` come from the e5 acceptance test
 > (`docs/POST_5B_CHECKLIST.md`). Nothing here is in force until the draft is completed,
@@ -1040,7 +1047,8 @@ proposals of `docs/STUDY_CAPTURE_PLAN_DRAFT.md`.
   - Only the pan of the tripod head is turned. The plate's tilt joint is not loosened
     (13.1).
   - The tripod stays on its taped reference position and is only turned. Moving it
-    elsewhere is not decided. The scene's distance marks are taped from the plate's
+    elsewhere is not decided (2026-10-28: one second position, B, is decided below; the
+    rest of this item applies there too). The scene's distance marks are taped from the plate's
     front edge in the direction it faces. At the scene's farthest distance, the source
     must stand at least 1 m from every wall (as in s10/s11); a direction without that
     clearance is not used.
@@ -1056,10 +1064,117 @@ proposals of `docs/STUDY_CAPTURE_PLAN_DRAFT.md`.
     and direction. At the start of every session the tripod faces the reference direction
     for the session checks, and is then turned for the scene.
   - The scene sheet records the tripod position and the direction it faces.
-* **Still open.** The DRAFT status of section 13 stays until the following are recorded
-  here:
+* **Still open** (until 2026-10-28). The DRAFT status of section 13 stays until the
+  following are recorded here:
   - the background and floor pairs of the 18 scenes;
   - the materials.
+
+  Both are recorded below (2026-10-28), and the DRAFT status is lifted (section 13
+  header).
+* **Second tripod position B** (decided by the author on 2026-10-28, before any study
+  capture). The author offered a corridor with the kitchen as background first. It was
+  not used: it would have needed a recalibration of all three cameras (lamp condition)
+  and changes for daylight from the kitchen window, light-emitting appliances and the
+  wall clearance at 3 m. Every scene stays in the room of 13.1.
+  - *Position A* is the taped reference position, facing the reference corner (curtain
+    edge and white wall). *Position B* is a second taped position in front of the closed
+    curtain, facing the white wardrobe on the opposite side of the room. The distance
+    from the plate's front edge to the wardrobe at B is 4.5 m (author), so the source at
+    3 m is 1.5 m in front of it.
+  - At the scene's farthest distance the source stands at least 1 m from every wall and
+    from the wardrobe, at A and at B (item above). At B the author confirmed it for the
+    side walls (2026-10-28).
+  - The tripod is carried to B without loosening the plate's tilt joint. After every
+    move to B, and before the first capture there, the tilt is checked as after a turn
+    (item above): D435if, candles unlit on the matte base at 3 m, 17 +- 1 deg. The author
+    expects no change and the check is made anyway.
+  - The calibrations and the session checks of 13.1 stay at A, facing the reference
+    direction. A session that captures at B starts at A, passes its session checks there,
+    and then moves to B.
+* **Session-check set-up** (2026-10-28). The session check of 13.1 compares the 224 mean
+  luma with the calibration value (+-10 %). It is therefore taken on the calibration
+  set-up: position A, reference direction, no backdrop or rack in view, no floor cover,
+  no study distractor, the candles unlit on the matte base at 3 m. The scene is set up
+  after the check.
+* **Backgrounds, floors and distractors of the 18 scenes** (inventory by the author;
+  assignment made by Claude at the author's request on 2026-10-28, following reviewer
+  comment R3.3, before any study capture).
+  - *Background* = position x backdrop, six backgrounds. The backdrop hangs on a drying
+    rack: none (rack out of every camera's view), the blanket (white and orange), or a
+    red football shirt hung inside out. The shirt is red, so in its scenes the backdrop
+    is itself a fire-like object. The rack stands centred on the optical axis, its front
+    at least 0.5 m behind the 3 m mark; its spot is taped once per position and used for
+    every scene of that position, and its distance from the plate's front edge goes into
+    the scene sheet.
+  - *Floor*: the laminate (no cover), kilim 1 (mustard and blue) or kilim 2 (blue and
+    black), each about 3-4 m long. A kilim lies lengthwise and centred on the optical
+    axis, its far end 3.5 m from the plate's front edge, so it lies under the source at
+    1, 2 and 3 m. Any excess at the near end is folded under; no kilim lies under a
+    tripod leg. The matte base stands on the floor cover.
+  - *Distractors*: two per scene, one small (red book, red toy car, red PS controller)
+    and one large (red cardboard sheet, 5 l bottle with a red cap, reflective metal
+    pot). The small one stands left of the optical axis (seen from the camera) and the
+    large one right of it at A; the sides are swapped at B. Both stand on the floor
+    cover, at least 0.5 m from every flame position of the scene, never between a
+    camera and a flame position, and visible in the 224 crop of all three cameras on
+    the framing snapshot of 13.1. Their measured positions
+    (along the axis, to the side) go into the scene sheet, and they are not moved
+    between the scene's captures.
+  - *Table.* Distances and camera order follow from the scene id (above); they are
+    repeated here.
+
+    | scene | pos | distances (m) | camera order | backdrop | floor | distractors |
+    |---|---|---|---|---|---|---|
+    | s12 | A | {1,2} | 0 | none | laminate | book + cardboard |
+    | s13 | A | {1,3} | 0 | blanket | kilim 1 | book + bottle |
+    | s14 | A | {2,3} | 0 | shirt | kilim 2 | book + pot |
+    | s15 | A | {1,2} | 1 | blanket | kilim 2 | car + cardboard |
+    | s16 | A | {1,3} | 1 | shirt | laminate | car + bottle |
+    | s17 | A | {2,3} | 1 | none | kilim 1 | car + pot |
+    | s18 | A | {1,2} | 2 | shirt | kilim 1 | controller + cardboard |
+    | s19 | A | {1,3} | 2 | none | kilim 2 | controller + bottle |
+    | s20 | A | {2,3} | 2 | blanket | laminate | controller + pot |
+    | s21 | B | {1,2} | 0 | none | kilim 1 | controller + bottle |
+    | s22 | B | {1,3} | 0 | blanket | kilim 2 | controller + pot |
+    | s23 | B | {2,3} | 0 | shirt | laminate | controller + cardboard |
+    | s24 | B | {1,2} | 1 | blanket | laminate | book + bottle |
+    | s25 | B | {1,3} | 1 | shirt | kilim 1 | book + pot |
+    | s26 | B | {2,3} | 1 | none | kilim 2 | book + cardboard |
+    | s27 | B | {1,2} | 2 | shirt | kilim 2 | car + bottle |
+    | s28 | B | {1,3} | 2 | none | laminate | car + pot |
+    | s29 | B | {2,3} | 2 | blanket | kilim 1 | car + cardboard |
+
+  - *Properties* (checked by a script before this was written):
+    - No two scenes share position, backdrop and floor. The tripod moves to B once,
+      after s20.
+    - Within each position, backdrop and floor each occur once with every distance pair
+      and every camera order (a Graeco-Latin square on the nine scenes of the block),
+      and no distractor pair repeats.
+    - The two scenes that share backdrop and floor (one at A, one at B: s12/s28,
+      s13/s29, s14/s27, s15/s22, s16/s23, s17/s21, s18/s25, s19/s26, s20/s24) also
+      differ in distance pair, camera order and both distractors. *Reason (R3.3):* a
+      held-out scene should have no near-copy among the training scenes.
+    - Each distractor is used in six scenes: three per position, and twice with each
+      backdrop and each floor. Not balanced, because the two orthogonal squares are
+      already used: each small distractor meets two of the three camera orders, and
+      each large one two of the three distance pairs.
+  - Every capture's `--notes` add `position=A` or `position=B`, `backdrop=...`,
+    `floor=...` and `distractors=...` as in the table, and the scene sheet records them.
+* **Materials** (2026-10-28).
+  - Candles: 16 new candles of the `candles4` type (four sets), a lighter and a snuffer.
+    The e5 set is not used (its height when new was not recorded). Larger candles also
+    bought are another source type and are not used: e5 and the replacement rule above
+    cover `candles4` only.
+  - The matte base, the vertical ruler, floor tape and the tape measure.
+  - The drying rack, the blanket, the red football shirt (inside out; any print that
+    shows through is covered with matte tape), kilim 1 and kilim 2.
+  - Distractors. The book's cover and spine text and the toy car's logo are covered with
+    matte tape. The controller is switched off, has no cable, its light bar is dark
+    (lit, it would be a light-emitting object) and its PS logo is covered. The bottle's
+    label is removed, and whether it is filled is recorded and kept the same in all its
+    scenes. The metal pot is either the teapot or the pot, the same one in all six of
+    its scenes and named in the scene sheet; a brand stamp on it is covered.
+  - Water or an extinguisher at hand during every fire capture.
 
 ## 14. Erratum (2026-10-07)
 

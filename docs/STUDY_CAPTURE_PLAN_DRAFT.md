@@ -127,6 +127,16 @@ backdrops and floor covers:
 - Pair them so that no two scenes share both, and each background and each floor recurs
   at most 2-3 times. A list of 15/18 (background, floor) pairs is left for the review.
 
+### 5a. DECIDED 2026-10-28 (prereg 13.4)
+
+Position B (in front of the curtain, facing the wardrobe, 4.5 m), the session-check
+set-up, the 18 (position, backdrop, floor, distractors) assignments, the placement rules
+and the materials are recorded in prereg 13.4. A first proposal of the same day used the
+same Graeco-Latin square at A and B, so that the two scenes sharing backdrop and floor
+also shared distance pair and camera order; it was replaced before it was recorded
+(reviewer comment R3.3: a held-out scene should have no near-copy among the training
+scenes).
+
 ## 6. Distractors (unbranded; at least one fire-like per scene)
 
 Fire-like, unbranded: a plain red/orange mug; a red or orange book with a blank cover; a
@@ -136,6 +146,18 @@ plant). **Not usable as distractors without a decision:** anything that emits li
 warm lamp, an LED) -- it changes the lamp condition of the calibration (open item O3).
 Anything with a visible brand or text is covered or left out (the red tube with a brand
 seen in s11 is replaced).
+
+**Author's inventory (2026-10-28).** A red book, a red toy car, a red PS controller, a red
+cardboard sheet, a 5 l bottle with a red cap, and a teapot or a pot (reflective metal).
+Conditions: the book's cover and spine text and the car's logo are covered with matte tape;
+the controller is switched off, has no cable, its light bar is dark (lit, it would be a
+light-emitting object, O3) and its PS logo is covered; the bottle's label is removed and
+whether it is filled is recorded; a brand stamp on the teapot/pot is covered. The author
+also offered the corridor with the kitchen as background. It would have needed a
+recalibration of all three cameras and a change to 13.4 (lamp condition, daylight from the
+kitchen window, light-emitting appliances, wall clearance at 3 m); the author agreed to
+the room instead, so the "one room, one lamp" rule of 13.4 stands (a second tripod
+position in the same room, B, was added on 2026-10-28).
 
 ## 7. Materials
 
