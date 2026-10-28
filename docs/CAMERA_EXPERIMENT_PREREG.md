@@ -372,7 +372,8 @@ family, verdict phrase or interpretation rule, and not the preprocessing of sect
 > (checked 2026-10-28); the nodes are checked for `data/raw/camera` before the first
 > study capture. The DRAFT notes below are kept as the record.
 > **2026-10-28 (later), before any study capture:** block order changed by the author,
-> position B first (`s12`-`s20` at B, `s21`-`s29` at A; last item of 13.4).
+> position B first (`s12`-`s20` at B, `s21`-`s29` at A; 13.4 "Block order"). Kilim
+> placement by distance pair, kilim 1 being 2.3 m long (13.4, last item).
 
 > **DRAFT.** Values marked `[e5]` come from the e5 acceptance test
 > (`docs/POST_5B_CHECKLIST.md`). Nothing here is in force until the draft is completed,
@@ -1222,6 +1223,31 @@ proposals of `docs/STUDY_CAPTURE_PLAN_DRAFT.md`.
     | s27 | A | {1,2} | 2 | shirt | kilim 1 | controller + cardboard |
     | s28 | A | {1,3} | 2 | none | kilim 2 | controller + bottle |
     | s29 | A | {2,3} | 2 | blanket | laminate | controller + pot |
+* **Kilim placement by distance pair** (decided by the author on 2026-10-28, before any
+  study capture). Kilim 1 is 2.3 m long (measured by the author), not the 3-4 m of the
+  inventory. With its far end at 3.5 m (the *Floor* item above) its near end would lie
+  at 1.2 m, and the source at 1 m would stand on the laminate. The *Floor* rule is
+  therefore replaced, for both kilims:
+  - A kilim of at least 2.6 m keeps the *Floor* rule: far end 3.5 m from the plate's
+    front edge, any excess at the near end folded under. Its near end then lies at
+    0.9 m or nearer, so it lies under the source at 1, 2 and 3 m.
+  - A shorter kilim is placed by the scene's distance pair: in {1,2} and {1,3} scenes
+    its near end lies 0.9 m from the plate's front edge; in {2,3} scenes its far end
+    lies 3.5 m from it.
+  - The kilim is placed once per scene, before the scene's first capture, and is not
+    moved between the scene's captures, like the distractors. *Reason:* if it moved
+    between distances, the fire and no-fire captures could see the floor cover in
+    different places, and a classifier could learn its position instead of the flame.
+  - It still lies lengthwise, centred on the optical axis, and never under a tripod
+    leg. The matte base stands on it wherever the kilim reaches.
+  - *Disclosed consequence.* In {1,3} scenes with a kilim shorter than 2.6 m, the far
+    end lies at 0.9 m plus its length (3.2 m for kilim 1). At 3 m the front candle then
+    stands on the kilim, while the candles behind it and part of the matte base may
+    stand on the laminate. For kilim 1 this concerns `s16` and `s22`. Kilim 2's length
+    is measured and recorded in the scene sheet before its first scene (`s13`), and
+    decides which rule applies to it.
+  - The scene sheet records each kilim's length and, for every kilim scene, the
+    distances of its near and far ends from the plate's front edge.
 
 ## 14. Erratum (2026-10-07)
 
