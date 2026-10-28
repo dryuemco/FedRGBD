@@ -371,6 +371,8 @@ family, verdict phrase or interpretation rule, and not the preprocessing of sect
 > study capture. On the desktop `data/raw/camera` holds only the scene-sheet template
 > (checked 2026-10-28); the nodes are checked for `data/raw/camera` before the first
 > study capture. The DRAFT notes below are kept as the record.
+> **2026-10-28 (later), before any study capture:** block order changed by the author,
+> position B first (`s12`-`s20` at B, `s21`-`s29` at A; last item of 13.4).
 
 > **DRAFT.** Values marked `[e5]` come from the e5 acceptance test
 > (`docs/POST_5B_CHECKLIST.md`). Nothing here is in force until the draft is completed,
@@ -1121,7 +1123,8 @@ proposals of `docs/STUDY_CAPTURE_PLAN_DRAFT.md`.
     (along the axis, to the side) go into the scene sheet, and they are not moved
     between the scene's captures.
   - *Table.* Distances and camera order follow from the scene id (above); they are
-    repeated here.
+    repeated here. *Ids superseded on 2026-10-28 by "Block order: position B first" at
+    the end of 13.4: the B rows are captured first, as `s12`-`s20`.*
 
     | scene | pos | distances (m) | camera order | backdrop | floor | distractors |
     |---|---|---|---|---|---|---|
@@ -1146,7 +1149,8 @@ proposals of `docs/STUDY_CAPTURE_PLAN_DRAFT.md`.
 
   - *Properties* (checked by a script before this was written):
     - No two scenes share position, backdrop and floor. The tripod moves to B once,
-      after s20.
+      after s20 (after the block-order change at the end of 13.4: to A once, after
+      s20).
     - Within each position, backdrop and floor each occur once with every distance pair
       and every camera order (a Graeco-Latin square on the nine scenes of the block),
       and no distractor pair repeats.
@@ -1175,6 +1179,49 @@ proposals of `docs/STUDY_CAPTURE_PLAN_DRAFT.md`.
     scenes. The metal pot is either the teapot or the pot, the same one in all six of
     its scenes and named in the scene sheet; a brand stamp on it is covered.
   - Water or an extinguisher at hand during every fire capture.
+* **Block order: position B first** (decided by the author on 2026-10-28, after the
+  table above was committed and pushed and before any study capture; `data/raw/camera`
+  absent on all three nodes, checked 2026-10-28 18:29-18:31).
+  - *Change.* The nine scenes at B are captured before the nine at A. Ids stay in
+    capture order, so the two blocks swap ids: the B rows of the table above become
+    `s12`-`s20` and the A rows `s21`-`s29`. Each row keeps its position, backdrop, floor
+    and distractors: the old `s<n>` at A is now `s<n+9>`, the old `s<n>` at B `s<n-9>`.
+  - *Nothing else changes.* Distance pair and camera order follow from the id, and
+    (n - 12) mod 3 and floor((n - 12) / 3) mod 3 are the same for n and n + 9, so every
+    row keeps its distance pair and camera order. All properties listed with the table
+    still hold (checked by a script before this was written). The scenes sharing
+    backdrop and floor (one at B, one at A) are now s12/s26, s13/s24, s14/s25, s15/s29,
+    s16/s27, s17/s28, s18/s23, s19/s21, s20/s22.
+  - The tripod moves once between the blocks, from B to A after s20. The rules of
+    "Second tripod position B" and "Session-check set-up" are unchanged: every session
+    that captures at B starts at A with the session checks on the calibration set-up,
+    then moves to B, and the D435if tilt check at B passes before the first capture
+    there.
+  - The first scene with the metal pot is now `s13`; the author names the teapot or
+    the pot there, in the scene sheet.
+  - *Reason (author).* The room was set up for position B on 2026-10-28.
+  - *The table that applies:*
+
+    | scene | pos | distances (m) | camera order | backdrop | floor | distractors |
+    |---|---|---|---|---|---|---|
+    | s12 | B | {1,2} | 0 | none | kilim 1 | controller + bottle |
+    | s13 | B | {1,3} | 0 | blanket | kilim 2 | controller + pot |
+    | s14 | B | {2,3} | 0 | shirt | laminate | controller + cardboard |
+    | s15 | B | {1,2} | 1 | blanket | laminate | book + bottle |
+    | s16 | B | {1,3} | 1 | shirt | kilim 1 | book + pot |
+    | s17 | B | {2,3} | 1 | none | kilim 2 | book + cardboard |
+    | s18 | B | {1,2} | 2 | shirt | kilim 2 | car + bottle |
+    | s19 | B | {1,3} | 2 | none | laminate | car + pot |
+    | s20 | B | {2,3} | 2 | blanket | kilim 1 | car + cardboard |
+    | s21 | A | {1,2} | 0 | none | laminate | book + cardboard |
+    | s22 | A | {1,3} | 0 | blanket | kilim 1 | book + bottle |
+    | s23 | A | {2,3} | 0 | shirt | kilim 2 | book + pot |
+    | s24 | A | {1,2} | 1 | blanket | kilim 2 | car + cardboard |
+    | s25 | A | {1,3} | 1 | shirt | laminate | car + bottle |
+    | s26 | A | {2,3} | 1 | none | kilim 1 | car + pot |
+    | s27 | A | {1,2} | 2 | shirt | kilim 1 | controller + cardboard |
+    | s28 | A | {1,3} | 2 | none | kilim 2 | controller + bottle |
+    | s29 | A | {2,3} | 2 | blanket | laminate | controller + pot |
 
 ## 14. Erratum (2026-10-07)
 

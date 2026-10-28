@@ -8,6 +8,17 @@ the narrative text, testbed photo, upload package).
 
 ## 0. Where we stopped (tell the author this first)
 
+- **Update 2026-10-28 evening: block order changed, B first** (author; prereg 13.4, last
+  item). `s12`-`s20` are the B scenes, `s21`-`s29` the A scenes; each row keeps its
+  distance pair, camera order, backdrop, floor and distractors. Sessions still start at
+  A (session checks on the calibration set-up), then move to B with the D435if tilt
+  check there. First scene: `s12` = B, {1,2} m, order 0, no backdrop, kilim 1,
+  controller (small, right at B) + bottle (large, left at B). First pot scene: `s13`.
+  Wherever this handoff says s12 at A (below), read the new table. Nodes checked
+  18:29-18:31: all three MAXN_SUPER, WiFi off, NTP synced, GUI off, no FL/capture
+  process, `data/raw/camera` absent, at `8dad714`. Before node_c's cable was plugged in,
+  another device (MAC `e8:51:9e:...`, not a Jetson) answered on 192.168.1.6.
+
 - **Section 13 of the camera prereg is complete and in force** (DRAFT lifted, committed
   and pushed 2026-10-28). 13.4 now records:
   - position B: second taped tripod position in front of the closed curtain, facing the
